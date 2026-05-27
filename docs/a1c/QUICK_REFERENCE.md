@@ -1,20 +1,22 @@
-# Hemoglobin A1C Quick Reference
+# Lab Results Quick Reference
 
-> Testing status: A1C export has been verified working end-to-end on a physical device with Clinical Health Records enabled.
+> Testing status: A1C export has been verified working end-to-end on a physical device with Clinical Health Records enabled. Byte-identical CSV output is pinned by `A1CCSVBytePinningTests`.
 
 ## What It Does
 
-- Exports Hemoglobin A1C values from Apple Health Clinical Records
-- Uses LOINC `4548-4` to identify the matching lab result records
-- Includes A1C rows in the same CSV as weight, steps, and glucose
+- Exports lab result values from Apple Health Clinical Records
+- Each metric is identified by its LOINC code (`4548-4` for Hemoglobin A1C)
+- Includes matching lab rows in the same CSV as weight, steps, and glucose
 
 ## Key Files
 
-- `HealthSampleTypes.swift` for `A1CSample` and FHIR parsing
-- `HealthKitManager.swift` for authorization and `fetchA1CData(dateRange:limit:completion:)`
-- `SettingsManager.swift` for the `exportA1C` preference
-- `DataSelectionView.swift` for the A1C toggle and export flow
-- `CSVGenerator.swift` for CSV row generation
+- `LabMetricRegistry.swift` for `LabPanel`, `LabMetric`, and `LabMetricRegistry.all`
+- `HealthSampleTypes.swift` for `LabResultSample`, FHIR parsing, and `LOINCCode` constants
+- `HealthKitManager.swift` for `requestAuthorization(includeLabs:completion:)` and `fetchLabResults(metrics:dateRange:limit:completion:)`
+- `SettingsManager.swift` for `selectedLabPanels` and `favoriteLabCodes` (with one-time `exportA1C` migration)
+- `ExportLogic.swift` for `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`
+- `DataSelectionView.swift` for the "Lab Favorites" / "Lab Panels" toggles and the export flow
+- `CSVGenerator.swift` for `appendLabResultRows(to:samples:dateFormat:sortOrder:)`
 
 ## Required Setup
 
@@ -29,17 +31,18 @@ Also make sure the target has HealthKit and Clinical Health Records capabilities
 ## Runtime Notes
 
 - The app currently targets iOS 26+
-- The A1C code path itself is guarded with `#available(iOS 15.0, *)`
+- The clinical-records code path is guarded with `#available(iOS 15.0, *)`
 - Simulator support is limited; validate on a physical device
 - The simulator-only test data generator is separate from the production export path
 
 ## Export Flow
 
-1. User enables Hemoglobin A1C in the export screen
-2. App requests HealthKit read access
-3. A1C clinical records are fetched and parsed
-4. The combined CSV is generated in memory
-5. The file picker saves the export
+1. User toggles favorites or panels in the export screen
+2. `ExportLogic.resolveLabMetrics` builds the deduplicated `[LabMetric]` fetch list
+3. App requests HealthKit read access (clinical records included when labs are selected)
+4. `fetchLabResults` runs a single clinical-records query and parses every matching LOINC into a `LabResultSample`
+5. The combined CSV is generated in memory via `appendLabResultRows`
+6. The file picker saves the export
 
 ## CSV Example
 
@@ -48,8 +51,14 @@ Date,Metric,Value,Unit,Source
 2026-01-15 14:30:00,Hemoglobin A1C,7.50,%,Apple Health
 ```
 
+## Adding a New Lab
+
+1. Add a LOINC constant in `LOINCCode` if needed
+2. Append a `LabMetric` to `LabMetricRegistry.all` (with `group` and `valuePrecision`)
+3. UI, fetch, and CSV output all pick it up automatically
+
 ## Notes
 
-- Default export state for A1C is off
-- A1C rows are formatted to 2 decimal places
+- No labs are selected by default
+- Per-metric value precision comes from `LabMetric.valuePrecision`; A1C still renders to 2 decimal places
 - Existing export metrics are unaffected

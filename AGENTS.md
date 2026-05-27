@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), and export logic (`CSVGenerator.swift`, `CSVDocument.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/` and `HealthExporter.xcworkspace/`.
+`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`), and CSV output (`CSVGenerator.swift`, `CSVDocument.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/` and `HealthExporter.xcworkspace/`. `CLAUDE.md` is a symlink to this file — edit `AGENTS.md`.
 
 ## Architecture Notes
 Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (splash/loading, then `Next` + Settings) → `DataSelectionView`; `SettingsView` is presented from the launch screen.
@@ -10,13 +10,16 @@ Key components:
 
 | File | Role |
 |------|------|
-| `HealthKitManager.swift` | HealthKit authorization and data fetching; uses `DispatchGroup` for parallel concurrent queries |
-| `HealthMetricConfig.swift` | Central metric registry for supported export metrics |
-| `SettingsManager.swift` | Persists unit and format preferences in `UserDefaults` |
-| `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order |
-| `DataSelectionView.swift` | Metric toggles, date range picker, export trigger, and exporter state |
+| `HealthKitManager.swift` | HealthKit authorization and data fetching; uses `DispatchGroup` for parallel concurrent queries. `requestAuthorization(includeLabs:)` opts into clinical-records read; `fetchLabResults(metrics:)` is one query that resolves every requested LOINC |
+| `HealthMetricConfig.swift` | Built-in metric registry (`HealthMetrics`) for the always-available metrics (weight, steps, glucose) plus `BuildConfig` |
+| `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == LOINC), and `LabMetricRegistry.all`. Adding a lab is a single append here |
+| `HealthSampleTypes.swift` | `GlucoseSampleMgDl`, generic `LabResultSample`, `LOINCCode` constants, and `FHIRLabResultParser` |
+| `ExportLogic.swift` | Pure logic: `isExportEnabled(...,hasSelectedLabs:)`, `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`, date-range/limit helpers, fetch-error ordering, filename generation |
+| `SettingsManager.swift` | Persists unit and format preferences plus `selectedLabPanels` and `favoriteLabCodes` in `UserDefaults`; runs the one-time legacy `exportA1C` → `favoriteLabCodes` migration |
+| `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order. `appendLabResultRows` uses per-metric `LabMetric.valuePrecision` |
+| `DataSelectionView.swift` | Metric toggles (Weight/Steps/Glucose), "Lab Favorites" and "Lab Panels" sections driven by the registry, date range picker, export trigger, and exporter state |
 
-A1C support uses Clinical Health Records via `HKClinicalTypeIdentifier.labResultRecord`; see `docs/a1c/` for implementation details.
+Lab support (including A1C) uses Clinical Health Records via `HKClinicalTypeIdentifier.labResultRecord` and the LOINC code on each `LabMetric`; see `docs/a1c/` for the registry-driven implementation details.
 
 ## Build, Test, and Development Commands
 Open the project in Xcode for day-to-day work:
@@ -40,15 +43,16 @@ xcodebuild build -project HealthExporter.xcodeproj -scheme HealthExporter -desti
 Use Xcode on a physical device for HealthKit and Clinical Records verification; simulator coverage is limited.
 
 ## Export Flow
-The app is read-only with respect to HealthKit in production. `HealthKitManager.requestAuthorization()` calls `requestAuthorization(toShare: Set(), read: ...)`.
+The app is read-only with respect to HealthKit in production. `HealthKitManager.requestAuthorization(includeLabs:)` calls `requestAuthorization(toShare: Set(), read: ...)` and only includes the clinical-records read type when `includeLabs` is true.
 
 Export sequence:
-1. User selects metrics and a date range in `DataSelectionView`.
-2. HealthKit read authorization is requested if needed.
-3. `HealthKitManager` fetches the selected metrics in parallel.
-4. `CSVGenerator.generateCombinedCSV()` builds the output in memory.
-5. SwiftUI `.fileExporter()` presents the Files picker.
-6. Sample arrays and `csvContent` are cleared after export.
+1. User selects built-in metric toggles, panel/favorite labs, and a date range in `DataSelectionView`.
+2. `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:)` produces the deduplicated list of `LabMetric`s to fetch.
+3. HealthKit read authorization is requested if needed; `includeLabs` is set when the resolved lab list is non-empty.
+4. `HealthKitManager` fetches the selected metrics in parallel; lab results come from a single `fetchLabResults(metrics:)` call.
+5. `CSVGenerator.generateCombinedCSV()` builds the output in memory, appending generic lab rows via `appendLabResultRows`.
+6. SwiftUI `.fileExporter()` presents the Files picker.
+7. Sample arrays and `csvContent` are cleared after export.
 
 Keep this flow and its surrounding privacy copy aligned whenever export behavior changes.
 
@@ -56,13 +60,19 @@ Keep this flow and its surrounding privacy copy aligned whenever export behavior
 Follow existing Swift conventions: 4-space indentation, one top-level type per file, `UpperCamelCase` for types, `lowerCamelCase` for properties and methods. Prefer small SwiftUI views and move reusable logic into managers or helper types. Keep comments sparse and only where intent is not obvious. Match current file naming: view types end in `View`, managers end in `Manager`, tests end in `Tests`. When adding metrics, route availability through `HealthMetricConfig.swift`; do not gate UI directly on `BuildConfig`.
 
 ## Implementation Patterns
-When adding a metric:
+When adding a built-in HealthKit metric (e.g. a new quantity type):
 1. Update `HealthMetricConfig.swift`.
 2. Request the right HealthKit type in `HealthKitManager`.
 3. Add the toggle and selection handling in `DataSelectionView`.
 4. Persist the setting in `SettingsManager`.
 5. Extend `CSVGenerator`.
 6. Add tests and docs in the same change.
+
+When adding a new lab (Clinical Health Records / LOINC-coded observation):
+1. Add the LOINC constant in `LOINCCode` if needed.
+2. Append a `LabMetric` to `LabMetricRegistry.all` with the correct `LabPanel` group and `valuePrecision`.
+3. No UI, fetch, or CSV code changes are required — the favorites/panel toggles, single `fetchLabResults` query, and registry-driven CSV rendering pick it up automatically.
+4. Add tests (and a CSV byte-pinning test if exact output matters) and docs in the same change.
 
 Memory management matters because HealthKit datasets can be large:
 - Release fetched sample arrays immediately after CSV generation, for example `weightSamples = nil`.
@@ -75,7 +85,8 @@ CSV format details:
 - Date formats come from `DateFormatOption`
 - Sort order comes from `SortOrder`
 - Weight precision is 2 decimals
-- Filename format is `HealthExporter_YYYY-MM-DD_HHMMSS.csv`
+- Lab precision is per-metric, sourced from `LabMetric.valuePrecision` (A1C renders to 2 decimals)
+- Filename format is `HealthExporter_YYYY-MM-DD_HHMMSS.csv` (see `ExportLogic.exportFilename`)
 - Default units are Fahrenheit, pounds, and imperial
 
 ## Testing Guidelines
@@ -90,7 +101,7 @@ Do not commit real secrets; use `Secrets.plist.example` as the template. Keep He
 
 Required capabilities and configuration:
 - HealthKit is always required.
-- Clinical Health Records is required for A1C export.
+- Clinical Health Records is required for lab-result export (any LOINC-coded metric, including A1C).
 - Usage descriptions are set via build settings: `NSHealthShareUsageDescription`, `NSHealthClinicalHealthRecordsShareUsageDescription`, and `NSHealthUpdateUsageDescription`.
 - Keep `NSHealthUpdateUsageDescription` in the app target even though the production export flow is read-only. `HealthKitManager.generateTestData()` calls `healthStore.save(...)` inside simulator-only code, and App Store validation still expects the write-purpose string to exist when that API is referenced.
 

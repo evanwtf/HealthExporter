@@ -62,6 +62,8 @@ class SettingsManager: ObservableObject {
     @Published var exportSteps: Bool
     @Published var exportGlucose: Bool
     @Published var exportA1C: Bool
+    @Published var selectedLabPanels: Set<LabPanel>
+    @Published var favoriteLabCodes: Set<String>
     @Published var dateFormat: DateFormatOption
     @Published var sortOrder: SortOrder
     @Published var lastXDaysValue: Int
@@ -69,7 +71,19 @@ class SettingsManager: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    /// One-time migration from the legacy boolean `exportA1C` setting to the
+    /// new panels-and-favorites model. If `exportA1C == true` and the user
+    /// has not yet customized `favoriteLabCodes`, seed Hemoglobin A1C in the
+    /// favorites set so the toggle's user intent carries forward.
+    static func migrateLegacyA1CSetting(in defaults: UserDefaults) {
+        guard defaults.object(forKey: "favoriteLabCodes") == nil else { return }
+        guard defaults.bool(forKey: "exportA1C") else { return }
+        defaults.set([LOINCCode.hemoglobinA1C], forKey: "favoriteLabCodes")
+    }
+
     init() {
+        Self.migrateLegacyA1CSetting(in: .standard)
+
         let tempUnitRaw = UserDefaults.standard.string(forKey: "temperatureUnit") ?? TemperatureUnit.fahrenheit.rawValue
         self.temperatureUnit = TemperatureUnit(rawValue: tempUnitRaw) ?? .fahrenheit
 
@@ -93,6 +107,12 @@ class SettingsManager: ObservableObject {
         self.exportGlucose = UserDefaults.standard.object(forKey: "exportGlucose") as? Bool ?? false
 
         self.exportA1C = UserDefaults.standard.object(forKey: "exportA1C") as? Bool ?? false
+
+        let panelsRaw = UserDefaults.standard.array(forKey: "selectedLabPanels") as? [String] ?? []
+        self.selectedLabPanels = Set(panelsRaw.compactMap(LabPanel.init(rawValue:)))
+
+        let favoritesRaw = UserDefaults.standard.array(forKey: "favoriteLabCodes") as? [String] ?? []
+        self.favoriteLabCodes = Set(favoritesRaw)
 
         self.lastXDaysValue = UserDefaults.standard.object(forKey: "lastXDaysValue") as? Int ?? 30
         self.lastXRecordsValue = UserDefaults.standard.object(forKey: "lastXRecordsValue") as? Int ?? 100
@@ -146,6 +166,16 @@ class SettingsManager: ObservableObject {
         $exportA1C
             .dropFirst()
             .sink { UserDefaults.standard.set($0, forKey: "exportA1C") }
+            .store(in: &cancellables)
+
+        $selectedLabPanels
+            .dropFirst()
+            .sink { UserDefaults.standard.set($0.map(\.rawValue), forKey: "selectedLabPanels") }
+            .store(in: &cancellables)
+
+        $favoriteLabCodes
+            .dropFirst()
+            .sink { UserDefaults.standard.set(Array($0), forKey: "favoriteLabCodes") }
             .store(in: &cancellables)
 
         $lastXDaysValue

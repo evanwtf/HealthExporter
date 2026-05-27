@@ -446,7 +446,7 @@ struct DataSelectionView: View {
                     weightSamples: payload.weightSamples,
                     stepsSamples: payload.stepsSamples,
                     glucoseSamples: payload.glucoseSamples,
-                    a1cSamples: payload.a1cSamples,
+                    labResults: payload.a1cSamples.map { $0.map(Self.labResultSample(fromA1C:)) },
                     weightUnit: weightUnit,
                     dateFormat: dateFormat
                 )
@@ -491,9 +491,9 @@ struct DataSelectionView: View {
             CSVGenerator.appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
-        if var samples = payload.a1cSamples {
+        if var samples = payload.a1cSamples.map({ $0.map(Self.labResultSample(fromA1C:)) }) {
             payload.a1cSamples = nil
-            CSVGenerator.appendA1CRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+            CSVGenerator.appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         csvContent = csv
@@ -507,6 +507,17 @@ struct DataSelectionView: View {
     private func clearPendingExport() {
         pendingExportPayload = nil
         pendingExportEstimate = nil
+    }
+
+    private static func labResultSample(fromA1C sample: A1CSample) -> LabResultSample {
+        LabResultSample(
+            metricName: LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)?.name ?? "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: sample.effectiveDateTime,
+            value: sample.value,
+            unit: sample.unit,
+            source: sample.source
+        )
     }
 }
 

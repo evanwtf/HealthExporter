@@ -142,7 +142,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
@@ -153,7 +153,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [],
             stepsSamples: [],
             glucoseSamples: [],
-            a1cSamples: [],
+            labResults: [],
             weightUnit: .kilograms
         )
         XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
@@ -170,7 +170,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -189,7 +189,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: [sample],
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.contains(",Steps,"))
@@ -210,7 +210,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: [glucoseSample],
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.contains(",Blood Glucose,"))
@@ -242,7 +242,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [weightSample],
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -253,12 +253,18 @@ final class CSVGeneratorTests: XCTestCase {
     }
 
     func testGenerateCombinedCSV_a1cData_containsA1CRow() {
-        let a1c = A1CSample(effectiveDateTime: referenceDate, value: 7.2, unit: "%")
+        let a1c = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: referenceDate,
+            value: 7.2,
+            unit: "%"
+        )
         let csv = CSVGenerator.generateCombinedCSV(
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: [a1c],
+            labResults: [a1c],
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.contains(",Hemoglobin A1C,"))
@@ -277,7 +283,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .pounds
         )
         XCTAssertTrue(csv.contains(",lbs"))
@@ -289,7 +295,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.hasSuffix("\n"), "CSV output should end with a newline")
@@ -307,10 +313,71 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: [glucoseSample],
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.contains(",146,"), "Glucose should be rounded to nearest integer")
+    }
+
+    // MARK: - Lab Result Rows (generic)
+
+    func testLabResultRow_usesRegistryPrecision_forKnownLoinc() {
+        // A1C is registered with precision 2, so 7.0 renders as "7.00"
+        let sample = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: referenceDate,
+            value: 7.0,
+            unit: "%",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",7.00,%,"))
+    }
+
+    func testLabResultRow_unknownLoinc_defaultsToTwoDecimals() {
+        // Registry has no entry for this code, so precision falls back to 2.
+        let sample = LabResultSample(
+            metricName: "Mystery Lab",
+            loincCode: "0000-0",
+            effectiveDateTime: referenceDate,
+            value: 3.456,
+            unit: "u",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Mystery Lab,3.46,u,"))
+    }
+
+    func testLabResultRow_metricNameContainingCommaIsCSVEscaped() {
+        let sample = LabResultSample(
+            metricName: "Some, Metric",
+            loincCode: "0000-0",
+            effectiveDateTime: referenceDate,
+            value: 1.0,
+            unit: "u",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",\"Some, Metric\","))
     }
 
     // MARK: - Date Format Options
@@ -326,7 +393,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms,
             dateFormat: .iso8601
         )
@@ -344,7 +411,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms,
             dateFormat: .yyyySlashMMddHHmmss
         )
@@ -356,7 +423,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: nil,
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.hasPrefix("Date,Metric,"), "Should have single Date column, not Date,ISO8601")
@@ -386,7 +453,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample2, sample1],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms,
             sortOrder: .ascending
         )
@@ -398,7 +465,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightSamples: [sample1, sample2],
             stepsSamples: nil,
             glucoseSamples: nil,
-            a1cSamples: nil,
+            labResults: nil,
             weightUnit: .kilograms,
             sortOrder: .descending
         )

@@ -23,8 +23,8 @@ final class HealthKitQueryHelpersTests: XCTestCase {
 
     // MARK: - readTypes
 
-    func testReadTypes_withoutA1C_containsBaseTypes() {
-        let types = HealthKitQueryHelpers.readTypes(includeA1C: false)
+    func testReadTypes_withoutLabs_containsBaseTypes() {
+        let types = HealthKitQueryHelpers.readTypes(includeLabs: false)
 
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -36,8 +36,8 @@ final class HealthKitQueryHelpersTests: XCTestCase {
         XCTAssertEqual(types.count, 3)
     }
 
-    func testReadTypes_withA1C_containsClinicalType() {
-        let types = HealthKitQueryHelpers.readTypes(includeA1C: true)
+    func testReadTypes_withLabs_containsClinicalType() {
+        let types = HealthKitQueryHelpers.readTypes(includeLabs: true)
 
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -56,8 +56,8 @@ final class HealthKitQueryHelpersTests: XCTestCase {
         }
     }
 
-    func testReadTypes_withoutA1C_doesNotContainClinical() {
-        let types = HealthKitQueryHelpers.readTypes(includeA1C: false)
+    func testReadTypes_withoutLabs_doesNotContainClinical() {
+        let types = HealthKitQueryHelpers.readTypes(includeLabs: false)
         if let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
             XCTAssertFalse(types.contains(clinicalType))
         }
@@ -128,80 +128,90 @@ final class HealthKitQueryHelpersTests: XCTestCase {
         XCTAssertNotNil(predicate)
     }
 
-    // MARK: - filterA1CSamplesByDateRange
+    // MARK: - filterLabResultsByDateRange
 
-    func testFilterA1C_insideRange_included() {
-        let sample = A1CSample(effectiveDateTime: date(2024, 6, 17, 10, 0), value: 7.2, unit: "%")
+    private func labSample(_ date: Date, value: Double = 7.0) -> LabResultSample {
+        LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: date,
+            value: value,
+            unit: "%"
+        )
+    }
+
+    func testFilterLabResults_insideRange_included() {
+        let sample = labSample(date(2024, 6, 17, 10, 0), value: 7.2)
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([sample], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 1)
     }
 
-    func testFilterA1C_beforeRange_excluded() {
-        let sample = A1CSample(effectiveDateTime: date(2024, 6, 14, 10, 0), value: 7.2, unit: "%")
+    func testFilterLabResults_beforeRange_excluded() {
+        let sample = labSample(date(2024, 6, 14, 10, 0), value: 7.2)
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([sample], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 0)
     }
 
-    func testFilterA1C_afterRange_excluded() {
-        let sample = A1CSample(effectiveDateTime: date(2024, 6, 21, 10, 0), value: 7.2, unit: "%")
+    func testFilterLabResults_afterRange_excluded() {
+        let sample = labSample(date(2024, 6, 21, 10, 0), value: 7.2)
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([sample], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 0)
     }
 
-    func testFilterA1C_onStartDay_included() {
-        let sample = A1CSample(effectiveDateTime: date(2024, 6, 15, 0, 0), value: 6.5, unit: "%")
+    func testFilterLabResults_onStartDay_included() {
+        let sample = labSample(date(2024, 6, 15, 0, 0), value: 6.5)
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([sample], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 1)
     }
 
-    func testFilterA1C_onEndDay_included() {
-        let sample = A1CSample(effectiveDateTime: date(2024, 6, 20, 23, 59), value: 6.5, unit: "%")
+    func testFilterLabResults_onEndDay_included() {
+        let sample = labSample(date(2024, 6, 20, 23, 59), value: 6.5)
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([sample], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 1)
     }
 
-    func testFilterA1C_multipleSamples_filtersCorrectly() {
+    func testFilterLabResults_multipleSamples_filtersCorrectly() {
         let samples = [
-            A1CSample(effectiveDateTime: date(2024, 6, 14), value: 7.0, unit: "%"), // before
-            A1CSample(effectiveDateTime: date(2024, 6, 15), value: 7.1, unit: "%"), // start day
-            A1CSample(effectiveDateTime: date(2024, 6, 18), value: 7.2, unit: "%"), // middle
-            A1CSample(effectiveDateTime: date(2024, 6, 20), value: 7.3, unit: "%"), // end day
-            A1CSample(effectiveDateTime: date(2024, 6, 21), value: 7.4, unit: "%"), // after
+            labSample(date(2024, 6, 14), value: 7.0), // before
+            labSample(date(2024, 6, 15), value: 7.1), // start day
+            labSample(date(2024, 6, 18), value: 7.2), // middle
+            labSample(date(2024, 6, 20), value: 7.3), // end day
+            labSample(date(2024, 6, 21), value: 7.4), // after
         ]
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange(samples, dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 3)
         XCTAssertEqual(filtered[0].value, 7.1, accuracy: 0.01)
         XCTAssertEqual(filtered[1].value, 7.2, accuracy: 0.01)
         XCTAssertEqual(filtered[2].value, 7.3, accuracy: 0.01)
     }
 
-    func testFilterA1C_emptySamples_returnsEmpty() {
+    func testFilterLabResults_emptySamples_returnsEmpty() {
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange([], dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([], dateRange: range, calendar: calendar)
         XCTAssertTrue(filtered.isEmpty)
     }
 
-    func testFilterA1C_sameDay_includesFullDay() {
+    func testFilterLabResults_sameDay_includesFullDay() {
         let samples = [
-            A1CSample(effectiveDateTime: date(2024, 6, 15, 0, 0), value: 6.5, unit: "%"),
-            A1CSample(effectiveDateTime: date(2024, 6, 15, 12, 0), value: 6.6, unit: "%"),
-            A1CSample(effectiveDateTime: date(2024, 6, 15, 23, 59), value: 6.7, unit: "%"),
+            labSample(date(2024, 6, 15, 0, 0), value: 6.5),
+            labSample(date(2024, 6, 15, 12, 0), value: 6.6),
+            labSample(date(2024, 6, 15, 23, 59), value: 6.7),
         ]
         let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 15))
 
-        let filtered = HealthKitQueryHelpers.filterA1CSamplesByDateRange(samples, dateRange: range, calendar: calendar)
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: range, calendar: calendar)
         XCTAssertEqual(filtered.count, 3)
     }
 

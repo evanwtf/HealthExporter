@@ -9,7 +9,7 @@ private struct PendingExportPayload {
     var weightSamples: [HKQuantitySample]?
     var stepsSamples: [HKQuantitySample]?
     var glucoseSamples: [GlucoseSampleMgDl]?
-    var a1cSamples: [A1CSample]?
+    var labResults: [LabResultSample]?
 }
 
 struct DataSelectionView: View {
@@ -323,7 +323,7 @@ struct DataSelectionView: View {
         dismissSaveSuccessConfirmation()
         isPreparingExport = true
 
-        healthManager.requestAuthorization(includeA1C: settings.exportA1C) { success, error in
+        healthManager.requestAuthorization(includeLabs: settings.exportA1C) { success, error in
             guard success else {
                 DispatchQueue.main.async {
                     isPreparingExport = false
@@ -337,11 +337,11 @@ struct DataSelectionView: View {
             var weightSamples: [HKQuantitySample]? = nil
             var stepsSamples: [HKQuantitySample]? = nil
             var glucoseSamples: [GlucoseSampleMgDl]? = nil
-            var a1cSamples: [A1CSample]? = nil
+            var labResults: [LabResultSample]? = nil
             var weightFetchError: Error?
             var stepsFetchError: Error?
             var glucoseFetchError: Error?
-            var a1cFetchError: Error?
+            var labFetchError: Error?
             let dispatchGroup = DispatchGroup()
 
             let dateRange = ExportLogic.dateRange(
@@ -388,12 +388,12 @@ struct DataSelectionView: View {
                 }
             }
 
-            if settings.exportA1C {
+            if settings.exportA1C, let a1cMetric = LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C) {
                 dispatchGroup.enter()
-                healthManager.fetchA1CData(dateRange: dateRange, limit: recordLimit) { samples, error in
+                healthManager.fetchLabResults(metrics: [a1cMetric], dateRange: dateRange, limit: recordLimit) { samples, error in
                     DispatchQueue.main.async {
-                        a1cSamples = samples
-                        a1cFetchError = error
+                        labResults = samples
+                        labFetchError = error
                         dispatchGroup.leave()
                     }
                 }
@@ -404,12 +404,12 @@ struct DataSelectionView: View {
                     weightError: weightFetchError,
                     stepsError: stepsFetchError,
                     glucoseError: glucoseFetchError,
-                    a1cError: a1cFetchError
+                    labError: labFetchError
                 ) {
                     weightSamples = nil
                     stepsSamples = nil
                     glucoseSamples = nil
-                    a1cSamples = nil
+                    labResults = nil
                     isPreparingExport = false
                     errorMessage = fetchError.localizedDescription
                     showErrorAlert = true
@@ -420,14 +420,14 @@ struct DataSelectionView: View {
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    a1cSamples: a1cSamples
+                    labResults: labResults
                 )
 
                 guard hasData else {
                     weightSamples = nil
                     stepsSamples = nil
                     glucoseSamples = nil
-                    a1cSamples = nil
+                    labResults = nil
                     isPreparingExport = false
                     errorMessage = ExportError.noDataFound.localizedDescription
                     showErrorAlert = true
@@ -440,13 +440,13 @@ struct DataSelectionView: View {
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    a1cSamples: a1cSamples
+                    labResults: labResults
                 )
                 let estimate = CSVGenerator.makePreviewEstimate(
                     weightSamples: payload.weightSamples,
                     stepsSamples: payload.stepsSamples,
                     glucoseSamples: payload.glucoseSamples,
-                    labResults: payload.a1cSamples.map { $0.map(Self.labResultSample(fromA1C:)) },
+                    labResults: payload.labResults,
                     weightUnit: weightUnit,
                     dateFormat: dateFormat
                 )
@@ -491,8 +491,8 @@ struct DataSelectionView: View {
             CSVGenerator.appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
-        if var samples = payload.a1cSamples.map({ $0.map(Self.labResultSample(fromA1C:)) }) {
-            payload.a1cSamples = nil
+        if var samples = payload.labResults {
+            payload.labResults = nil
             CSVGenerator.appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
@@ -507,17 +507,6 @@ struct DataSelectionView: View {
     private func clearPendingExport() {
         pendingExportPayload = nil
         pendingExportEstimate = nil
-    }
-
-    private static func labResultSample(fromA1C sample: A1CSample) -> LabResultSample {
-        LabResultSample(
-            metricName: LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)?.name ?? "Hemoglobin A1C",
-            loincCode: LOINCCode.hemoglobinA1C,
-            effectiveDateTime: sample.effectiveDateTime,
-            value: sample.value,
-            unit: sample.unit,
-            source: sample.source
-        )
     }
 }
 

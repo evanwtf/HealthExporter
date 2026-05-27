@@ -55,7 +55,7 @@ enum ExportLogic {
         weightError: Error?,
         stepsError: Error?,
         glucoseError: Error?,
-        a1cError: Error?
+        labError: Error?
     ) -> ExportError? {
         if let weightError {
             return .healthKitQueryFailed(metric: HealthMetrics.weight.name, underlying: weightError)
@@ -66,8 +66,8 @@ enum ExportLogic {
         if let glucoseError {
             return .healthKitQueryFailed(metric: HealthMetrics.glucose.name, underlying: glucoseError)
         }
-        if let a1cError {
-            return .healthKitQueryFailed(metric: HealthMetrics.a1c.name, underlying: a1cError)
+        if let labError {
+            return .healthKitQueryFailed(metric: "Lab Results", underlying: labError)
         }
         return nil
     }
@@ -87,12 +87,12 @@ enum ExportLogic {
         weightSamples: [HKQuantitySample]?,
         stepsSamples: [HKQuantitySample]?,
         glucoseSamples: [GlucoseSampleMgDl]?,
-        a1cSamples: [A1CSample]?
+        labResults: [LabResultSample]?
     ) -> Bool {
         (weightSamples?.isEmpty == false) ||
         (stepsSamples?.isEmpty == false) ||
         (glucoseSamples?.isEmpty == false) ||
-        (a1cSamples?.isEmpty == false)
+        (labResults?.isEmpty == false)
     }
 
     /// Generates the export filename for a given date.

@@ -104,7 +104,7 @@ final class ExportLogicTests: XCTestCase {
             weightError: underlying,
             stepsError: nil,
             glucoseError: nil,
-            a1cError: nil
+            labError: nil
         )
 
         XCTAssertEqual(
@@ -117,7 +117,7 @@ final class ExportLogicTests: XCTestCase {
         let stepsError = NSError(domain: "HKErrorDomain", code: 2, userInfo: [
             NSLocalizedDescriptionKey: "Steps failed"
         ])
-        let a1cError = NSError(domain: "HKErrorDomain", code: 3, userInfo: [
+        let labError = NSError(domain: "HKErrorDomain", code: 3, userInfo: [
             NSLocalizedDescriptionKey: "A1C failed"
         ])
 
@@ -125,12 +125,30 @@ final class ExportLogicTests: XCTestCase {
             weightError: nil,
             stepsError: stepsError,
             glucoseError: nil,
-            a1cError: a1cError
+            labError: labError
         )
 
         XCTAssertEqual(
             error?.localizedDescription,
             "Failed to fetch Steps data: Steps failed"
+        )
+    }
+
+    func testFirstFetchError_labErrorUsesLabResultsLabel() {
+        let labError = NSError(domain: "HKErrorDomain", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "lab failed"
+        ])
+
+        let error = ExportLogic.firstFetchError(
+            weightError: nil,
+            stepsError: nil,
+            glucoseError: nil,
+            labError: labError
+        )
+
+        XCTAssertEqual(
+            error?.localizedDescription,
+            "Failed to fetch Lab Results data: lab failed"
         )
     }
 
@@ -193,22 +211,28 @@ final class ExportLogicTests: XCTestCase {
     func testHasAnyData_allNil_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: nil
+            glucoseSamples: nil, labResults: nil
         ))
     }
 
     func testHasAnyData_allEmpty_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: [], stepsSamples: [],
-            glucoseSamples: [], a1cSamples: []
+            glucoseSamples: [], labResults: []
         ))
     }
 
-    func testHasAnyData_withA1CSamples_returnsTrue() {
-        let sample = A1CSample(effectiveDateTime: now, value: 7.0, unit: "%")
+    func testHasAnyData_withLabResults_returnsTrue() {
+        let sample = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: now,
+            value: 7.0,
+            unit: "%"
+        )
         XCTAssertTrue(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: [sample]
+            glucoseSamples: nil, labResults: [sample]
         ))
     }
 
@@ -221,14 +245,14 @@ final class ExportLogicTests: XCTestCase {
         )
         XCTAssertTrue(ExportLogic.hasAnyData(
             weightSamples: [sample], stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: nil
+            glucoseSamples: nil, labResults: nil
         ))
     }
 
     func testHasAnyData_mixedNilAndEmpty_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: [],
-            glucoseSamples: nil, a1cSamples: []
+            glucoseSamples: nil, labResults: []
         ))
     }
 

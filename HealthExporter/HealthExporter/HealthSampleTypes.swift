@@ -145,32 +145,3 @@ struct LabResultSample {
     }
 }
 
-// MARK: - Hemoglobin A1C Sample Type
-struct A1CSample {
-    let effectiveDateTime: Date
-    let value: Double // A1C value as percentage (e.g., 7.5 for 7.5%)
-    let unit: String // Unit from FHIR (typically "%")
-    let source: String
-
-    /// Memberwise initializer for use in tests and previews.
-    init(effectiveDateTime: Date, value: Double, unit: String, source: String = "") {
-        self.effectiveDateTime = effectiveDateTime
-        self.value = value
-        self.unit = unit
-        self.source = source
-    }
-
-    /// Creates an A1C sample from a clinical record FHIR resource
-    /// Looks for LOINC code 4548-4 (Hemoglobin A1C)
-    /// Extracts effectiveDateTime, valueQuantity.value, and valueQuantity.unit
-    init?(from clinicalRecord: HKClinicalRecord) {
-        guard let result = FHIRLabResultParser.extractLabResult(from: clinicalRecord, loincCode: LOINCCode.hemoglobinA1C) else {
-            return nil
-        }
-
-        self.effectiveDateTime = result.effectiveDateTime
-        self.value = result.value
-        self.unit = result.unit
-        self.source = clinicalRecord.sourceRevision.source.name
-    }
-}

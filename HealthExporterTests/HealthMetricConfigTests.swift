@@ -17,10 +17,6 @@ final class HealthMetricConfigTests: XCTestCase {
         XCTAssertEqual(HealthMetrics.glucose.name, "Blood Glucose")
     }
 
-    func testA1C_hasExpectedName() {
-        XCTAssertEqual(HealthMetrics.a1c.name, "Hemoglobin A1C")
-    }
-
     // MARK: - LOINCCode constants
 
     func testLOINCCode_hemoglobinA1C_isCorrect() {

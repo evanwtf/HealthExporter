@@ -61,7 +61,6 @@ class SettingsManager: ObservableObject {
     @Published var exportWeight: Bool
     @Published var exportSteps: Bool
     @Published var exportGlucose: Bool
-    @Published var exportA1C: Bool
     @Published var selectedLabPanels: Set<LabPanel>
     @Published var favoriteLabCodes: Set<String>
     @Published var dateFormat: DateFormatOption
@@ -105,8 +104,6 @@ class SettingsManager: ObservableObject {
         self.exportWeight = UserDefaults.standard.object(forKey: "exportWeight") as? Bool ?? true
         self.exportSteps = UserDefaults.standard.object(forKey: "exportSteps") as? Bool ?? true
         self.exportGlucose = UserDefaults.standard.object(forKey: "exportGlucose") as? Bool ?? false
-
-        self.exportA1C = UserDefaults.standard.object(forKey: "exportA1C") as? Bool ?? false
 
         let panelsRaw = UserDefaults.standard.array(forKey: "selectedLabPanels") as? [String] ?? []
         self.selectedLabPanels = Set(panelsRaw.compactMap(LabPanel.init(rawValue:)))
@@ -161,11 +158,6 @@ class SettingsManager: ObservableObject {
         $exportGlucose
             .dropFirst()
             .sink { UserDefaults.standard.set($0, forKey: "exportGlucose") }
-            .store(in: &cancellables)
-
-        $exportA1C
-            .dropFirst()
-            .sink { UserDefaults.standard.set($0, forKey: "exportA1C") }
             .store(in: &cancellables)
 
         $selectedLabPanels

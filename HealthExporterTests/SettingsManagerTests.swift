@@ -72,12 +72,6 @@ final class SettingsManagerTests: XCTestCase {
         XCTAssertFalse(value)
     }
 
-    func testDefaultExportA1C_whenKeyMissing_isFalse() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "exportA1C") as? Bool ?? false
-        XCTAssertFalse(value)
-    }
-
     func testDefaultLastXDaysValue_whenKeyMissing_is30() {
         let defaults = makeDefaults()
         let value = defaults.object(forKey: "lastXDaysValue") as? Int ?? 30
@@ -113,13 +107,11 @@ final class SettingsManagerTests: XCTestCase {
         defaults.set(false, forKey: "exportWeight")
         defaults.set(false, forKey: "exportSteps")
         defaults.set(true, forKey: "exportGlucose")
-        defaults.set(true, forKey: "exportA1C")
 
         XCTAssertFalse(defaults.bool(forKey: "autoDismissSaveConfirmation"))
         XCTAssertFalse(defaults.bool(forKey: "exportWeight"))
         XCTAssertFalse(defaults.bool(forKey: "exportSteps"))
         XCTAssertTrue(defaults.bool(forKey: "exportGlucose"))
-        XCTAssertTrue(defaults.bool(forKey: "exportA1C"))
     }
 
     func testReadsPersistedIntValues() {

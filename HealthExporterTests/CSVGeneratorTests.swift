@@ -7,6 +7,10 @@ final class CSVGeneratorTests: XCTestCase {
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
     private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+    private let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)!
+    private let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)!
+    private let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+    private let bodyTemperatureType = HKQuantityType.quantityType(forIdentifier: .bodyTemperature)!
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
     /// A fixed reference date (2024-01-15 09:30:00 UTC) for deterministic test output.
@@ -250,6 +254,79 @@ final class CSVGeneratorTests: XCTestCase {
         XCTAssertTrue(csv.contains(",Weight,"))
         XCTAssertTrue(csv.contains(",Steps,"))
         XCTAssertTrue(csv.contains(",Blood Glucose,"))
+    }
+
+    func testGenerateCombinedCSV_bloodPressure_containsPairedRows() {
+        let systolic = HKQuantitySample(
+            type: systolicType,
+            quantity: HKQuantity(unit: .millimeterOfMercury(), doubleValue: 120),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let diastolic = HKQuantitySample(
+            type: diastolicType,
+            quantity: HKQuantity(unit: .millimeterOfMercury(), doubleValue: 80),
+            start: referenceDate,
+            end: referenceDate
+        )
+
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: nil,
+            vitalSamples: [
+                .bloodPressureSystolic: [systolic],
+                .bloodPressureDiastolic: [diastolic]
+            ],
+            weightUnit: .kilograms
+        )
+
+        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertTrue(csv.contains(",Blood Pressure Systolic,120,mmHg,"))
+        XCTAssertTrue(csv.contains(",Blood Pressure Diastolic,80,mmHg,"))
+    }
+
+    func testGenerateCombinedCSV_oxygenSaturation_formatsPercent() {
+        let sample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.985),
+            start: referenceDate,
+            end: referenceDate
+        )
+
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: nil,
+            vitalSamples: [.oxygenSaturation: [sample]],
+            weightUnit: .kilograms
+        )
+
+        XCTAssertTrue(csv.contains(",Oxygen Saturation,98.5,%,"))
+    }
+
+    func testGenerateCombinedCSV_bodyTemperature_usesSelectedUnit() {
+        let sample = HKQuantitySample(
+            type: bodyTemperatureType,
+            quantity: HKQuantity(unit: .degreeCelsius(), doubleValue: 37),
+            start: referenceDate,
+            end: referenceDate
+        )
+
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: nil,
+            vitalSamples: [.bodyTemperature: [sample]],
+            weightUnit: .kilograms,
+            temperatureUnit: .fahrenheit
+        )
+
+        XCTAssertTrue(csv.contains(",Body Temperature,98.6,°F,"))
     }
 
     func testGenerateCombinedCSV_a1cData_containsA1CRow() {

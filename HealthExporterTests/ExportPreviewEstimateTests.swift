@@ -7,6 +7,7 @@ final class ExportPreviewEstimateTests: XCTestCase {
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
     private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+    private let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
     private var referenceDate: Date {
@@ -81,12 +82,19 @@ final class ExportPreviewEstimateTests: XCTestCase {
             unit: "%",
             source: "Clinical Labs"
         )
+        let oxygenSample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.98),
+            start: referenceDate.addingTimeInterval(240),
+            end: referenceDate.addingTimeInterval(240)
+        )
 
         let estimate = CSVGenerator.makePreviewEstimate(
             weightSamples: [weightSample],
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
             labResults: [labSample],
+            vitalSamples: [.oxygenSaturation: [oxygenSample]],
             weightUnit: .pounds,
             dateFormat: .yyyyMMddHHmmss
         )
@@ -95,11 +103,12 @@ final class ExportPreviewEstimateTests: XCTestCase {
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
             labResults: [labSample],
+            vitalSamples: [.oxygenSaturation: [oxygenSample]],
             weightUnit: .pounds,
             dateFormat: .yyyyMMddHHmmss
         )
 
-        XCTAssertEqual(estimate.rowCount, 4)
+        XCTAssertEqual(estimate.rowCount, 5)
         XCTAssertEqual(estimate.estimatedByteCount, csv.utf8.count)
     }
 }

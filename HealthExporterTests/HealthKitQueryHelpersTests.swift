@@ -63,6 +63,22 @@ final class HealthKitQueryHelpersTests: XCTestCase {
         }
     }
 
+    func testReadTypes_withVitals_containsSelectedVitalQuantityTypes() {
+        let types = HealthKitQueryHelpers.readTypes(
+            includeLabs: false,
+            vitalMetrics: [.bloodPressure, .oxygenSaturation]
+        )
+
+        let systolic = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)!
+        let diastolic = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)!
+        let oxygen = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+
+        XCTAssertTrue(types.contains(systolic))
+        XCTAssertTrue(types.contains(diastolic))
+        XCTAssertTrue(types.contains(oxygen))
+        XCTAssertEqual(types.count, 6)
+    }
+
     // MARK: - dayAlignedRange
 
     func testDayAlignedRange_alignsToStartOfDay() {

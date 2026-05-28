@@ -5,17 +5,17 @@
 ## What It Does
 
 - Exports lab result values from Apple Health Clinical Records
-- Each metric is identified by its LOINC code (`4548-4` for Hemoglobin A1C; lipid panel codes `2093-3`, `2085-9`, `2089-1`, `2571-8`)
+- Each metric is identified by its LOINC code (`4548-4` for Hemoglobin A1C; additional supported panels include lipid, CBC, CMP / BMP, thyroid, and other tracked labs)
 - Includes matching lab rows in the same CSV as weight, steps, and glucose
 
 ## Key Files
 
 - `LabMetricRegistry.swift` for `LabPanel`, `LabMetric`, and `LabMetricRegistry.all`
 - `HealthSampleTypes.swift` for `LabResultSample`, FHIR parsing, and `LOINCCode` constants
-- `HealthKitManager.swift` for `requestAuthorization(includeLabs:completion:)` and `fetchLabResults(metrics:dateRange:limit:completion:)`
+- `HealthKitManager.swift` for `requestAuthorization(includeLabs:vitalMetrics:completion:)` and `fetchLabResults(metrics:dateRange:limit:completion:)`
 - `SettingsManager.swift` for `selectedLabPanels` and `favoriteLabCodes` (with one-time `exportA1C` migration)
 - `ExportLogic.swift` for `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`
-- `DataSelectionView.swift` for the "Lab Favorites" / "Lab Panels" toggles and the export flow
+- `DataSelectionView.swift` for lab section toggles and the export flow
 - `CSVGenerator.swift` for `appendLabResultRows(to:samples:dateFormat:sortOrder:)`
 
 ## Required Setup
@@ -37,7 +37,7 @@ Also make sure the target has HealthKit and Clinical Health Records capabilities
 
 ## Export Flow
 
-1. User toggles favorites or panels in the export screen
+1. User toggles lab sections or individual labs in the export screen
 2. `ExportLogic.resolveLabMetrics` builds the deduplicated `[LabMetric]` fetch list
 3. App requests HealthKit read access (clinical records included when labs are selected)
 4. `fetchLabResults` runs a single clinical-records query and parses every matching LOINC into a `LabResultSample`
@@ -61,5 +61,5 @@ Date,Metric,Value,Unit,Source
 ## Notes
 
 - No labs are selected by default
-- Per-metric value precision comes from `LabMetric.valuePrecision`; A1C renders to 2 decimal places and lipid panel labs render as integers
+- Per-metric value precision comes from `LabMetric.valuePrecision`
 - Existing export metrics are unaffected

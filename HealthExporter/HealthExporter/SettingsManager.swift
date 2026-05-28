@@ -63,6 +63,7 @@ class SettingsManager: ObservableObject {
     @Published var exportGlucose: Bool
     @Published var selectedLabPanels: Set<LabPanel>
     @Published var favoriteLabCodes: Set<String>
+    @Published var selectedVitalMetrics: Set<VitalMetric>
     @Published var dateFormat: DateFormatOption
     @Published var sortOrder: SortOrder
     @Published var lastXDaysValue: Int
@@ -110,6 +111,9 @@ class SettingsManager: ObservableObject {
 
         let favoritesRaw = UserDefaults.standard.array(forKey: "favoriteLabCodes") as? [String] ?? []
         self.favoriteLabCodes = Set(favoritesRaw)
+
+        let vitalsRaw = UserDefaults.standard.array(forKey: "selectedVitalMetrics") as? [String] ?? []
+        self.selectedVitalMetrics = Set(vitalsRaw.compactMap(VitalMetric.init(rawValue:)))
 
         self.lastXDaysValue = UserDefaults.standard.object(forKey: "lastXDaysValue") as? Int ?? 30
         self.lastXRecordsValue = UserDefaults.standard.object(forKey: "lastXRecordsValue") as? Int ?? 100
@@ -168,6 +172,11 @@ class SettingsManager: ObservableObject {
         $favoriteLabCodes
             .dropFirst()
             .sink { UserDefaults.standard.set(Array($0), forKey: "favoriteLabCodes") }
+            .store(in: &cancellables)
+
+        $selectedVitalMetrics
+            .dropFirst()
+            .sink { UserDefaults.standard.set($0.map(\.rawValue), forKey: "selectedVitalMetrics") }
             .store(in: &cancellables)
 
         $lastXDaysValue

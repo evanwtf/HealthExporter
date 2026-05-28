@@ -9,7 +9,8 @@ The current app exports:
 - Weight (`HKQuantityTypeIdentifierBodyMass`)
 - Steps (`HKQuantityTypeIdentifierStepCount`)
 - Blood Glucose (`HKQuantityTypeIdentifierBloodGlucose`)
-- Hemoglobin A1C (`HKClinicalTypeIdentifierLabResultRecord`, filtered to LOINC `4548-4`)
+- Selected lab panels from Clinical Health Records, including Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
+- Selected vitals: blood pressure, resting heart rate, heart rate variability (SDNN), oxygen saturation, respiratory rate, and body temperature
 
 The list below is based on a review of a full Apple Health export dump from a real iPhone backup (`~/Dropbox/apple_health_export`). The goal is to prioritize exports that are both useful to users and compatible with the app's CSV-first workflow.
 
@@ -46,14 +47,14 @@ The dump also contains:
 
 ### Cardio and recovery
 
-Strong near-term candidates with broad user appeal:
+Strong candidates with broad user appeal:
 
 - Heart Rate (`HKQuantityTypeIdentifierHeartRate`)
-- Resting Heart Rate (`HKQuantityTypeIdentifierRestingHeartRate`)
+- Resting Heart Rate (`HKQuantityTypeIdentifierRestingHeartRate`) — implemented
 - Walking Heart Rate Average (`HKQuantityTypeIdentifierWalkingHeartRateAverage`)
-- Heart Rate Variability (SDNN) (`HKQuantityTypeIdentifierHeartRateVariabilitySDNN`)
-- Respiratory Rate (`HKQuantityTypeIdentifierRespiratoryRate`)
-- Oxygen Saturation (`HKQuantityTypeIdentifierOxygenSaturation`)
+- Heart Rate Variability (SDNN) (`HKQuantityTypeIdentifierHeartRateVariabilitySDNN`) — implemented
+- Respiratory Rate (`HKQuantityTypeIdentifierRespiratoryRate`) — implemented
+- Oxygen Saturation (`HKQuantityTypeIdentifierOxygenSaturation`) — implemented
 - VO2 Max (`HKQuantityTypeIdentifierVO2Max`)
 - Heart Rate Recovery (`HKQuantityTypeIdentifierHeartRateRecoveryOneMinute`)
 
@@ -206,7 +207,7 @@ Beyond A1C, the sampled export includes:
 
 Potential future directions:
 
-- Generic lab-result export from clinical records
+- Additional clinical-record categories beyond lab-result observations
 - Diagnostic report metadata export
 - Condition and allergy metadata export
 - ECG discovery/export

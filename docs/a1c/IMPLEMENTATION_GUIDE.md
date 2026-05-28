@@ -2,7 +2,7 @@
 
 ## Overview
 
-Lab result export — including Hemoglobin A1C and lipid panel labs — is part of the current HealthExporter release. Users can opt into exporting Clinical Health Records lab results and the app will include matching records in the combined CSV output. The lab pipeline is registry-driven: adding a new lab requires only appending a `LabMetric` to `LabMetricRegistry.all`.
+Lab result export — including Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs — is part of the current HealthExporter release. Users can opt into exporting Clinical Health Records lab results and the app will include matching records in the combined CSV output. The lab pipeline is registry-driven: adding a new lab requires only appending a `LabMetric` to `LabMetricRegistry.all`.
 
 > Testing status: A1C export has been verified working end-to-end on a physical device with Clinical Health Records enabled. Byte-identical CSV output is pinned by `A1CCSVBytePinningTests`.
 
@@ -13,7 +13,7 @@ Lab result export — including Hemoglobin A1C and lipid panel labs — is part 
 - `LabMetricRegistry.swift` defines the metric registry
 - `LabPanel` groups metrics into logical panels (`lipid`, `cbc`, `cmp`, `thyroid`, `other`)
 - `LabMetric` describes a single lab observation: `name`, `loincCode` (also `id`), `group`, and `valuePrecision`
-- `LabMetricRegistry.all` is the single source of truth; current entries include Hemoglobin A1C plus Total Cholesterol, HDL Cholesterol, LDL Cholesterol, and Triglycerides
+- `LabMetricRegistry.all` is the single source of truth; current entries include Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
 - Helpers: `LabMetricRegistry.metric(forLoincCode:)` and `LabMetricRegistry.metrics(in:)`
 
 ### Data Model
@@ -21,11 +21,11 @@ Lab result export — including Hemoglobin A1C and lipid panel labs — is part 
 - `HealthSampleTypes.swift` defines `LabResultSample`, the generic lab result row
 - `LabResultSample` carries `metricName`, `loincCode`, `effectiveDateTime`, `value`, `unit`, and `source`
 - Initializers parse FHIR JSON (`init?(fromFHIRData:loincCode:source:)`) or an `HKClinicalRecord` (`init?(from:loincCode:)`)
-- LOINC `4548-4` identifies Hemoglobin A1C; lipid LOINC constants (`2093-3`, `2085-9`, `2089-1`, `2571-8`) live alongside it in `LOINCCode`
+- LOINC constants live in `LOINCCode`; for example, `4548-4` identifies Hemoglobin A1C and `2093-3` identifies Total Cholesterol
 
 ### HealthKit Authorization
 
-- `HealthKitManager.requestAuthorization(includeLabs:completion:)` adds the clinical-records read type when any lab metric is selected
+- `HealthKitManager.requestAuthorization(includeLabs:vitalMetrics:completion:)` adds the clinical-records read type when any lab metric is selected
 - Production authorization is read-only; `toShare` is an empty set
 - The app targets iOS 26+, while the clinical-records code path is guarded with `#available(iOS 15.0, *)`
 
@@ -39,7 +39,7 @@ Lab result export — including Hemoglobin A1C and lipid panel labs — is part 
 
 - `SettingsManager` persists `selectedLabPanels: Set<LabPanel>` and `favoriteLabCodes: Set<String>` in `UserDefaults`
 - A one-time legacy migration seeds `favoriteLabCodes = ["4548-4"]` for upgrade installs that had `exportA1C == true`; the legacy boolean is no longer read after migration
-- `DataSelectionView` shows a "Lab Favorites" section (per-metric toggles bound to `favoriteLabCodes`) and a "Lab Panels" section (one toggle per `LabPanel` that has at least one registered metric)
+- `DataSelectionView` shows one section per `LabPanel`. Each section has a panel-level toggle plus per-metric toggles for fine-grained selection.
 - `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:registry:)` produces the deduplicated fetch list
 - `SettingsView` exposes simulator-only test data generation, but the write path is not part of the production export flow
 
@@ -47,7 +47,7 @@ Lab result export — including Hemoglobin A1C and lipid panel labs — is part 
 
 - `CSVGenerator.appendLabResultRows(to:samples:dateFormat:sortOrder:)` appends rows to the combined export
 - The metric label comes from `LabMetric.name` (e.g. `Hemoglobin A1C` or `Total Cholesterol`)
-- Per-metric precision comes from `LabMetric.valuePrecision`; A1C renders to 2 decimal places and lipid panel labs render as integers
+- Per-metric precision comes from `LabMetric.valuePrecision`
 
 ## Required Configuration
 
@@ -67,7 +67,7 @@ The Clinical Health Records usage string should clearly explain why the app need
 
 ## Data Flow
 
-1. User toggles favorites or panels in `DataSelectionView`
+1. User toggles lab sections or individual labs in `DataSelectionView`
 2. `ExportLogic.resolveLabMetrics` produces the deduplicated list of `LabMetric`s
 3. The app requests HealthKit read access; clinical records are included when the list is non-empty
 4. `HealthKitManager.fetchLabResults` runs a single clinical-records query

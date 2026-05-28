@@ -10,6 +10,7 @@ private struct PendingExportPayload {
     var stepsSamples: [HKQuantitySample]?
     var glucoseSamples: [GlucoseSampleMgDl]?
     var labResults: [LabResultSample]?
+    var vitalSamples: [VitalMetricComponent: [HKQuantitySample]]
 }
 
 struct DataSelectionView: View {
@@ -44,7 +45,8 @@ struct DataSelectionView: View {
         settings.exportWeight ||
         settings.exportSteps ||
         settings.exportGlucose ||
-        hasSelectedLabs
+        hasSelectedLabs ||
+        hasSelectedVitals
     }
 
     private var hasSelectedLabs: Bool {
@@ -58,46 +60,104 @@ struct DataSelectionView: View {
         )
     }
 
+    private var hasSelectedVitals: Bool {
+        !settings.selectedVitalMetrics.isEmpty
+    }
+
+    private var vitalComponentsToFetch: [VitalMetricComponent] {
+        VitalMetricComponent.allCases.filter { component in
+            settings.selectedVitalMetrics.contains { $0.components.contains(component) }
+        }
+    }
+
     private func updateExportEnabled() {
         exportEnabled = ExportLogic.isExportEnabled(
             exportWeight: settings.exportWeight,
             exportSteps: settings.exportSteps,
             exportGlucose: settings.exportGlucose,
             hasSelectedLabs: hasSelectedLabs,
+            hasSelectedVitals: hasSelectedVitals,
             dateRangeOption: selectedDateRangeOption,
             startDate: startDate,
             endDate: endDate
         )
     }
 
-    private func favoriteBinding(for loincCode: String) -> Binding<Bool> {
+    private func labSelectionBinding(for loincCode: String) -> Binding<Bool> {
         Binding(
-            get: { settings.favoriteLabCodes.contains(loincCode) },
+            get: {
+                if settings.favoriteLabCodes.contains(loincCode) {
+                    return true
+                }
+                guard let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group else {
+                    return false
+                }
+                return settings.selectedLabPanels.contains(panel)
+            },
             set: { newValue in
                 if newValue {
                     settings.favoriteLabCodes.insert(loincCode)
                 } else {
+                    if let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group,
+                       settings.selectedLabPanels.contains(panel) {
+                        let remainingCodes = LabMetricRegistry.metrics(in: panel)
+                            .map(\.loincCode)
+                            .filter { $0 != loincCode }
+                        settings.selectedLabPanels.remove(panel)
+                        settings.favoriteLabCodes.formUnion(remainingCodes)
+                    }
                     settings.favoriteLabCodes.remove(loincCode)
                 }
             }
         )
     }
 
-    private func panelBinding(for panel: LabPanel) -> Binding<Bool> {
+    private func labPanelSelectionBinding(for panel: LabPanel) -> Binding<Bool> {
         Binding(
-            get: { settings.selectedLabPanels.contains(panel) },
+            get: {
+                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
+                return settings.selectedLabPanels.contains(panel) || (!codes.isEmpty && codes.allSatisfy { settings.favoriteLabCodes.contains($0) })
+            },
             set: { newValue in
+                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
                 if newValue {
+                    settings.favoriteLabCodes.formUnion(codes)
                     settings.selectedLabPanels.insert(panel)
                 } else {
+                    settings.favoriteLabCodes.subtract(codes)
                     settings.selectedLabPanels.remove(panel)
                 }
             }
         )
     }
 
-    private var panelsWithMetrics: [LabPanel] {
-        LabPanel.allCases.filter { !LabMetricRegistry.metrics(in: $0).isEmpty }
+    private func vitalMetricBinding(for metric: VitalMetric) -> Binding<Bool> {
+        Binding(
+            get: { settings.selectedVitalMetrics.contains(metric) },
+            set: { newValue in
+                if newValue {
+                    settings.selectedVitalMetrics.insert(metric)
+                } else {
+                    settings.selectedVitalMetrics.remove(metric)
+                }
+            }
+        )
+    }
+
+    private func vitalSectionBinding() -> Binding<Bool> {
+        Binding(
+            get: {
+                let metrics = Set(VitalMetric.allCases)
+                return !metrics.isEmpty && metrics.isSubset(of: settings.selectedVitalMetrics)
+            },
+            set: { newValue in
+                if newValue {
+                    settings.selectedVitalMetrics.formUnion(VitalMetric.allCases)
+                } else {
+                    settings.selectedVitalMetrics.removeAll()
+                }
+            }
+        )
     }
 
     private func presentSaveSuccessConfirmation() {
@@ -131,168 +191,169 @@ struct DataSelectionView: View {
         saveSuccessDismissTask = nil
     }
 
+    private func labPanelSection(_ panel: LabPanel) -> some View {
+        let metrics = LabMetricRegistry.metrics(in: panel)
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: labPanelSelectionBinding(for: panel)) {
+                Text(panel.displayName)
+                    .font(.headline)
+            }
+            .accessibilityIdentifier("panel_\(panel.rawValue)")
+
+            ForEach(metrics) { metric in
+                Toggle(isOn: labSelectionBinding(for: metric.loincCode)) {
+                    HStack(spacing: 4) {
+                        Text(metric.name)
+                        Image(systemName: "cross.case")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.leading, 12)
+                .accessibilityIdentifier("lab_\(metric.loincCode)")
+            }
+        }
+    }
+
+    private func vitalsSection() -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: vitalSectionBinding()) {
+                Text("Vitals")
+                    .font(.headline)
+            }
+            .accessibilityIdentifier("vitalsSectionToggle")
+
+            ForEach(VitalMetric.allCases) { metric in
+                Toggle(metric.displayName, isOn: vitalMetricBinding(for: metric))
+                    .padding(.leading, 12)
+                    .accessibilityIdentifier("vital_\(metric.rawValue)")
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
-            VStack {
-                Text("Select Data to Export")
-                    .font(.largeTitle)
-                    .padding()
-
-                Toggle(isOn: $settings.exportWeight) {
-                    Text("Weight")
-                }
-                .padding(.horizontal)
-                .accessibilityIdentifier("weightToggle")
-
-                Toggle(isOn: $settings.exportSteps) {
-                    Text("Steps")
-                }
-                .padding(.horizontal)
-                .accessibilityIdentifier("stepsToggle")
-
-                Toggle(isOn: $settings.exportGlucose) {
-                    Text("Blood Glucose (mg/dL)")
-                }
-                .padding(.horizontal)
-                .accessibilityIdentifier("glucoseToggle")
-
-                if !LabMetricRegistry.all.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Lab Favorites")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        ForEach(LabMetricRegistry.all) { metric in
-                            HStack {
-                                HStack(spacing: 4) {
-                                    Text(metric.name)
-                                    Image(systemName: "cross.case")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Toggle("", isOn: favoriteBinding(for: metric.loincCode))
-                                    .labelsHidden()
-                                    .accessibilityIdentifier("favorite_\(metric.loincCode)")
-                            }
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: $settings.exportWeight) {
+                            Text("Weight")
                         }
+                        .accessibilityIdentifier("weightToggle")
 
-                        if !panelsWithMetrics.isEmpty {
-                            Text("Lab Panels")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 4)
+                        Toggle(isOn: $settings.exportSteps) {
+                            Text("Steps")
+                        }
+                        .accessibilityIdentifier("stepsToggle")
 
-                            ForEach(panelsWithMetrics, id: \.self) { panel in
-                                Toggle(panel.displayName, isOn: panelBinding(for: panel))
-                                    .accessibilityIdentifier("panel_\(panel.rawValue)")
-                            }
+                        Toggle(isOn: $settings.exportGlucose) {
+                            Text("Blood Glucose (mg/dL)")
+                        }
+                        .accessibilityIdentifier("glucoseToggle")
+
+                        ForEach(LabPanel.allCases, id: \.self) { panel in
+                            labPanelSection(panel)
                         }
 
                         HStack(spacing: 4) {
                             Image(systemName: "cross.case")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
-                            Text("Requires access to Clinical Health Records")
+                            Text("Lab sections require access to Clinical Health Records")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal)
-                }
 
-                Divider()
-                    .padding()
+                        vitalsSection()
 
-                Text("Date Range")
-                    .font(.headline)
-                    .padding(.horizontal)
+                        Divider()
+                            .padding(.vertical, 8)
 
-                Picker("Date Range", selection: $selectedDateRangeOption) {
-                    ForEach(DateRangeOption.allCases, id: \.self) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-                .accessibilityIdentifier("dateRangePicker")
+                        Text("Date Range")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .center)
 
-                // Last X Days Option
-                if selectedDateRangeOption == .lastXDays {
-                    VStack(spacing: 4) {
-                        Text("Days:")
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Picker("Days", selection: $settings.lastXDaysValue) {
-                            ForEach(DataSelectionView.dayOptions, id: \.self) { days in
-                                Text("\(days)").tag(days)
+                        Picker("Date Range", selection: $selectedDateRangeOption) {
+                            ForEach(DateRangeOption.allCases, id: \.self) { option in
+                                Text(option.displayName).tag(option)
                             }
                         }
-                        .pickerStyle(.wheel)
-                        .frame(height: 120)
-                        .accessibilityLabel("Number of days")
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("dateRangePicker")
 
-                        Text(DayRangeSummaryFormatter.summaryText(forDays: settings.lastXDaysValue, relativeTo: Date()))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal)
-                }
+                        if selectedDateRangeOption == .lastXDays {
+                            VStack(spacing: 4) {
+                                Text("Days:")
+                                    .font(.subheadline)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Picker("Days", selection: $settings.lastXDaysValue) {
+                                    ForEach(DataSelectionView.dayOptions, id: \.self) { days in
+                                        Text("\(days)").tag(days)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(height: 120)
+                                .accessibilityLabel("Number of days")
 
-                // Last X Records Option
-                if selectedDateRangeOption == .lastXRecords {
-                    VStack(spacing: 4) {
-                        Text("Records:")
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Picker("Records", selection: $settings.lastXRecordsValue) {
-                            ForEach(DataSelectionView.recordOptions, id: \.self) { records in
-                                Text("\(records)").tag(records)
+                                Text(DayRangeSummaryFormatter.summaryText(forDays: settings.lastXDaysValue, relativeTo: Date()))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                        .pickerStyle(.wheel)
-                        .frame(height: 120)
-                        .accessibilityLabel("Number of records")
+
+                        if selectedDateRangeOption == .lastXRecords {
+                            VStack(spacing: 4) {
+                                Text("Records:")
+                                    .font(.subheadline)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Picker("Records", selection: $settings.lastXRecordsValue) {
+                                    ForEach(DataSelectionView.recordOptions, id: \.self) { records in
+                                        Text("\(records)").tag(records)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(height: 120)
+                                .accessibilityLabel("Number of records")
+                            }
+                        }
+
+                        if selectedDateRangeOption == .specificDateRange {
+                            VStack(alignment: .leading, spacing: 12) {
+                                VStack(alignment: .leading) {
+                                    Text("Start Date")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                                        .datePickerStyle(.compact)
+                                }
+
+                                VStack(alignment: .leading) {
+                                    Text("End Date")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    DatePicker("", selection: $endDate, displayedComponents: .date)
+                                        .datePickerStyle(.compact)
+                                }
+                            }
+                        }
+
+                        if !hasSelectedMetric {
+                            Text("Please select at least one metric")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+
+                        if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
+                            Text("End date must be on or after start date")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
                     }
                     .padding(.horizontal)
-                }
-
-                // Specific Date Range Option
-                if selectedDateRangeOption == .specificDateRange {
-                    VStack(alignment: .leading, spacing: 12) {
-                        VStack(alignment: .leading) {
-                            Text("Start Date")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            DatePicker("", selection: $startDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                        }
-
-                        VStack(alignment: .leading) {
-                            Text("End Date")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            DatePicker("", selection: $endDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                        }
-                    }
-                    .padding()
-                }
-
-                Spacer()
-
-                if !hasSelectedMetric {
-                    Text("Please select at least one metric")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-
-                if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
-                    Text("End date must be on or after start date")
-                        .font(.caption)
-                        .foregroundColor(.red)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
                 }
 
                 Button(action: {
@@ -310,7 +371,6 @@ struct DataSelectionView: View {
                 .padding()
                 .accessibilityIdentifier("exportButton")
             }
-            .padding()
             .disabled(isPreparingExport)
 
             if isPreparingExport {
@@ -323,12 +383,15 @@ struct DataSelectionView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
+        .navigationTitle("Select Data to Export")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear { updateExportEnabled() }
         .onChange(of: settings.exportWeight) { updateExportEnabled() }
         .onChange(of: settings.exportSteps) { updateExportEnabled() }
         .onChange(of: settings.exportGlucose) { updateExportEnabled() }
         .onChange(of: settings.favoriteLabCodes) { updateExportEnabled() }
         .onChange(of: settings.selectedLabPanels) { updateExportEnabled() }
+        .onChange(of: settings.selectedVitalMetrics) { updateExportEnabled() }
         .onChange(of: selectedDateRangeOption) { updateExportEnabled() }
         .onChange(of: startDate) { updateExportEnabled() }
         .onChange(of: endDate) { updateExportEnabled() }
@@ -387,7 +450,9 @@ struct DataSelectionView: View {
         isPreparingExport = true
 
         let metricsForFetch = labMetricsToFetch
-        healthManager.requestAuthorization(includeLabs: !metricsForFetch.isEmpty) { success, error in
+        let vitalMetricsForFetch = settings.selectedVitalMetrics
+        let vitalComponentsForFetch = vitalComponentsToFetch
+        healthManager.requestAuthorization(includeLabs: !metricsForFetch.isEmpty, vitalMetrics: vitalMetricsForFetch) { success, error in
             guard success else {
                 DispatchQueue.main.async {
                     isPreparingExport = false
@@ -402,10 +467,12 @@ struct DataSelectionView: View {
             var stepsSamples: [HKQuantitySample]? = nil
             var glucoseSamples: [GlucoseSampleMgDl]? = nil
             var labResults: [LabResultSample]? = nil
+            var vitalSamples: [VitalMetricComponent: [HKQuantitySample]] = [:]
             var weightFetchError: Error?
             var stepsFetchError: Error?
             var glucoseFetchError: Error?
             var labFetchError: Error?
+            var vitalFetchError: Error?
             let dispatchGroup = DispatchGroup()
 
             let dateRange = ExportLogic.dateRange(
@@ -463,17 +530,32 @@ struct DataSelectionView: View {
                 }
             }
 
+            for component in vitalComponentsForFetch {
+                dispatchGroup.enter()
+                healthManager.fetchVitalData(component: component, dateRange: dateRange, limit: recordLimit) { samples, error in
+                    DispatchQueue.main.async {
+                        vitalSamples[component] = samples ?? []
+                        if vitalFetchError == nil {
+                            vitalFetchError = error
+                        }
+                        dispatchGroup.leave()
+                    }
+                }
+            }
+
             dispatchGroup.notify(queue: .main) {
                 if let fetchError = ExportLogic.firstFetchError(
                     weightError: weightFetchError,
                     stepsError: stepsFetchError,
                     glucoseError: glucoseFetchError,
-                    labError: labFetchError
+                    labError: labFetchError,
+                    vitalError: vitalFetchError
                 ) {
                     weightSamples = nil
                     stepsSamples = nil
                     glucoseSamples = nil
                     labResults = nil
+                    vitalSamples.removeAll()
                     isPreparingExport = false
                     errorMessage = fetchError.localizedDescription
                     showErrorAlert = true
@@ -484,7 +566,8 @@ struct DataSelectionView: View {
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    labResults: labResults
+                    labResults: labResults,
+                    vitalSamples: vitalSamples
                 )
 
                 guard hasData else {
@@ -492,6 +575,7 @@ struct DataSelectionView: View {
                     stepsSamples = nil
                     glucoseSamples = nil
                     labResults = nil
+                    vitalSamples.removeAll()
                     isPreparingExport = false
                     errorMessage = ExportError.noDataFound.localizedDescription
                     showErrorAlert = true
@@ -500,18 +584,22 @@ struct DataSelectionView: View {
 
                 let dateFormat = self.settings.dateFormat
                 let weightUnit = self.settings.weightUnit
+                let temperatureUnit = self.settings.temperatureUnit
                 let payload = PendingExportPayload(
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    labResults: labResults
+                    labResults: labResults,
+                    vitalSamples: vitalSamples
                 )
                 let estimate = CSVGenerator.makePreviewEstimate(
                     weightSamples: payload.weightSamples,
                     stepsSamples: payload.stepsSamples,
                     glucoseSamples: payload.glucoseSamples,
                     labResults: payload.labResults,
+                    vitalSamples: payload.vitalSamples,
                     weightUnit: weightUnit,
+                    temperatureUnit: temperatureUnit,
                     dateFormat: dateFormat
                 )
 
@@ -538,6 +626,7 @@ struct DataSelectionView: View {
         let dateFormat = settings.dateFormat
         let sortOrder = settings.sortOrder
         let weightUnit = settings.weightUnit
+        let temperatureUnit = settings.temperatureUnit
         var csv = CSVGenerator.csvHeader + "\n"
 
         if var samples = payload.weightSamples {
@@ -558,6 +647,10 @@ struct DataSelectionView: View {
         if var samples = payload.labResults {
             payload.labResults = nil
             CSVGenerator.appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+        }
+
+        if !payload.vitalSamples.isEmpty {
+            CSVGenerator.appendVitalRows(to: &csv, samplesByComponent: &payload.vitalSamples, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         csvContent = csv

@@ -37,6 +37,13 @@ final class ExportLogicTests: XCTestCase {
         ))
     }
 
+    func testExportEnabled_vitalsOnly_lastXDays() {
+        XCTAssertTrue(ExportLogic.isExportEnabled(
+            exportWeight: false, exportSteps: false, exportGlucose: false, hasSelectedLabs: false, hasSelectedVitals: true,
+            dateRangeOption: .lastXDays, startDate: now, endDate: now
+        ))
+    }
+
     func testExportEnabled_a1cOnly_specificDateRange_validRange() {
         let start = calendar.date(byAdding: .day, value: -7, to: now)!
         XCTAssertTrue(ExportLogic.isExportEnabled(
@@ -149,6 +156,25 @@ final class ExportLogicTests: XCTestCase {
         XCTAssertEqual(
             error?.localizedDescription,
             "Failed to fetch Lab Results data: lab failed"
+        )
+    }
+
+    func testFirstFetchError_vitalErrorUsesVitalsLabel() {
+        let vitalError = NSError(domain: "HKErrorDomain", code: 5, userInfo: [
+            NSLocalizedDescriptionKey: "vitals failed"
+        ])
+
+        let error = ExportLogic.firstFetchError(
+            weightError: nil,
+            stepsError: nil,
+            glucoseError: nil,
+            labError: nil,
+            vitalError: vitalError
+        )
+
+        XCTAssertEqual(
+            error?.localizedDescription,
+            "Failed to fetch Vitals data: vitals failed"
         )
     }
 
@@ -309,6 +335,24 @@ final class ExportLogicTests: XCTestCase {
         XCTAssertTrue(ExportLogic.hasAnyData(
             weightSamples: [sample], stepsSamples: nil,
             glucoseSamples: nil, labResults: nil
+        ))
+    }
+
+    func testHasAnyData_withVitalSamples_returnsTrue() {
+        let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+        let sample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.98),
+            start: now,
+            end: now
+        )
+
+        XCTAssertTrue(ExportLogic.hasAnyData(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: nil,
+            vitalSamples: [.oxygenSaturation: [sample]]
         ))
     }
 

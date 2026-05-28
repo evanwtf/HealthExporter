@@ -5,12 +5,18 @@ import os
 enum HealthKitQueryHelpers {
 
     /// The set of HealthKit types to request read access for.
-    static func readTypes(includeLabs: Bool) -> Set<HKObjectType> {
+    static func readTypes(includeLabs: Bool, vitalMetrics: Set<VitalMetric> = []) -> Set<HKObjectType> {
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
         let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
 
         var types: Set<HKObjectType> = [weightType, stepsType, glucoseType]
+
+        for component in vitalMetrics.flatMap(\.components) {
+            if let type = HKQuantityType.quantityType(forIdentifier: component.healthKitIdentifier) {
+                types.insert(type)
+            }
+        }
 
         if includeLabs,
            let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
@@ -105,13 +111,13 @@ class HealthKitManager {
     let healthStore = HKHealthStore()
     private static let logger = Logger(subsystem: "com.HealthExporter", category: "HealthKit")
     
-    func requestAuthorization(includeLabs: Bool = false, completion: @escaping (Bool, Error?) -> Void) {
+    func requestAuthorization(includeLabs: Bool = false, vitalMetrics: Set<VitalMetric> = [], completion: @escaping (Bool, Error?) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false, NSError(domain: "HealthKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "HealthKit is not available"]))
             return
         }
 
-        let typesToRead = HealthKitQueryHelpers.readTypes(includeLabs: includeLabs)
+        let typesToRead = HealthKitQueryHelpers.readTypes(includeLabs: includeLabs, vitalMetrics: vitalMetrics)
 
         healthStore.requestAuthorization(toShare: Set(), read: typesToRead) { success, error in
             completion(success, error)
@@ -175,6 +181,28 @@ class HealthKitManager {
             let glucoseSamples = rawSamples?.compactMap { GlucoseSampleMgDl(from: $0) }
             Self.logger.debug("Glucose samples after filtering: \(glucoseSamples?.count ?? 0)")
             completion(glucoseSamples, error)
+        }
+        healthStore.execute(query)
+    }
+
+    func fetchVitalData(component: VitalMetricComponent, dateRange: (startDate: Date, endDate: Date)? = nil, limit: Int = HKObjectQueryNoLimit, completion: @escaping ([HKQuantitySample]?, Error?) -> Void) {
+        guard let quantityType = HKQuantityType.quantityType(forIdentifier: component.healthKitIdentifier) else {
+            completion(nil, NSError(domain: "HealthKit", code: 4, userInfo: [NSLocalizedDescriptionKey: "\(component.displayName) type not available"]))
+            return
+        }
+
+        var predicate: NSPredicate? = nil
+        if let dateRange = dateRange {
+            predicate = HealthKitQueryHelpers.predicateForDateRange(dateRange)
+            if predicate == nil {
+                completion(nil, nil)
+                return
+            }
+        }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let query = HKSampleQuery(sampleType: quantityType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]) { _, samples, error in
+            completion(samples as? [HKQuantitySample], error)
         }
         healthStore.execute(query)
     }

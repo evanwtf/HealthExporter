@@ -27,10 +27,48 @@ struct GlucoseSampleMgDl {
 /// Common LOINC codes for lab results
 struct LOINCCode {
     static let hemoglobinA1C = "4548-4"
+
     static let totalCholesterol = "2093-3"
     static let hdlCholesterol = "2085-9"
     static let ldlCholesterolDirect = "2089-1"
     static let triglycerides = "2571-8"
+
+    static let whiteBloodCellCount = "6690-2"
+    static let redBloodCellCount = "789-8"
+    static let hemoglobin = "718-7"
+    static let hematocrit = "4544-3"
+    static let platelets = "777-3"
+    static let meanCorpuscularVolume = "787-2"
+    static let meanCorpuscularHemoglobin = "785-6"
+    static let meanCorpuscularHemoglobinConcentration = "786-4"
+    static let redCellDistributionWidth = "788-0"
+
+    static let fastingGlucose = "1558-6"
+    static let bloodUreaNitrogen = "3094-0"
+    static let creatinine = "2160-0"
+    static let estimatedGlomerularFiltrationRate = "33914-3"
+    static let sodium = "2951-2"
+    static let potassium = "2823-3"
+    static let chloride = "2075-0"
+    static let carbonDioxideBicarbonate = "2028-9"
+    static let calcium = "17861-6"
+    static let totalProtein = "2885-2"
+    static let albumin = "1751-7"
+    static let bilirubinTotal = "1975-2"
+    static let alanineAminotransferase = "1742-6"
+    static let aspartateAminotransferase = "1920-8"
+    static let alkalinePhosphatase = "6768-6"
+
+    static let thyroidStimulatingHormone = "3016-3"
+    static let freeT4 = "3024-7"
+    static let freeT3 = "3051-0"
+
+    static let vitaminD25Hydroxy = "1989-3"
+    static let vitaminB12 = "2132-9"
+    static let ferritin = "2276-4"
+    static let iron = "2498-4"
+    static let totalIronBindingCapacity = "2500-7"
+    static let highSensitivityCRP = "30522-7"
 }
 
 // MARK: - FHIR Lab Result Helper

@@ -6,7 +6,7 @@ permalink: /privacy-policy/
 
 # Privacy Policy — HealthExporterCSV
 
-**Last updated:** March 2026
+**Last updated:** May 2026
 
 ## Overview
 
@@ -19,7 +19,8 @@ HealthExporterCSV requests read-only access to the following Apple HealthKit dat
 - Weight
 - Step Count
 - Blood Glucose
-- Selected clinical lab results, such as Hemoglobin A1C and lipid panel labs
+- Selected clinical lab results, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
+- Selected vitals, such as blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature
 
 You control exactly which data types to share through the Apple Health permissions dialog.
 

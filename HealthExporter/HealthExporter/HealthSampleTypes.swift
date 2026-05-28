@@ -87,32 +87,61 @@ struct FHIRLabResultParser {
     }
 }
 
-// MARK: - Hemoglobin A1C Sample Type
-struct A1CSample {
+// MARK: - Generic Lab Result Sample
+
+/// Generic lab result row used by the lab pipeline. Carries everything needed
+/// to render a CSV row: human-readable metric name, LOINC identifier, and the
+/// observation's date/value/unit/source.
+struct LabResultSample {
+    let metricName: String
+    let loincCode: String
     let effectiveDateTime: Date
-    let value: Double // A1C value as percentage (e.g., 7.5 for 7.5%)
-    let unit: String // Unit from FHIR (typically "%")
+    let value: Double
+    let unit: String
     let source: String
 
-    /// Memberwise initializer for use in tests and previews.
-    init(effectiveDateTime: Date, value: Double, unit: String, source: String = "") {
+    init(
+        metricName: String,
+        loincCode: String,
+        effectiveDateTime: Date,
+        value: Double,
+        unit: String,
+        source: String = ""
+    ) {
+        self.metricName = metricName
+        self.loincCode = loincCode
         self.effectiveDateTime = effectiveDateTime
         self.value = value
         self.unit = unit
         self.source = source
     }
 
-    /// Creates an A1C sample from a clinical record FHIR resource
-    /// Looks for LOINC code 4548-4 (Hemoglobin A1C)
-    /// Extracts effectiveDateTime, valueQuantity.value, and valueQuantity.unit
-    init?(from clinicalRecord: HKClinicalRecord) {
-        guard let result = FHIRLabResultParser.extractLabResult(from: clinicalRecord, loincCode: LOINCCode.hemoglobinA1C) else {
+    /// Builds a LabResultSample from raw FHIR JSON data for a known LOINC code.
+    /// Returns nil if the FHIR resource cannot be parsed or the LOINC code is
+    /// not registered in `LabMetricRegistry`.
+    init?(fromFHIRData fhirData: Data, loincCode: String, source: String) {
+        guard let metric = LabMetricRegistry.metric(forLoincCode: loincCode),
+              let result = FHIRLabResultParser.extractLabResult(fromFHIRData: fhirData, loincCode: loincCode) else {
             return nil
         }
-
+        self.metricName = metric.name
+        self.loincCode = loincCode
         self.effectiveDateTime = result.effectiveDateTime
         self.value = result.value
         self.unit = result.unit
-        self.source = clinicalRecord.sourceRevision.source.name
+        self.source = source
+    }
+
+    /// Builds a LabResultSample from an HKClinicalRecord for a known LOINC code.
+    init?(from clinicalRecord: HKClinicalRecord, loincCode: String) {
+        guard let fhirResource = clinicalRecord.fhirResource else {
+            return nil
+        }
+        self.init(
+            fromFHIRData: fhirResource.data,
+            loincCode: loincCode,
+            source: clinicalRecord.sourceRevision.source.name
+        )
     }
 }
+

@@ -72,12 +72,6 @@ final class SettingsManagerTests: XCTestCase {
         XCTAssertFalse(value)
     }
 
-    func testDefaultExportA1C_whenKeyMissing_isFalse() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "exportA1C") as? Bool ?? false
-        XCTAssertFalse(value)
-    }
-
     func testDefaultLastXDaysValue_whenKeyMissing_is30() {
         let defaults = makeDefaults()
         let value = defaults.object(forKey: "lastXDaysValue") as? Int ?? 30
@@ -113,13 +107,11 @@ final class SettingsManagerTests: XCTestCase {
         defaults.set(false, forKey: "exportWeight")
         defaults.set(false, forKey: "exportSteps")
         defaults.set(true, forKey: "exportGlucose")
-        defaults.set(true, forKey: "exportA1C")
 
         XCTAssertFalse(defaults.bool(forKey: "autoDismissSaveConfirmation"))
         XCTAssertFalse(defaults.bool(forKey: "exportWeight"))
         XCTAssertFalse(defaults.bool(forKey: "exportSteps"))
         XCTAssertTrue(defaults.bool(forKey: "exportGlucose"))
-        XCTAssertTrue(defaults.bool(forKey: "exportA1C"))
     }
 
     func testReadsPersistedIntValues() {
@@ -166,5 +158,74 @@ final class SettingsManagerTests: XCTestCase {
         defaults.set("invalid", forKey: "distanceSpeedUnit")
         let raw = defaults.string(forKey: "distanceSpeedUnit") ?? DistanceSpeedUnit.imperial.rawValue
         XCTAssertEqual(DistanceSpeedUnit(rawValue: raw) ?? .imperial, .imperial)
+    }
+
+    // MARK: - Lab panels and favorites
+
+    func testDefaultSelectedLabPanels_whenKeyMissing_isEmpty() {
+        let defaults = makeDefaults()
+        let raw = defaults.array(forKey: "selectedLabPanels") as? [String] ?? []
+        XCTAssertTrue(raw.isEmpty)
+    }
+
+    func testDefaultFavoriteLabCodes_whenKeyMissing_isEmpty() {
+        let defaults = makeDefaults()
+        let raw = defaults.array(forKey: "favoriteLabCodes") as? [String] ?? []
+        XCTAssertTrue(raw.isEmpty)
+    }
+
+    func testReadsPersistedSelectedLabPanels() {
+        let defaults = makeDefaults()
+        defaults.set([LabPanel.lipid.rawValue, LabPanel.thyroid.rawValue], forKey: "selectedLabPanels")
+        let raw = defaults.array(forKey: "selectedLabPanels") as? [String] ?? []
+        let panels = Set(raw.compactMap(LabPanel.init(rawValue:)))
+        XCTAssertEqual(panels, [.lipid, .thyroid])
+    }
+
+    func testReadsPersistedFavoriteLabCodes() {
+        let defaults = makeDefaults()
+        defaults.set(["4548-4", "2093-3"], forKey: "favoriteLabCodes")
+        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
+        XCTAssertEqual(codes, ["4548-4", "2093-3"])
+    }
+
+    // MARK: - Legacy exportA1C migration
+
+    func testMigration_legacyExportA1CTrue_seedsFavorites() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "exportA1C")
+
+        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+
+        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
+        XCTAssertEqual(codes, [LOINCCode.hemoglobinA1C])
+    }
+
+    func testMigration_legacyExportA1CFalse_doesNotSeedFavorites() {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: "exportA1C")
+
+        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+
+        XCTAssertNil(defaults.object(forKey: "favoriteLabCodes"))
+    }
+
+    func testMigration_noLegacyKey_doesNotSeedFavorites() {
+        let defaults = makeDefaults()
+
+        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+
+        XCTAssertNil(defaults.object(forKey: "favoriteLabCodes"))
+    }
+
+    func testMigration_doesNotOverrideExistingFavorites() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "exportA1C")
+        defaults.set(["2093-3"], forKey: "favoriteLabCodes") // user already picked something
+
+        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+
+        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
+        XCTAssertEqual(codes, ["2093-3"], "Migration must not clobber existing user choices")
     }
 }

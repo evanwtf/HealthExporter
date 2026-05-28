@@ -5,14 +5,14 @@ import os
 enum HealthKitQueryHelpers {
 
     /// The set of HealthKit types to request read access for.
-    static func readTypes(includeA1C: Bool) -> Set<HKObjectType> {
+    static func readTypes(includeLabs: Bool) -> Set<HKObjectType> {
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
         let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
 
         var types: Set<HKObjectType> = [weightType, stepsType, glucoseType]
 
-        if includeA1C,
+        if includeLabs,
            let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
             types.insert(clinicalType)
         }
@@ -44,12 +44,12 @@ enum HealthKitQueryHelpers {
         return HKQuery.predicateForSamples(withStart: aligned.start, end: aligned.end, options: .strictStartDate)
     }
 
-    /// Filters A1C samples by date range (start-of-day inclusive, end-of-day+1 exclusive).
-    static func filterA1CSamplesByDateRange(
-        _ samples: [A1CSample],
+    /// Filters lab result samples by date range (start-of-day inclusive, end-of-day+1 exclusive).
+    static func filterLabResultsByDateRange(
+        _ samples: [LabResultSample],
         dateRange: (startDate: Date, endDate: Date),
         calendar: Calendar = .current
-    ) -> [A1CSample] {
+    ) -> [LabResultSample] {
         guard let aligned = dayAlignedRange(from: dateRange, calendar: calendar) else {
             return []
         }
@@ -105,13 +105,13 @@ class HealthKitManager {
     let healthStore = HKHealthStore()
     private static let logger = Logger(subsystem: "com.HealthExporter", category: "HealthKit")
     
-    func requestAuthorization(includeA1C: Bool = false, completion: @escaping (Bool, Error?) -> Void) {
+    func requestAuthorization(includeLabs: Bool = false, completion: @escaping (Bool, Error?) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false, NSError(domain: "HealthKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "HealthKit is not available"]))
             return
         }
 
-        let typesToRead = HealthKitQueryHelpers.readTypes(includeA1C: includeA1C)
+        let typesToRead = HealthKitQueryHelpers.readTypes(includeLabs: includeLabs)
 
         healthStore.requestAuthorization(toShare: Set(), read: typesToRead) { success, error in
             completion(success, error)
@@ -179,18 +179,23 @@ class HealthKitManager {
         healthStore.execute(query)
     }
     
-    func fetchA1CData(dateRange: (startDate: Date, endDate: Date)? = nil, limit: Int = HKObjectQueryNoLimit, completion: @escaping ([A1CSample]?, Error?) -> Void) {
+    func fetchLabResults(metrics: [LabMetric], dateRange: (startDate: Date, endDate: Date)? = nil, limit: Int = HKObjectQueryNoLimit, completion: @escaping ([LabResultSample]?, Error?) -> Void) {
+        guard !metrics.isEmpty else {
+            completion([], nil)
+            return
+        }
+
         // Requires iOS 15.0+ for clinical records
         guard #available(iOS 15.0, *) else {
             completion(nil, NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Clinical Records require iOS 15.0 or later"]))
             return
         }
-        
+
         guard let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) else {
             completion(nil, NSError(domain: "HealthKit", code: 3, userInfo: [NSLocalizedDescriptionKey: "Clinical Lab Result type not available"]))
             return
         }
-        
+
         let predicate = dateRange.flatMap { HealthKitQueryHelpers.predicateForDateRange($0) }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         let query = HKSampleQuery(sampleType: clinicalType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]) { _, records, error in
@@ -198,14 +203,22 @@ class HealthKitManager {
                 completion(nil, error)
                 return
             }
-            
-            var a1cSamples = (records as? [HKClinicalRecord])?.compactMap { A1CSample(from: $0) } ?? []
+
+            let clinicalRecords = (records as? [HKClinicalRecord]) ?? []
+            var samples: [LabResultSample] = []
+            for record in clinicalRecords {
+                for metric in metrics {
+                    if let sample = LabResultSample(from: record, loincCode: metric.loincCode) {
+                        samples.append(sample)
+                    }
+                }
+            }
 
             if let dateRange = dateRange {
-                a1cSamples = HealthKitQueryHelpers.filterA1CSamplesByDateRange(a1cSamples, dateRange: dateRange)
+                samples = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: dateRange)
             }
-            
-            completion(a1cSamples, nil)
+
+            completion(samples, nil)
         }
         healthStore.execute(query)
     }

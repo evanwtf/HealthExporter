@@ -11,28 +11,28 @@ final class ExportLogicTests: XCTestCase {
 
     func testExportDisabled_noMetricsSelected() {
         XCTAssertFalse(ExportLogic.isExportEnabled(
-            exportWeight: false, exportSteps: false, exportGlucose: false, exportA1C: false,
+            exportWeight: false, exportSteps: false, exportGlucose: false, hasSelectedLabs: false,
             dateRangeOption: .lastXDays, startDate: now, endDate: now
         ))
     }
 
     func testExportEnabled_weightOnly_lastXDays() {
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: true, exportSteps: false, exportGlucose: false, exportA1C: false,
+            exportWeight: true, exportSteps: false, exportGlucose: false, hasSelectedLabs: false,
             dateRangeOption: .lastXDays, startDate: now, endDate: now
         ))
     }
 
     func testExportEnabled_stepsOnly_lastXRecords() {
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: false, exportSteps: true, exportGlucose: false, exportA1C: false,
+            exportWeight: false, exportSteps: true, exportGlucose: false, hasSelectedLabs: false,
             dateRangeOption: .lastXRecords, startDate: now, endDate: now
         ))
     }
 
     func testExportEnabled_glucoseOnly_allRecords() {
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: false, exportSteps: false, exportGlucose: true, exportA1C: false,
+            exportWeight: false, exportSteps: false, exportGlucose: true, hasSelectedLabs: false,
             dateRangeOption: .allRecords, startDate: now, endDate: now
         ))
     }
@@ -40,7 +40,7 @@ final class ExportLogicTests: XCTestCase {
     func testExportEnabled_a1cOnly_specificDateRange_validRange() {
         let start = calendar.date(byAdding: .day, value: -7, to: now)!
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: false, exportSteps: false, exportGlucose: false, exportA1C: true,
+            exportWeight: false, exportSteps: false, exportGlucose: false, hasSelectedLabs: true,
             dateRangeOption: .specificDateRange, startDate: start, endDate: now
         ))
     }
@@ -48,21 +48,21 @@ final class ExportLogicTests: XCTestCase {
     func testExportDisabled_specificDateRange_invalidRange() {
         let start = calendar.date(byAdding: .day, value: 7, to: now)!
         XCTAssertFalse(ExportLogic.isExportEnabled(
-            exportWeight: true, exportSteps: true, exportGlucose: true, exportA1C: true,
+            exportWeight: true, exportSteps: true, exportGlucose: true, hasSelectedLabs: true,
             dateRangeOption: .specificDateRange, startDate: start, endDate: now
         ))
     }
 
     func testExportEnabled_specificDateRange_sameDay() {
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: true, exportSteps: false, exportGlucose: false, exportA1C: false,
+            exportWeight: true, exportSteps: false, exportGlucose: false, hasSelectedLabs: false,
             dateRangeOption: .specificDateRange, startDate: now, endDate: now
         ))
     }
 
     func testExportEnabled_allMetricsSelected() {
         XCTAssertTrue(ExportLogic.isExportEnabled(
-            exportWeight: true, exportSteps: true, exportGlucose: true, exportA1C: true,
+            exportWeight: true, exportSteps: true, exportGlucose: true, hasSelectedLabs: true,
             dateRangeOption: .lastXDays, startDate: now, endDate: now
         ))
     }
@@ -104,7 +104,7 @@ final class ExportLogicTests: XCTestCase {
             weightError: underlying,
             stepsError: nil,
             glucoseError: nil,
-            a1cError: nil
+            labError: nil
         )
 
         XCTAssertEqual(
@@ -117,7 +117,7 @@ final class ExportLogicTests: XCTestCase {
         let stepsError = NSError(domain: "HKErrorDomain", code: 2, userInfo: [
             NSLocalizedDescriptionKey: "Steps failed"
         ])
-        let a1cError = NSError(domain: "HKErrorDomain", code: 3, userInfo: [
+        let labError = NSError(domain: "HKErrorDomain", code: 3, userInfo: [
             NSLocalizedDescriptionKey: "A1C failed"
         ])
 
@@ -125,12 +125,30 @@ final class ExportLogicTests: XCTestCase {
             weightError: nil,
             stepsError: stepsError,
             glucoseError: nil,
-            a1cError: a1cError
+            labError: labError
         )
 
         XCTAssertEqual(
             error?.localizedDescription,
             "Failed to fetch Steps data: Steps failed"
+        )
+    }
+
+    func testFirstFetchError_labErrorUsesLabResultsLabel() {
+        let labError = NSError(domain: "HKErrorDomain", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "lab failed"
+        ])
+
+        let error = ExportLogic.firstFetchError(
+            weightError: nil,
+            stepsError: nil,
+            glucoseError: nil,
+            labError: labError
+        )
+
+        XCTAssertEqual(
+            error?.localizedDescription,
+            "Failed to fetch Lab Results data: lab failed"
         )
     }
 
@@ -188,27 +206,96 @@ final class ExportLogicTests: XCTestCase {
         XCTAssertEqual(ExportLogic.recordLimit(for: .lastXRecords, lastXRecords: 10000), 10000)
     }
 
+    // MARK: - resolveLabMetrics
+
+    private static let lipid1 = LabMetric(name: "Total Cholesterol", loincCode: "2093-3", group: .lipid, valuePrecision: 0)
+    private static let lipid2 = LabMetric(name: "HDL Cholesterol",   loincCode: "2085-9", group: .lipid, valuePrecision: 0)
+    private static let other1 = LabMetric(name: "Hemoglobin A1C",    loincCode: "4548-4", group: .other, valuePrecision: 2)
+    private static let stubRegistry: [LabMetric] = [lipid1, lipid2, other1]
+
+    func testResolveLabMetrics_noPanelsNoFavorites_returnsEmpty() {
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [],
+            favoriteCodes: [],
+            registry: Self.stubRegistry
+        )
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testResolveLabMetrics_panelOnly_returnsAllMetricsInPanel() {
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [.lipid],
+            favoriteCodes: [],
+            registry: Self.stubRegistry
+        )
+        XCTAssertEqual(Set(result.map(\.loincCode)), ["2093-3", "2085-9"])
+    }
+
+    func testResolveLabMetrics_favoritesOnly_returnsFavorites() {
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [],
+            favoriteCodes: ["4548-4"],
+            registry: Self.stubRegistry
+        )
+        XCTAssertEqual(result.map(\.loincCode), ["4548-4"])
+    }
+
+    func testResolveLabMetrics_panelAndFavorite_deduplicates() {
+        // Lipid panel already contains 2093-3; adding it as a favorite must not double up.
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [.lipid],
+            favoriteCodes: ["2093-3"],
+            registry: Self.stubRegistry
+        )
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(Set(result.map(\.loincCode)), ["2093-3", "2085-9"])
+    }
+
+    func testResolveLabMetrics_favoriteFromAnotherPanel_isStillIncluded() {
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [.lipid],
+            favoriteCodes: ["4548-4"],
+            registry: Self.stubRegistry
+        )
+        XCTAssertEqual(Set(result.map(\.loincCode)), ["2093-3", "2085-9", "4548-4"])
+    }
+
+    func testResolveLabMetrics_unknownFavoriteCode_isIgnored() {
+        let result = ExportLogic.resolveLabMetrics(
+            selectedPanels: [],
+            favoriteCodes: ["9999-9"],
+            registry: Self.stubRegistry
+        )
+        XCTAssertTrue(result.isEmpty)
+    }
+
     // MARK: - hasAnyData
 
     func testHasAnyData_allNil_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: nil
+            glucoseSamples: nil, labResults: nil
         ))
     }
 
     func testHasAnyData_allEmpty_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: [], stepsSamples: [],
-            glucoseSamples: [], a1cSamples: []
+            glucoseSamples: [], labResults: []
         ))
     }
 
-    func testHasAnyData_withA1CSamples_returnsTrue() {
-        let sample = A1CSample(effectiveDateTime: now, value: 7.0, unit: "%")
+    func testHasAnyData_withLabResults_returnsTrue() {
+        let sample = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: now,
+            value: 7.0,
+            unit: "%"
+        )
         XCTAssertTrue(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: [sample]
+            glucoseSamples: nil, labResults: [sample]
         ))
     }
 
@@ -221,14 +308,14 @@ final class ExportLogicTests: XCTestCase {
         )
         XCTAssertTrue(ExportLogic.hasAnyData(
             weightSamples: [sample], stepsSamples: nil,
-            glucoseSamples: nil, a1cSamples: nil
+            glucoseSamples: nil, labResults: nil
         ))
     }
 
     func testHasAnyData_mixedNilAndEmpty_returnsFalse() {
         XCTAssertFalse(ExportLogic.hasAnyData(
             weightSamples: nil, stepsSamples: [],
-            glucoseSamples: nil, a1cSamples: []
+            glucoseSamples: nil, labResults: []
         ))
     }
 

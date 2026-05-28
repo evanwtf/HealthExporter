@@ -73,7 +73,9 @@ final class ExportPreviewEstimateTests: XCTestCase {
             end: referenceDate.addingTimeInterval(120)
         )
         let glucoseSample = GlucoseSampleMgDl(from: glucoseHkSample)!
-        let a1cSample = A1CSample(
+        let labSample = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
             effectiveDateTime: referenceDate.addingTimeInterval(180),
             value: 7.2,
             unit: "%",
@@ -84,7 +86,7 @@ final class ExportPreviewEstimateTests: XCTestCase {
             weightSamples: [weightSample],
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
-            a1cSamples: [a1cSample],
+            labResults: [labSample],
             weightUnit: .pounds,
             dateFormat: .yyyyMMddHHmmss
         )
@@ -92,7 +94,7 @@ final class ExportPreviewEstimateTests: XCTestCase {
             weightSamples: [weightSample],
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
-            a1cSamples: [a1cSample],
+            labResults: [labSample],
             weightUnit: .pounds,
             dateFormat: .yyyyMMddHHmmss
         )

@@ -9,12 +9,12 @@ enum ExportLogic {
         exportWeight: Bool,
         exportSteps: Bool,
         exportGlucose: Bool,
-        exportA1C: Bool,
+        hasSelectedLabs: Bool,
         dateRangeOption: DateRangeOption,
         startDate: Date,
         endDate: Date
     ) -> Bool {
-        let hasSelectedMetric = exportWeight || exportSteps || exportGlucose || exportA1C
+        let hasSelectedMetric = exportWeight || exportSteps || exportGlucose || hasSelectedLabs
         guard hasSelectedMetric else { return false }
 
         switch dateRangeOption {
@@ -23,6 +23,21 @@ enum ExportLogic {
         case .specificDateRange:
             return startDate <= endDate
         }
+    }
+
+    /// Resolves the concrete LabMetric instances to fetch given the user's
+    /// selected panels and curated favorite LOINC codes. Favorites and panel
+    /// memberships are unioned, then deduplicated by LOINC code.
+    static func resolveLabMetrics(
+        selectedPanels: Set<LabPanel>,
+        favoriteCodes: Set<String>,
+        registry: [LabMetric] = LabMetricRegistry.all
+    ) -> [LabMetric] {
+        let panelCodes = registry
+            .filter { selectedPanels.contains($0.group) }
+            .map(\.loincCode)
+        let allCodes = Set(panelCodes).union(favoriteCodes)
+        return registry.filter { allCodes.contains($0.loincCode) }
     }
 
     /// Computes the date range for a given option, or nil when not applicable.
@@ -55,7 +70,7 @@ enum ExportLogic {
         weightError: Error?,
         stepsError: Error?,
         glucoseError: Error?,
-        a1cError: Error?
+        labError: Error?
     ) -> ExportError? {
         if let weightError {
             return .healthKitQueryFailed(metric: HealthMetrics.weight.name, underlying: weightError)
@@ -66,8 +81,8 @@ enum ExportLogic {
         if let glucoseError {
             return .healthKitQueryFailed(metric: HealthMetrics.glucose.name, underlying: glucoseError)
         }
-        if let a1cError {
-            return .healthKitQueryFailed(metric: HealthMetrics.a1c.name, underlying: a1cError)
+        if let labError {
+            return .healthKitQueryFailed(metric: "Lab Results", underlying: labError)
         }
         return nil
     }
@@ -87,12 +102,12 @@ enum ExportLogic {
         weightSamples: [HKQuantitySample]?,
         stepsSamples: [HKQuantitySample]?,
         glucoseSamples: [GlucoseSampleMgDl]?,
-        a1cSamples: [A1CSample]?
+        labResults: [LabResultSample]?
     ) -> Bool {
         (weightSamples?.isEmpty == false) ||
         (stepsSamples?.isEmpty == false) ||
         (glucoseSamples?.isEmpty == false) ||
-        (a1cSamples?.isEmpty == false)
+        (labResults?.isEmpty == false)
     }
 
     /// Generates the export filename for a given date.

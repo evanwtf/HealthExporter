@@ -10,20 +10,22 @@ Tests live in `HealthExporterTests/` (sibling to the main `HealthExporter/` sour
 
 | File | What it tests |
 |------|--------------|
-| `A1CSampleTests.swift` | `A1CSample` memberwise init, default source, value preservation |
+| `A1CCSVBytePinningTests.swift` | Byte-identical A1C CSV rows: `%` and `mmol/mol` units, comma/quote CSV escaping, two-decimal precision, ascending sort |
 | `CSVDocumentTests.swift` | `CSVDocument` content storage, UTF-8 round-trip, invalid encoding detection |
-| `CSVGeneratorTests.swift` | CSV generation for weight, steps, glucose, A1C; unit conversion (kg→lbs); output formatting |
+| `CSVGeneratorTests.swift` | CSV generation for weight, steps, glucose, lab results; unit conversion (kg→lbs); registry-driven precision; output formatting |
 | `DateRangeOptionTests.swift` | `DateRangeOption` enum cases, raw values, `displayName` |
 | `DayRangeSummaryFormatterTests.swift` | Date range summary text formatting |
 | `ExportErrorTests.swift` | All `ExportError.errorDescription` branches with/without underlying errors |
-| `ExportLogicTests.swift` | Export enablement, date range calculation, record limits, data availability, filename generation |
+| `ExportLogicTests.swift` | Export enablement (including `hasSelectedLabs`), date range calculation, record limits, data availability, filename generation, `resolveLabMetrics` panel/favorite union and dedup |
 | `ExportPreviewEstimateTests.swift` | Row count rounding, byte estimation, confirmation threshold |
 | `FHIRLabResultParserTests.swift` | FHIR JSON parsing — LOINC matching, missing fields, invalid data |
 | `GlucoseSampleTests.swift` | `GlucoseSampleMgDl` init — values ≥20 accepted, values <20 rejected |
-| `HealthKitQueryHelpersTests.swift` | Authorization type sets, day-aligned date ranges, A1C date filtering |
+| `HealthKitQueryHelpersTests.swift` | Authorization type sets (with/without labs), day-aligned date ranges, `filterLabResultsByDateRange`, simulator-only test data helpers |
 | `HealthMetricConfigTests.swift` | `HealthMetrics` static properties and `LOINCCode` constants |
+| `LabMetricRegistryTests.swift` | `LabPanel` cases, `LabMetric.id == loincCode`, registry uniqueness, lookup by LOINC, panel grouping |
+| `LabResultSampleTests.swift` | `LabResultSample` memberwise init, default empty source, FHIR init with known/unknown LOINC, missing observation handling |
 | `SettingsEnumTests.swift` | Raw values, displayName, dateFormat, isUTC for all settings enums |
-| `SettingsManagerTests.swift` | Default values, persisted value reads, invalid raw value fallbacks |
+| `SettingsManagerTests.swift` | Default values, persisted reads (including `selectedLabPanels` / `favoriteLabCodes`), invalid raw value fallbacks, legacy `exportA1C` → favorites migration |
 
 ## Running Tests Locally
 
@@ -96,7 +98,7 @@ The following items **intentionally remain outside CI unit tests** and require m
 
 ### Clinical Health Records
 - Real Clinical Health Records availability and entitlement
-- Actual A1C record retrieval from health providers
+- Actual lab record retrieval from health providers (e.g. A1C)
 - FHIR resource parsing with real clinical data (unit tests cover synthetic JSON)
 
 ### File Export Integration

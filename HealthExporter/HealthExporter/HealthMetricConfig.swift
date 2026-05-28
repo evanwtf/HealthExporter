@@ -18,8 +18,4 @@ enum HealthMetrics {
     static let glucose = HealthMetricConfig(
         name: "Blood Glucose"
     )
-    
-    static let a1c = HealthMetricConfig(
-        name: "Hemoglobin A1C"
-    )
 }

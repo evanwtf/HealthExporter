@@ -9,7 +9,7 @@ private struct PendingExportPayload {
     var weightSamples: [HKQuantitySample]?
     var stepsSamples: [HKQuantitySample]?
     var glucoseSamples: [GlucoseSampleMgDl]?
-    var a1cSamples: [A1CSample]?
+    var labResults: [LabResultSample]?
 }
 
 struct DataSelectionView: View {
@@ -44,7 +44,18 @@ struct DataSelectionView: View {
         settings.exportWeight ||
         settings.exportSteps ||
         settings.exportGlucose ||
-        settings.exportA1C
+        hasSelectedLabs
+    }
+
+    private var hasSelectedLabs: Bool {
+        !labMetricsToFetch.isEmpty
+    }
+
+    private var labMetricsToFetch: [LabMetric] {
+        ExportLogic.resolveLabMetrics(
+            selectedPanels: settings.selectedLabPanels,
+            favoriteCodes: settings.favoriteLabCodes
+        )
     }
 
     private func updateExportEnabled() {
@@ -52,11 +63,41 @@ struct DataSelectionView: View {
             exportWeight: settings.exportWeight,
             exportSteps: settings.exportSteps,
             exportGlucose: settings.exportGlucose,
-            exportA1C: settings.exportA1C,
+            hasSelectedLabs: hasSelectedLabs,
             dateRangeOption: selectedDateRangeOption,
             startDate: startDate,
             endDate: endDate
         )
+    }
+
+    private func favoriteBinding(for loincCode: String) -> Binding<Bool> {
+        Binding(
+            get: { settings.favoriteLabCodes.contains(loincCode) },
+            set: { newValue in
+                if newValue {
+                    settings.favoriteLabCodes.insert(loincCode)
+                } else {
+                    settings.favoriteLabCodes.remove(loincCode)
+                }
+            }
+        )
+    }
+
+    private func panelBinding(for panel: LabPanel) -> Binding<Bool> {
+        Binding(
+            get: { settings.selectedLabPanels.contains(panel) },
+            set: { newValue in
+                if newValue {
+                    settings.selectedLabPanels.insert(panel)
+                } else {
+                    settings.selectedLabPanels.remove(panel)
+                }
+            }
+        )
+    }
+
+    private var panelsWithMetrics: [LabPanel] {
+        LabPanel.allCases.filter { !LabMetricRegistry.metrics(in: $0).isEmpty }
     }
 
     private func presentSaveSuccessConfirmation() {
@@ -115,30 +156,51 @@ struct DataSelectionView: View {
                 .padding(.horizontal)
                 .accessibilityIdentifier("glucoseToggle")
 
-                HStack {
-                    HStack(spacing: 4) {
-                        Text("Hemoglobin A1C (%)")
-                        Image(systemName: "cross.case")
-                            .font(.caption)
+                if !LabMetricRegistry.all.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Lab Favorites")
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $settings.exportA1C)
-                    .labelsHidden()
-                    .accessibilityIdentifier("a1cToggle")
-                }
-                .padding(.horizontal)
 
-                HStack(spacing: 4) {
-                    Image(systemName: "cross.case")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("Requires access to Clinical Health Records")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        ForEach(LabMetricRegistry.all) { metric in
+                            HStack {
+                                HStack(spacing: 4) {
+                                    Text(metric.name)
+                                    Image(systemName: "cross.case")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: favoriteBinding(for: metric.loincCode))
+                                    .labelsHidden()
+                                    .accessibilityIdentifier("favorite_\(metric.loincCode)")
+                            }
+                        }
+
+                        if !panelsWithMetrics.isEmpty {
+                            Text("Lab Panels")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 4)
+
+                            ForEach(panelsWithMetrics, id: \.self) { panel in
+                                Toggle(panel.displayName, isOn: panelBinding(for: panel))
+                                    .accessibilityIdentifier("panel_\(panel.rawValue)")
+                            }
+                        }
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "cross.case")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text("Requires access to Clinical Health Records")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Divider()
                     .padding()
@@ -265,7 +327,8 @@ struct DataSelectionView: View {
         .onChange(of: settings.exportWeight) { updateExportEnabled() }
         .onChange(of: settings.exportSteps) { updateExportEnabled() }
         .onChange(of: settings.exportGlucose) { updateExportEnabled() }
-        .onChange(of: settings.exportA1C) { updateExportEnabled() }
+        .onChange(of: settings.favoriteLabCodes) { updateExportEnabled() }
+        .onChange(of: settings.selectedLabPanels) { updateExportEnabled() }
         .onChange(of: selectedDateRangeOption) { updateExportEnabled() }
         .onChange(of: startDate) { updateExportEnabled() }
         .onChange(of: endDate) { updateExportEnabled() }
@@ -323,7 +386,8 @@ struct DataSelectionView: View {
         dismissSaveSuccessConfirmation()
         isPreparingExport = true
 
-        healthManager.requestAuthorization(includeA1C: settings.exportA1C) { success, error in
+        let metricsForFetch = labMetricsToFetch
+        healthManager.requestAuthorization(includeLabs: !metricsForFetch.isEmpty) { success, error in
             guard success else {
                 DispatchQueue.main.async {
                     isPreparingExport = false
@@ -337,11 +401,11 @@ struct DataSelectionView: View {
             var weightSamples: [HKQuantitySample]? = nil
             var stepsSamples: [HKQuantitySample]? = nil
             var glucoseSamples: [GlucoseSampleMgDl]? = nil
-            var a1cSamples: [A1CSample]? = nil
+            var labResults: [LabResultSample]? = nil
             var weightFetchError: Error?
             var stepsFetchError: Error?
             var glucoseFetchError: Error?
-            var a1cFetchError: Error?
+            var labFetchError: Error?
             let dispatchGroup = DispatchGroup()
 
             let dateRange = ExportLogic.dateRange(
@@ -388,12 +452,12 @@ struct DataSelectionView: View {
                 }
             }
 
-            if settings.exportA1C {
+            if !metricsForFetch.isEmpty {
                 dispatchGroup.enter()
-                healthManager.fetchA1CData(dateRange: dateRange, limit: recordLimit) { samples, error in
+                healthManager.fetchLabResults(metrics: metricsForFetch, dateRange: dateRange, limit: recordLimit) { samples, error in
                     DispatchQueue.main.async {
-                        a1cSamples = samples
-                        a1cFetchError = error
+                        labResults = samples
+                        labFetchError = error
                         dispatchGroup.leave()
                     }
                 }
@@ -404,12 +468,12 @@ struct DataSelectionView: View {
                     weightError: weightFetchError,
                     stepsError: stepsFetchError,
                     glucoseError: glucoseFetchError,
-                    a1cError: a1cFetchError
+                    labError: labFetchError
                 ) {
                     weightSamples = nil
                     stepsSamples = nil
                     glucoseSamples = nil
-                    a1cSamples = nil
+                    labResults = nil
                     isPreparingExport = false
                     errorMessage = fetchError.localizedDescription
                     showErrorAlert = true
@@ -420,14 +484,14 @@ struct DataSelectionView: View {
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    a1cSamples: a1cSamples
+                    labResults: labResults
                 )
 
                 guard hasData else {
                     weightSamples = nil
                     stepsSamples = nil
                     glucoseSamples = nil
-                    a1cSamples = nil
+                    labResults = nil
                     isPreparingExport = false
                     errorMessage = ExportError.noDataFound.localizedDescription
                     showErrorAlert = true
@@ -440,13 +504,13 @@ struct DataSelectionView: View {
                     weightSamples: weightSamples,
                     stepsSamples: stepsSamples,
                     glucoseSamples: glucoseSamples,
-                    a1cSamples: a1cSamples
+                    labResults: labResults
                 )
                 let estimate = CSVGenerator.makePreviewEstimate(
                     weightSamples: payload.weightSamples,
                     stepsSamples: payload.stepsSamples,
                     glucoseSamples: payload.glucoseSamples,
-                    a1cSamples: payload.a1cSamples,
+                    labResults: payload.labResults,
                     weightUnit: weightUnit,
                     dateFormat: dateFormat
                 )
@@ -491,9 +555,9 @@ struct DataSelectionView: View {
             CSVGenerator.appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
-        if var samples = payload.a1cSamples {
-            payload.a1cSamples = nil
-            CSVGenerator.appendA1CRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+        if var samples = payload.labResults {
+            payload.labResults = nil
+            CSVGenerator.appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         csvContent = csv

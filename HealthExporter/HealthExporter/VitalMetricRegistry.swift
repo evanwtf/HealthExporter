@@ -10,6 +10,8 @@ enum VitalMetric: String, CaseIterable, Codable, Identifiable, Hashable {
     case respiratoryRate
     case bodyTemperature
 
+    static let allCasesSet: Set<VitalMetric> = Set(allCases)
+
     var id: String { rawValue }
 
     var displayName: String {

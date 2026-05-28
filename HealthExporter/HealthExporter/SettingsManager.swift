@@ -64,6 +64,8 @@ class SettingsManager: ObservableObject {
     @Published var selectedLabPanels: Set<LabPanel>
     @Published var favoriteLabCodes: Set<String>
     @Published var selectedVitalMetrics: Set<VitalMetric>
+    @Published var expandedLabPanels: Set<LabPanel>
+    @Published var expandedVitalsSection: Bool
     @Published var dateFormat: DateFormatOption
     @Published var sortOrder: SortOrder
     @Published var lastXDaysValue: Int
@@ -114,6 +116,11 @@ class SettingsManager: ObservableObject {
 
         let vitalsRaw = UserDefaults.standard.array(forKey: "selectedVitalMetrics") as? [String] ?? []
         self.selectedVitalMetrics = Set(vitalsRaw.compactMap(VitalMetric.init(rawValue:)))
+
+        let expandedPanelsRaw = UserDefaults.standard.array(forKey: "expandedLabPanels") as? [String] ?? []
+        self.expandedLabPanels = Set(expandedPanelsRaw.compactMap(LabPanel.init(rawValue:)))
+
+        self.expandedVitalsSection = UserDefaults.standard.object(forKey: "expandedVitalsSection") as? Bool ?? false
 
         self.lastXDaysValue = UserDefaults.standard.object(forKey: "lastXDaysValue") as? Int ?? 30
         self.lastXRecordsValue = UserDefaults.standard.object(forKey: "lastXRecordsValue") as? Int ?? 100
@@ -177,6 +184,16 @@ class SettingsManager: ObservableObject {
         $selectedVitalMetrics
             .dropFirst()
             .sink { UserDefaults.standard.set($0.map(\.rawValue), forKey: "selectedVitalMetrics") }
+            .store(in: &cancellables)
+
+        $expandedLabPanels
+            .dropFirst()
+            .sink { UserDefaults.standard.set($0.map(\.rawValue), forKey: "expandedLabPanels") }
+            .store(in: &cancellables)
+
+        $expandedVitalsSection
+            .dropFirst()
+            .sink { UserDefaults.standard.set($0, forKey: "expandedVitalsSection") }
             .store(in: &cancellables)
 
         $lastXDaysValue

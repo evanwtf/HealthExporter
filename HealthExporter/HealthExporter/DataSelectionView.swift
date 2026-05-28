@@ -65,9 +65,8 @@ struct DataSelectionView: View {
     }
 
     private var vitalComponentsToFetch: [VitalMetricComponent] {
-        VitalMetricComponent.allCases.filter { component in
-            settings.selectedVitalMetrics.contains { $0.components.contains(component) }
-        }
+        let components = Set(settings.selectedVitalMetrics.flatMap(\.components))
+        return VitalMetricComponent.allCases.filter { components.contains($0) }
     }
 
     private func updateExportEnabled() {
@@ -131,6 +130,19 @@ struct DataSelectionView: View {
         )
     }
 
+    private func panelExpansionBinding(for panel: LabPanel) -> Binding<Bool> {
+        Binding(
+            get: { settings.expandedLabPanels.contains(panel) },
+            set: { newValue in
+                if newValue {
+                    settings.expandedLabPanels.insert(panel)
+                } else {
+                    settings.expandedLabPanels.remove(panel)
+                }
+            }
+        )
+    }
+
     private func vitalMetricBinding(for metric: VitalMetric) -> Binding<Bool> {
         Binding(
             get: { settings.selectedVitalMetrics.contains(metric) },
@@ -147,17 +159,24 @@ struct DataSelectionView: View {
     private func vitalSectionBinding() -> Binding<Bool> {
         Binding(
             get: {
-                let metrics = Set(VitalMetric.allCases)
-                return !metrics.isEmpty && metrics.isSubset(of: settings.selectedVitalMetrics)
+                VitalMetric.allCasesSet.isSubset(of: settings.selectedVitalMetrics)
             },
             set: { newValue in
                 if newValue {
-                    settings.selectedVitalMetrics.formUnion(VitalMetric.allCases)
+                    settings.selectedVitalMetrics.formUnion(VitalMetric.allCasesSet)
                 } else {
                     settings.selectedVitalMetrics.removeAll()
                 }
             }
         )
+    }
+
+    private func panelSelectedCount(_ panel: LabPanel) -> Int {
+        LabMetricRegistry.metrics(in: panel).reduce(0) { count, metric in
+            let isSelected = settings.favoriteLabCodes.contains(metric.loincCode) ||
+                settings.selectedLabPanels.contains(panel)
+            return count + (isSelected ? 1 : 0)
+        }
     }
 
     private func presentSaveSuccessConfirmation() {
@@ -191,170 +210,218 @@ struct DataSelectionView: View {
         saveSuccessDismissTask = nil
     }
 
-    private func labPanelSection(_ panel: LabPanel) -> some View {
+    private func labPanelDisclosure(_ panel: LabPanel) -> some View {
         let metrics = LabMetricRegistry.metrics(in: panel)
-        return VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: labPanelSelectionBinding(for: panel)) {
-                Text(panel.displayName)
-                    .font(.headline)
-            }
-            .accessibilityIdentifier("panel_\(panel.rawValue)")
-
+        let selectedCount = panelSelectedCount(panel)
+        return DisclosureGroup(isExpanded: panelExpansionBinding(for: panel)) {
             ForEach(metrics) { metric in
-                Toggle(isOn: labSelectionBinding(for: metric.loincCode)) {
-                    HStack(spacing: 4) {
-                        Text(metric.name)
-                        Image(systemName: "cross.case")
-                            .font(.caption)
+                Toggle(metric.name, isOn: labSelectionBinding(for: metric.loincCode))
+                    .accessibilityIdentifier("lab_\(metric.loincCode)")
+            }
+        } label: {
+            Toggle(isOn: labPanelSelectionBinding(for: panel)) {
+                HStack(spacing: 6) {
+                    Text(panel.displayName)
+                    if !metrics.isEmpty {
+                        Text("\(selectedCount)/\(metrics.count)")
+                            .font(.footnote)
                             .foregroundColor(.secondary)
+                            .monospacedDigit()
                     }
                 }
-                .padding(.leading, 12)
-                .accessibilityIdentifier("lab_\(metric.loincCode)")
             }
+            .accessibilityIdentifier("panel_\(panel.rawValue)")
         }
     }
 
-    private func vitalsSection() -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: vitalSectionBinding()) {
-                Text("Vitals")
-                    .font(.headline)
-            }
-            .accessibilityIdentifier("vitalsSectionToggle")
-
-            ForEach(VitalMetric.allCases) { metric in
+    private func vitalsDisclosure() -> some View {
+        let allVitals = VitalMetric.allCases
+        let selectedCount = settings.selectedVitalMetrics.count
+        return DisclosureGroup(isExpanded: $settings.expandedVitalsSection) {
+            ForEach(allVitals) { metric in
                 Toggle(metric.displayName, isOn: vitalMetricBinding(for: metric))
-                    .padding(.leading, 12)
                     .accessibilityIdentifier("vital_\(metric.rawValue)")
             }
+        } label: {
+            Toggle(isOn: vitalSectionBinding()) {
+                HStack(spacing: 6) {
+                    Text("Vitals")
+                    if !allVitals.isEmpty {
+                        Text("\(selectedCount)/\(allVitals.count)")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .accessibilityIdentifier("vitalsSectionToggle")
         }
+    }
+
+    private static let dateRangeEditorHeight: CGFloat = 90
+
+    private func segmentLabel(for option: DateRangeOption) -> String {
+        switch option {
+        case .lastXDays:         return "Last X\nDays"
+        case .lastXRecords:      return "Last X\nRecords"
+        case .specificDateRange: return "Specific\nDates"
+        case .allRecords:        return "All\nRecords"
+        }
+    }
+
+    private func dateRangeSegmentedPicker() -> some View {
+        HStack(spacing: 2) {
+            ForEach(DateRangeOption.allCases, id: \.self) { option in
+                let isSelected = selectedDateRangeOption == option
+                Button {
+                    selectedDateRangeOption = option
+                } label: {
+                    Text(segmentLabel(for: option))
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(isSelected ? Color(uiColor: .systemBackground) : Color.clear)
+                                .shadow(color: isSelected ? Color.black.opacity(0.12) : .clear, radius: 1, y: 1)
+                        )
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(option.displayName)
+            }
+        }
+        .padding(2)
+        .background(Color(uiColor: .tertiarySystemFill))
+        .cornerRadius(9)
+        .accessibilityIdentifier("dateRangePicker")
+    }
+
+    @ViewBuilder
+    private func dateRangeValueEditor() -> some View {
+        switch selectedDateRangeOption {
+        case .lastXDays:
+            VStack(spacing: 6) {
+                HStack {
+                    Text("Days:")
+                        .font(.subheadline)
+                    Spacer()
+                    Picker("Days", selection: $settings.lastXDaysValue) {
+                        ForEach(DataSelectionView.dayOptions, id: \.self) { days in
+                            Text("\(days)").tag(days)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Number of days")
+                }
+                Text(DayRangeSummaryFormatter.summaryText(forDays: settings.lastXDaysValue, relativeTo: Date()))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+        case .lastXRecords:
+            HStack {
+                Text("Records:")
+                    .font(.subheadline)
+                Spacer()
+                Picker("Records", selection: $settings.lastXRecordsValue) {
+                    ForEach(DataSelectionView.recordOptions, id: \.self) { records in
+                        Text("\(records)").tag(records)
+                    }
+                }
+                .pickerStyle(.menu)
+                .accessibilityLabel("Number of records")
+            }
+
+        case .specificDateRange:
+            VStack(spacing: 6) {
+                HStack {
+                    Text("Start:")
+                        .font(.subheadline)
+                    Spacer()
+                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                        .labelsHidden()
+                }
+                HStack {
+                    Text("End:")
+                        .font(.subheadline)
+                    Spacer()
+                    DatePicker("", selection: $endDate, displayedComponents: .date)
+                        .labelsHidden()
+                }
+            }
+
+        case .allRecords:
+            Text("Exports every available record in the selected metrics.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func dateRangeFooter() -> some View {
+        VStack(spacing: 10) {
+            dateRangeSegmentedPicker()
+
+            dateRangeValueEditor()
+                .frame(height: Self.dateRangeEditorHeight, alignment: .top)
+
+            if !hasSelectedMetric {
+                Text("Please select at least one metric")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
+                Text("End date must be on or after start date")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(Color(uiColor: .secondarySystemBackground))
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: $settings.exportWeight) {
-                            Text("Weight")
-                        }
-                        .accessibilityIdentifier("weightToggle")
-
-                        Toggle(isOn: $settings.exportSteps) {
-                            Text("Steps")
-                        }
-                        .accessibilityIdentifier("stepsToggle")
-
-                        Toggle(isOn: $settings.exportGlucose) {
-                            Text("Blood Glucose (mg/dL)")
-                        }
-                        .accessibilityIdentifier("glucoseToggle")
-
-                        ForEach(LabPanel.allCases, id: \.self) { panel in
-                            labPanelSection(panel)
-                        }
-
-                        HStack(spacing: 4) {
-                            Image(systemName: "cross.case")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text("Lab sections require access to Clinical Health Records")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        vitalsSection()
-
-                        Divider()
-                            .padding(.vertical, 8)
-
-                        Text("Date Range")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .center)
-
-                        Picker("Date Range", selection: $selectedDateRangeOption) {
-                            ForEach(DateRangeOption.allCases, id: \.self) { option in
-                                Text(option.displayName).tag(option)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("dateRangePicker")
-
-                        if selectedDateRangeOption == .lastXDays {
-                            VStack(spacing: 4) {
-                                Text("Days:")
-                                    .font(.subheadline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Picker("Days", selection: $settings.lastXDaysValue) {
-                                    ForEach(DataSelectionView.dayOptions, id: \.self) { days in
-                                        Text("\(days)").tag(days)
-                                    }
-                                }
-                                .pickerStyle(.wheel)
-                                .frame(height: 120)
-                                .accessibilityLabel("Number of days")
-
-                                Text(DayRangeSummaryFormatter.summaryText(forDays: settings.lastXDaysValue, relativeTo: Date()))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-
-                        if selectedDateRangeOption == .lastXRecords {
-                            VStack(spacing: 4) {
-                                Text("Records:")
-                                    .font(.subheadline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Picker("Records", selection: $settings.lastXRecordsValue) {
-                                    ForEach(DataSelectionView.recordOptions, id: \.self) { records in
-                                        Text("\(records)").tag(records)
-                                    }
-                                }
-                                .pickerStyle(.wheel)
-                                .frame(height: 120)
-                                .accessibilityLabel("Number of records")
-                            }
-                        }
-
-                        if selectedDateRangeOption == .specificDateRange {
-                            VStack(alignment: .leading, spacing: 12) {
-                                VStack(alignment: .leading) {
-                                    Text("Start Date")
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                    DatePicker("", selection: $startDate, displayedComponents: .date)
-                                        .datePickerStyle(.compact)
-                                }
-
-                                VStack(alignment: .leading) {
-                                    Text("End Date")
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                    DatePicker("", selection: $endDate, displayedComponents: .date)
-                                        .datePickerStyle(.compact)
-                                }
-                            }
-                        }
-
-                        if !hasSelectedMetric {
-                            Text("Please select at least one metric")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-
-                        if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
-                            Text("End date must be on or after start date")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
+                Form {
+                    Section {
+                        Toggle("Weight", isOn: $settings.exportWeight)
+                            .accessibilityIdentifier("weightToggle")
+                        Toggle("Steps", isOn: $settings.exportSteps)
+                            .accessibilityIdentifier("stepsToggle")
+                        Toggle("Blood Glucose (mg/dL)", isOn: $settings.exportGlucose)
+                            .accessibilityIdentifier("glucoseToggle")
+                    } header: {
+                        Label("Activity & Glucose", systemImage: "figure.walk")
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
+
+                    Section {
+                        ForEach(LabPanel.allCases, id: \.self) { panel in
+                            labPanelDisclosure(panel)
+                        }
+                    } header: {
+                        Label("Labs", systemImage: "cross.case")
+                    } footer: {
+                        Text("Lab sections require access to Clinical Health Records.")
+                    }
+
+                    Section {
+                        vitalsDisclosure()
+                    } header: {
+                        Label("Vitals", systemImage: "heart.text.square")
+                    }
                 }
+
+                dateRangeFooter()
 
                 Button(action: {
                     exportData()
@@ -368,7 +435,8 @@ struct DataSelectionView: View {
                         .cornerRadius(10)
                 }
                 .disabled(!exportEnabled || isPreparingExport)
-                .padding()
+                .padding(.horizontal)
+                .padding(.vertical, 10)
                 .accessibilityIdentifier("exportButton")
             }
             .disabled(isPreparingExport)
@@ -535,6 +603,8 @@ struct DataSelectionView: View {
                 healthManager.fetchVitalData(component: component, dateRange: dateRange, limit: recordLimit) { samples, error in
                     DispatchQueue.main.async {
                         vitalSamples[component] = samples ?? []
+                        // Surface the first vital component error; downstream code reports a single error
+                        // for the whole vitals group rather than overwhelming the user with per-component failures.
                         if vitalFetchError == nil {
                             vitalFetchError = error
                         }

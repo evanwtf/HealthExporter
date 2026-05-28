@@ -40,7 +40,19 @@ struct ExportPreviewEstimate {
 
 class CSVGenerator {
 
-    static let csvHeader = "Date,Metric,Value,Unit,Source"
+    /// Three-line disclaimer prepended to every export. Each line begins with `### `
+    /// so common CSV parsers can be configured to treat them as comments.
+    static let csvDisclaimer = """
+        ### HealthExporterCSV: data exported as-is from Apple Health.
+        ### No warranty of accuracy, completeness, or fitness for any purpose.
+        ### Not a medical record. Verify with your healthcare provider before any clinical use.
+        """
+
+    static let csvHeader = "Date,Metric,LOINC,Value,Unit,Source"
+
+    /// Disclaimer block followed by a newline, then the column header and a newline.
+    /// Use this as the starting buffer for every CSV export.
+    static let csvPreamble = csvDisclaimer + "\n" + csvHeader + "\n"
 
     private static func makeDateFormatter(for option: DateFormatOption) -> DateFormatter {
         let formatter = DateFormatter()
@@ -64,20 +76,20 @@ class CSVGenerator {
         let weightKg = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo))
         let (value, unitString) = convertWeight(weightKg, to: unit)
         let source = csvEscape(sample.sourceRevision.source.name)
-        return "\(date),Weight,\(String(format: "%.2f", value)),\(unitString),\(source)\n"
+        return "\(date),Weight,,\(String(format: "%.2f", value)),\(unitString),\(source)\n"
     }
 
     private static func stepsRow(for sample: HKQuantitySample, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.startDate)
         let steps = sample.quantity.doubleValue(for: HKUnit.count())
         let source = csvEscape(sample.sourceRevision.source.name)
-        return "\(date),Steps,\(Int(steps)),steps,\(source)\n"
+        return "\(date),Steps,,\(Int(steps)),steps,\(source)\n"
     }
 
     private static func glucoseRow(for sample: GlucoseSampleMgDl, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.startDate)
         let source = csvEscape(sample.source)
-        return "\(date),Blood Glucose,\(String(format: "%.0f", sample.value)),mg/dL,\(source)\n"
+        return "\(date),Blood Glucose,,\(String(format: "%.0f", sample.value)),mg/dL,\(source)\n"
     }
 
     private static func labResultRow(for sample: LabResultSample, dateFormatter: DateFormatter) -> String {
@@ -86,7 +98,7 @@ class CSVGenerator {
         let source = csvEscape(sample.source)
         let precision = LabMetricRegistry.metric(forLoincCode: sample.loincCode)?.valuePrecision ?? 2
         let value = String(format: "%.\(precision)f", sample.value)
-        return "\(date),\(metric),\(value),\(sample.unit),\(source)\n"
+        return "\(date),\(metric),\(sample.loincCode),\(value),\(sample.unit),\(source)\n"
     }
 
     private static func vitalRow(for sample: HKQuantitySample, component: VitalMetricComponent, temperatureUnit: TemperatureUnit, dateFormatter: DateFormatter) -> String {
@@ -94,7 +106,7 @@ class CSVGenerator {
         let source = csvEscape(sample.sourceRevision.source.name)
         let result = component.valueAndUnit(from: sample.quantity, temperatureUnit: temperatureUnit)
         let value = String(format: "%.\(component.valuePrecision)f", result.value)
-        return "\(date),\(component.displayName),\(value),\(result.unit),\(source)\n"
+        return "\(date),\(component.displayName),,\(value),\(result.unit),\(source)\n"
     }
 
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)
@@ -152,7 +164,7 @@ class CSVGenerator {
         let rowCount = weightCount + stepsCount + glucoseCount + labCount + vitalCount
 
         let dateFormatter = makeDateFormatter(for: dateFormat)
-        var estimatedByteCount = (csvHeader + "\n").utf8.count
+        var estimatedByteCount = csvPreamble.utf8.count
 
         if let samples = weightSamples {
             for sample in samples {
@@ -193,21 +205,21 @@ class CSVGenerator {
     // MARK: - Legacy convenience methods (used by tests and single-metric exports)
 
     static func generateWeightCSV(from samples: [HKQuantitySample], unit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
-        var csv = csvHeader + "\n"
+        var csv = csvPreamble
         var mutableSamples = samples
         appendWeightRows(to: &csv, samples: &mutableSamples, unit: unit, dateFormat: dateFormat, sortOrder: sortOrder)
         return csv
     }
 
     static func generateStepsCSV(from samples: [HKQuantitySample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
-        var csv = csvHeader + "\n"
+        var csv = csvPreamble
         var mutableSamples = samples
         appendStepsRows(to: &csv, samples: &mutableSamples, dateFormat: dateFormat, sortOrder: sortOrder)
         return csv
     }
 
     static func generateCombinedCSV(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil, weightUnit: WeightUnit, temperatureUnit: TemperatureUnit = .fahrenheit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
-        var csv = csvHeader + "\n"
+        var csv = csvPreamble
 
         if var samples = weightSamples {
             appendWeightRows(to: &csv, samples: &samples, unit: weightUnit, dateFormat: dateFormat, sortOrder: sortOrder)

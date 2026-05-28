@@ -13,6 +13,15 @@ final class CSVGeneratorTests: XCTestCase {
     private let bodyTemperatureType = HKQuantityType.quantityType(forIdentifier: .bodyTemperature)!
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
+    /// Returns just the data rows of a CSV (disclaimer and column header lines stripped).
+    /// Tests previously indexed by `lines[1]` assumed only a single header line preceded
+    /// the data; now there are also three `### ` disclaimer lines.
+    private func dataRows(in csv: String) -> [String] {
+        csv.components(separatedBy: "\n").filter { line in
+            !line.isEmpty && !line.hasPrefix("###") && !line.hasPrefix("Date,")
+        }
+    }
+
     /// A fixed reference date (2024-01-15 09:30:00 UTC) for deterministic test output.
     private var referenceDate: Date {
         var components = DateComponents()
@@ -30,12 +39,18 @@ final class CSVGeneratorTests: XCTestCase {
 
     func testGenerateWeightCSV_emptyInput_returnsHeaderOnly() {
         let csv = CSVGenerator.generateWeightCSV(from: [], unit: .kilograms)
-        XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
+        XCTAssertEqual(csv, CSVGenerator.csvPreamble)
     }
 
     func testGenerateWeightCSV_hasCorrectHeader() {
         let csv = CSVGenerator.generateWeightCSV(from: [], unit: .kilograms)
-        XCTAssertTrue(csv.hasPrefix("Date,Metric,Value,Unit,Source"))
+        XCTAssertTrue(csv.contains("Date,Metric,LOINC,Value,Unit,Source"))
+    }
+
+    func testGenerateWeightCSV_emitsDisclaimerBeforeHeader() {
+        let csv = CSVGenerator.generateWeightCSV(from: [], unit: .kilograms)
+        XCTAssertTrue(csv.hasPrefix("### "), "CSV should begin with a `### ` disclaimer line")
+        XCTAssertTrue(csv.contains("Not a medical record"), "Disclaimer should mention the file is not a medical record")
     }
 
     func testGenerateWeightCSV_kilograms_formatsCorrectly() {
@@ -46,11 +61,11 @@ final class CSVGeneratorTests: XCTestCase {
             end: referenceDate
         )
         let csv = CSVGenerator.generateWeightCSV(from: [sample], unit: .kilograms)
-        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertEqual(lines.count, 2)
-        XCTAssertTrue(lines[1].contains(",Weight,"))
-        XCTAssertTrue(lines[1].contains(",75.00,"))
-        XCTAssertTrue(lines[1].contains(",kg,"))
+        let rows = dataRows(in: csv)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(rows[0].contains(",Weight,"))
+        XCTAssertTrue(rows[0].contains(",75.00,"))
+        XCTAssertTrue(rows[0].contains(",kg,"))
     }
 
     func testGenerateWeightCSV_pounds_convertsFromKg() {
@@ -91,8 +106,7 @@ final class CSVGeneratorTests: XCTestCase {
             )
         }
         let csv = CSVGenerator.generateWeightCSV(from: samples, unit: .kilograms)
-        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertEqual(lines.count, 6) // 1 header + 5 data rows
+        XCTAssertEqual(dataRows(in: csv).count, 5)
     }
 
     func testGenerateWeightCSV_iso8601Format_usesUTC() {
@@ -111,7 +125,7 @@ final class CSVGeneratorTests: XCTestCase {
 
     func testGenerateStepsCSV_emptyInput_returnsHeaderOnly() {
         let csv = CSVGenerator.generateStepsCSV(from: [])
-        XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
+        XCTAssertEqual(csv, CSVGenerator.csvPreamble)
     }
 
     func testGenerateStepsCSV_formatsCorrectly() {
@@ -149,7 +163,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: nil,
             weightUnit: .kilograms
         )
-        XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
+        XCTAssertEqual(csv, CSVGenerator.csvPreamble)
     }
 
     func testGenerateCombinedCSV_allEmpty_returnsHeaderOnly() {
@@ -160,7 +174,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: [],
             weightUnit: .kilograms
         )
-        XCTAssertEqual(csv, "Date,Metric,Value,Unit,Source\n")
+        XCTAssertEqual(csv, CSVGenerator.csvPreamble)
     }
 
     func testGenerateCombinedCSV_weightOnly_containsWeightRow() {
@@ -177,9 +191,9 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: nil,
             weightUnit: .kilograms
         )
-        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertEqual(lines.count, 2)
-        XCTAssertTrue(lines[1].contains(",Weight,"))
+        let rows = dataRows(in: csv)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(rows[0].contains(",Weight,"))
     }
 
     func testGenerateCombinedCSV_stepsOnly_containsStepsRow() {
@@ -249,8 +263,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: nil,
             weightUnit: .kilograms
         )
-        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertEqual(lines.count, 4) // header + 3 data rows
+        XCTAssertEqual(dataRows(in: csv).count, 3)
         XCTAssertTrue(csv.contains(",Weight,"))
         XCTAssertTrue(csv.contains(",Steps,"))
         XCTAssertTrue(csv.contains(",Blood Glucose,"))
@@ -282,10 +295,9 @@ final class CSVGeneratorTests: XCTestCase {
             weightUnit: .kilograms
         )
 
-        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertEqual(lines.count, 3)
-        XCTAssertTrue(csv.contains(",Blood Pressure Systolic,120,mmHg,"))
-        XCTAssertTrue(csv.contains(",Blood Pressure Diastolic,80,mmHg,"))
+        XCTAssertEqual(dataRows(in: csv).count, 2)
+        XCTAssertTrue(csv.contains(",Blood Pressure Systolic,,120,mmHg,"))
+        XCTAssertTrue(csv.contains(",Blood Pressure Diastolic,,80,mmHg,"))
     }
 
     func testGenerateCombinedCSV_oxygenSaturation_formatsPercent() {
@@ -305,7 +317,7 @@ final class CSVGeneratorTests: XCTestCase {
             weightUnit: .kilograms
         )
 
-        XCTAssertTrue(csv.contains(",Oxygen Saturation,98.5,%,"))
+        XCTAssertTrue(csv.contains(",Oxygen Saturation,,98.5,%,"))
     }
 
     func testGenerateCombinedCSV_bodyTemperature_usesSelectedUnit() {
@@ -326,7 +338,7 @@ final class CSVGeneratorTests: XCTestCase {
             temperatureUnit: .fahrenheit
         )
 
-        XCTAssertTrue(csv.contains(",Body Temperature,98.6,°F,"))
+        XCTAssertTrue(csv.contains(",Body Temperature,,98.6,°F,"))
     }
 
     func testGenerateCombinedCSV_a1cData_containsA1CRow() {
@@ -434,7 +446,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: [sample],
             weightUnit: .kilograms
         )
-        XCTAssertTrue(csv.contains(",Total Cholesterol,202,mg/dL,"))
+        XCTAssertTrue(csv.contains(",Total Cholesterol,2093-3,202,mg/dL,"))
     }
 
     func testLabResultRow_unknownLoinc_defaultsToTwoDecimals() {
@@ -454,8 +466,73 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: [sample],
             weightUnit: .kilograms
         )
-        XCTAssertTrue(csv.contains(",Mystery Lab,3.46,u,"))
+        XCTAssertTrue(csv.contains(",Mystery Lab,0000-0,3.46,u,"))
     }
+
+    // MARK: - LOINC column
+
+    func testLOINCColumn_emptyForWeightSteps() {
+        let weightSample = HKQuantitySample(
+            type: weightType,
+            quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 75.0),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let stepsSample = HKQuantitySample(
+            type: stepsType,
+            quantity: HKQuantity(unit: .count(), doubleValue: 8000),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: [weightSample],
+            stepsSamples: [stepsSample],
+            glucoseSamples: nil,
+            labResults: nil,
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Weight,,75.00,kg,"), "Weight row should have empty LOINC column")
+        XCTAssertTrue(csv.contains(",Steps,,8000,steps,"), "Steps row should have empty LOINC column")
+    }
+
+    func testLOINCColumn_emptyForVitalRows() {
+        let sample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.97),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: nil,
+            vitalSamples: [.oxygenSaturation: [sample]],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Oxygen Saturation,,97.0,%,"), "Vital row should have empty LOINC column")
+    }
+
+    func testLOINCColumn_populatedForLabRows() {
+        let sample = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: referenceDate,
+            value: 5.6,
+            unit: "%",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Hemoglobin A1C,4548-4,5.60,%,"), "Lab row should include LOINC code from sample")
+    }
+
+    // MARK: - CSV escaping (labs)
 
     func testLabResultRow_metricNameContainingCommaIsCSVEscaped() {
         let sample = LabResultSample(
@@ -522,7 +599,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: nil,
             weightUnit: .kilograms
         )
-        XCTAssertTrue(csv.hasPrefix("Date,Metric,"), "Should have single Date column, not Date,ISO8601")
+        XCTAssertTrue(csv.contains("Date,Metric,LOINC,Value,Unit,Source"), "Should have single Date column, not Date,ISO8601")
         XCTAssertFalse(csv.contains("ISO8601"), "Should not have separate ISO8601 column")
     }
 
@@ -553,9 +630,9 @@ final class CSVGeneratorTests: XCTestCase {
             weightUnit: .kilograms,
             sortOrder: .ascending
         )
-        let linesAsc = csvAsc.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertTrue(linesAsc[1].contains("70.00"), "Ascending: older (70kg) should come first")
-        XCTAssertTrue(linesAsc[2].contains("80.00"), "Ascending: newer (80kg) should come second")
+        let rowsAsc = dataRows(in: csvAsc)
+        XCTAssertTrue(rowsAsc[0].contains("70.00"), "Ascending: older (70kg) should come first")
+        XCTAssertTrue(rowsAsc[1].contains("80.00"), "Ascending: newer (80kg) should come second")
 
         let csvDesc = CSVGenerator.generateCombinedCSV(
             weightSamples: [sample1, sample2],
@@ -565,8 +642,8 @@ final class CSVGeneratorTests: XCTestCase {
             weightUnit: .kilograms,
             sortOrder: .descending
         )
-        let linesDesc = csvDesc.components(separatedBy: "\n").filter { !$0.isEmpty }
-        XCTAssertTrue(linesDesc[1].contains("80.00"), "Descending: newer (80kg) should come first")
-        XCTAssertTrue(linesDesc[2].contains("70.00"), "Descending: older (70kg) should come second")
+        let rowsDesc = dataRows(in: csvDesc)
+        XCTAssertTrue(rowsDesc[0].contains("80.00"), "Descending: newer (80kg) should come first")
+        XCTAssertTrue(rowsDesc[1].contains("70.00"), "Descending: older (70kg) should come second")
     }
 }

@@ -697,7 +697,7 @@ struct DataSelectionView: View {
         let sortOrder = settings.sortOrder
         let weightUnit = settings.weightUnit
         let temperatureUnit = settings.temperatureUnit
-        var csv = CSVGenerator.csvHeader + "\n"
+        var csv = CSVGenerator.csvPreamble
 
         if var samples = payload.weightSamples {
             payload.weightSamples = nil

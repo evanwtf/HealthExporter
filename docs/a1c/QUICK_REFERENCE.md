@@ -47,9 +47,12 @@ Also make sure the target has HealthKit and Clinical Health Records capabilities
 ## CSV Example
 
 ```csv
-Date,Metric,Value,Unit,Source
-2026-01-15 14:30:00,Hemoglobin A1C,7.50,%,Apple Health
-2026-01-15 14:31:00,Total Cholesterol,184,mg/dL,Apple Health
+### HealthExporterCSV: data exported as-is from Apple Health.
+### No warranty of accuracy, completeness, or fitness for any purpose.
+### Not a medical record. Verify with your healthcare provider before any clinical use.
+Date,Metric,LOINC,Value,Unit,Source
+2026-01-15 14:30:00,Hemoglobin A1C,4548-4,7.50,%,Apple Health
+2026-01-15 14:31:00,Total Cholesterol,2093-3,184,mg/dL,Apple Health
 ```
 
 ## Adding a New Lab

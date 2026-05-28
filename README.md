@@ -5,7 +5,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 ## Features
 
 - **Privacy-first design**: All processing on-device, no analytics, no tracking, no accounts
-- **Multiple health metrics**: Export Weight, Steps, Blood Glucose (mg/dL), and Hemoglobin A1C (%)
+- **Multiple health metrics**: Export Weight, Steps, Blood Glucose (mg/dL), selected clinical lab panels, and selected vitals
 - **Flexible date ranges**: Last X days, last X records, custom date range, or all data
 - **Unit preferences**: Configure weight units (kg/lbs), temperature (°C/°F), and distance/speed (metric/imperial); defaults to US units (Fahrenheit, lbs, imperial)
 - **Selectable date format**: Choose from 5 date formats including ISO8601 (UTC), `yyyy-MM-dd HH:mm:ss`, `MM/dd/yyyy HH:mm:ss`, and more
@@ -13,7 +13,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 - **CSV export**: Save directly to Files app via `.fileExporter()`
 - **Splash screen** with navigation to data selection and settings
 - **Settings persistence**: Unit preferences are automatically saved
-- **Clinical records support**: A1C export requires Clinical Health Records capability and permission
+- **Clinical records support**: Lab-result export requires Clinical Health Records capability and permission
 - **Memory-optimized**: Health data is cleared from memory immediately after export
 
 ## Screenshots
@@ -39,7 +39,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 
 1. Open `HealthExporter.xcodeproj` in Xcode
 2. Ensure HealthKit is enabled in Signing & Capabilities
-3. If using Hemoglobin A1C export, enable **Clinical Health Records** capability (see [A1C docs](docs/a1c/) for details)
+3. If using lab-result export, enable **Clinical Health Records** capability (see [lab result docs](docs/a1c/) for details)
 4. Build and run on a physical device (HealthKit has limited simulator support)
 
 ## Usage
@@ -47,7 +47,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 1. Launch the app (splash screen displays briefly)
 2. (Optional) Tap the gear icon to configure unit preferences or view the privacy policy
 3. Tap "Next" to go to the data selection screen
-4. Select metrics to export (Weight, Steps, Blood Glucose, A1C)
+4. Select metrics to export (Weight, Steps, Blood Glucose, lab sections, or vitals)
 5. Choose a date range option (last X days, last X records, date range, or all data)
 6. Tap "Save..." to save to Files
 
@@ -58,9 +58,9 @@ The exported CSV includes the following columns:
 | Column | Description |
 |--------|-------------|
 | **Date** | Timestamp in user-selected format (see below) |
-| **Metric** | Type of measurement (Weight, Steps, Blood Glucose, Hemoglobin A1C) |
-| **Value** | Numeric value (weight/A1C: 2 decimal places; glucose: integer; steps: integer) |
-| **Unit** | Unit of measurement (kg, lbs, steps, mg/dL, %) |
+| **Metric** | Type of measurement (Weight, Steps, Blood Glucose, lab result, or vital sign) |
+| **Value** | Numeric value with metric-specific precision |
+| **Unit** | Unit of measurement (kg, lbs, steps, mg/dL, %, etc.) |
 | **Source** | The app or device that recorded the data (e.g., Withings, Apple Watch) |
 
 ### Date Format Options
@@ -80,6 +80,10 @@ Date,Metric,Value,Unit,Source
 2026-01-09 11:00:00,Steps,5432,steps,Apple Watch
 2026-01-09 14:30:00,Blood Glucose,145,mg/dL,MyFitnessPal
 2026-01-15 14:30:00,Hemoglobin A1C,7.50,%,Apple Health
+2026-01-15 14:31:00,Total Cholesterol,184,mg/dL,Apple Health
+2026-01-15 14:32:00,Blood Pressure Systolic,120,mmHg,Apple Health
+2026-01-15 14:32:00,Blood Pressure Diastolic,80,mmHg,Apple Health
+2026-01-15 14:33:00,Oxygen Saturation,98.5,%,Apple Health
 ```
 
 Data can be sorted ascending (oldest first) or descending (newest first) within each metric type. Filename format: `HealthExporter_YYYY-MM-DD_HHMMSS.csv`.
@@ -89,7 +93,7 @@ Data can be sorted ascending (oldest first) or descending (newest first) within 
 - iOS 26+
 - Physical iOS device (for full HealthKit functionality)
 - HealthKit access permission
-- Clinical Health Records capability and user permission (for A1C export)
+- Clinical Health Records capability and user permission (for lab-result export)
 
 ## Testing
 
@@ -102,9 +106,9 @@ Unit tests run automatically in GitHub Actions CI on every push and PR. See [doc
 | `HealthMetricConfigTests.swift` | Metric availability, LOINC codes |
 | `GlucoseSampleTests.swift` | Blood glucose filtering (values >= 20 accepted, < 20 rejected) |
 
-### A1C Testing Status
+### Lab Testing Status
 
-Hemoglobin A1C export has been **verified working end-to-end** on a physical device with Clinical Health Records enabled. See [docs/a1c/](docs/a1c/) for implementation details.
+Hemoglobin A1C export has been **verified working end-to-end** on a physical device with Clinical Health Records enabled. Additional lab panels use the same registry-driven clinical-records pipeline and are covered by unit tests; validate new lab records on a physical device before release. Vitals use HealthKit quantity samples and should also be verified on device before release. See [docs/a1c/](docs/a1c/) for lab implementation details.
 
 ## Releases
 
@@ -145,8 +149,10 @@ HealthExporter/
 │       ├── SettingsView.swift           # Unit/format preferences & test data
 │       ├── PrivacyPolicyView.swift      # Privacy policy & disclaimer
 │       ├── HealthKitManager.swift       # HealthKit auth & data fetching
-│       ├── HealthMetricConfig.swift     # Central metric registry
-│       ├── HealthSampleTypes.swift      # Glucose, A1C, FHIR parsing
+      │       ├── HealthMetricConfig.swift     # Base metric registry
+      │       ├── LabMetricRegistry.swift      # Clinical lab panel registry
+      │       ├── VitalMetricRegistry.swift    # HealthKit vital metric registry
+│       ├── HealthSampleTypes.swift      # Glucose, LOINC constants, FHIR parsing
 │       ├── CSVGenerator.swift           # CSV generation & unit conversion
 │       ├── CSVDocument.swift            # FileDocument for saving
 │       ├── SettingsManager.swift        # UserDefaults persistence
@@ -173,7 +179,7 @@ HealthExporter/
 
 ## Privacy Policy
 
-*Last updated: March 2026*
+*Last updated: May 2026*
 
 ### Overview
 
@@ -186,7 +192,8 @@ HealthExporterCSV requests read-only access to the following Apple HealthKit dat
 - Weight
 - Step Count
 - Blood Glucose
-- Hemoglobin A1C
+- Selected clinical lab results, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
+- Selected vitals, such as blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature
 
 You control exactly which data types to share through the Apple Health permissions dialog.
 

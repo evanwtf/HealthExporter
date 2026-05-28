@@ -89,6 +89,14 @@ class CSVGenerator {
         return "\(date),\(metric),\(value),\(sample.unit),\(source)\n"
     }
 
+    private static func vitalRow(for sample: HKQuantitySample, component: VitalMetricComponent, temperatureUnit: TemperatureUnit, dateFormatter: DateFormatter) -> String {
+        let date = dateFormatter.string(from: sample.startDate)
+        let source = csvEscape(sample.sourceRevision.source.name)
+        let result = component.valueAndUnit(from: sample.quantity, temperatureUnit: temperatureUnit)
+        let value = String(format: "%.\(component.valuePrecision)f", result.value)
+        return "\(date),\(component.displayName),\(value),\(result.unit),\(source)\n"
+    }
+
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)
 
     static func appendWeightRows(to csv: inout String, samples: inout [HKQuantitySample], unit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
@@ -123,12 +131,25 @@ class CSVGenerator {
         }
     }
 
-    static func makePreviewEstimate(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, weightUnit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss) -> ExportPreviewEstimate {
+    static func appendVitalRows(to csv: inout String, samplesByComponent: inout [VitalMetricComponent: [HKQuantitySample]], temperatureUnit: TemperatureUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
+        let dateFormatter = makeDateFormatter(for: dateFormat)
+        for component in VitalMetricComponent.allCases {
+            guard var samples = samplesByComponent[component] else { continue }
+            samplesByComponent[component] = nil
+            samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
+            for sample in samples {
+                csv.append(vitalRow(for: sample, component: component, temperatureUnit: temperatureUnit, dateFormatter: dateFormatter))
+            }
+        }
+    }
+
+    static func makePreviewEstimate(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil, weightUnit: WeightUnit, temperatureUnit: TemperatureUnit = .fahrenheit, dateFormat: DateFormatOption = .yyyyMMddHHmmss) -> ExportPreviewEstimate {
         let weightCount = weightSamples?.count ?? 0
         let stepsCount = stepsSamples?.count ?? 0
         let glucoseCount = glucoseSamples?.count ?? 0
         let labCount = labResults?.count ?? 0
-        let rowCount = weightCount + stepsCount + glucoseCount + labCount
+        let vitalCount = vitalSamples?.values.reduce(0) { $0 + $1.count } ?? 0
+        let rowCount = weightCount + stepsCount + glucoseCount + labCount + vitalCount
 
         let dateFormatter = makeDateFormatter(for: dateFormat)
         var estimatedByteCount = (csvHeader + "\n").utf8.count
@@ -157,6 +178,15 @@ class CSVGenerator {
             }
         }
 
+        if let samplesByComponent = vitalSamples {
+            for component in VitalMetricComponent.allCases {
+                guard let samples = samplesByComponent[component] else { continue }
+                for sample in samples {
+                    estimatedByteCount += vitalRow(for: sample, component: component, temperatureUnit: temperatureUnit, dateFormatter: dateFormatter).utf8.count
+                }
+            }
+        }
+
         return ExportPreviewEstimate(rowCount: rowCount, estimatedByteCount: estimatedByteCount)
     }
 
@@ -176,7 +206,7 @@ class CSVGenerator {
         return csv
     }
 
-    static func generateCombinedCSV(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, weightUnit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
+    static func generateCombinedCSV(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil, weightUnit: WeightUnit, temperatureUnit: TemperatureUnit = .fahrenheit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
         var csv = csvHeader + "\n"
 
         if var samples = weightSamples {
@@ -193,6 +223,10 @@ class CSVGenerator {
 
         if var samples = labResults {
             appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+        }
+
+        if var samplesByComponent = vitalSamples {
+            appendVitalRows(to: &csv, samplesByComponent: &samplesByComponent, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         return csv

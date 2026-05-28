@@ -10,11 +10,12 @@ enum ExportLogic {
         exportSteps: Bool,
         exportGlucose: Bool,
         hasSelectedLabs: Bool,
+        hasSelectedVitals: Bool = false,
         dateRangeOption: DateRangeOption,
         startDate: Date,
         endDate: Date
     ) -> Bool {
-        let hasSelectedMetric = exportWeight || exportSteps || exportGlucose || hasSelectedLabs
+        let hasSelectedMetric = exportWeight || exportSteps || exportGlucose || hasSelectedLabs || hasSelectedVitals
         guard hasSelectedMetric else { return false }
 
         switch dateRangeOption {
@@ -70,7 +71,8 @@ enum ExportLogic {
         weightError: Error?,
         stepsError: Error?,
         glucoseError: Error?,
-        labError: Error?
+        labError: Error?,
+        vitalError: Error? = nil
     ) -> ExportError? {
         if let weightError {
             return .healthKitQueryFailed(metric: HealthMetrics.weight.name, underlying: weightError)
@@ -83,6 +85,9 @@ enum ExportLogic {
         }
         if let labError {
             return .healthKitQueryFailed(metric: "Lab Results", underlying: labError)
+        }
+        if let vitalError {
+            return .healthKitQueryFailed(metric: "Vitals", underlying: vitalError)
         }
         return nil
     }
@@ -102,12 +107,14 @@ enum ExportLogic {
         weightSamples: [HKQuantitySample]?,
         stepsSamples: [HKQuantitySample]?,
         glucoseSamples: [GlucoseSampleMgDl]?,
-        labResults: [LabResultSample]?
+        labResults: [LabResultSample]?,
+        vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil
     ) -> Bool {
         (weightSamples?.isEmpty == false) ||
         (stepsSamples?.isEmpty == false) ||
         (glucoseSamples?.isEmpty == false) ||
-        (labResults?.isEmpty == false)
+        (labResults?.isEmpty == false) ||
+        (vitalSamples?.values.contains { !$0.isEmpty } == true)
     }
 
     /// Generates the export filename for a given date.

@@ -174,6 +174,12 @@ final class SettingsManagerTests: XCTestCase {
         XCTAssertTrue(raw.isEmpty)
     }
 
+    func testDefaultSelectedVitalMetrics_whenKeyMissing_isEmpty() {
+        let defaults = makeDefaults()
+        let raw = defaults.array(forKey: "selectedVitalMetrics") as? [String] ?? []
+        XCTAssertTrue(raw.isEmpty)
+    }
+
     func testReadsPersistedSelectedLabPanels() {
         let defaults = makeDefaults()
         defaults.set([LabPanel.lipid.rawValue, LabPanel.thyroid.rawValue], forKey: "selectedLabPanels")
@@ -187,6 +193,17 @@ final class SettingsManagerTests: XCTestCase {
         defaults.set(["4548-4", "2093-3"], forKey: "favoriteLabCodes")
         let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
         XCTAssertEqual(codes, ["4548-4", "2093-3"])
+    }
+
+    func testReadsPersistedSelectedVitalMetrics() {
+        let defaults = makeDefaults()
+        defaults.set(
+            [VitalMetric.bloodPressure.rawValue, VitalMetric.restingHeartRate.rawValue],
+            forKey: "selectedVitalMetrics"
+        )
+        let raw = defaults.array(forKey: "selectedVitalMetrics") as? [String] ?? []
+        let metrics = Set(raw.compactMap(VitalMetric.init(rawValue:)))
+        XCTAssertEqual(metrics, [.bloodPressure, .restingHeartRate])
     }
 
     // MARK: - Legacy exportA1C migration

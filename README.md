@@ -106,6 +106,30 @@ Unit tests run automatically in GitHub Actions CI on every push and PR. See [doc
 
 Hemoglobin A1C export has been **verified working end-to-end** on a physical device with Clinical Health Records enabled. See [docs/a1c/](docs/a1c/) for implementation details.
 
+## Releases
+
+Three GitHub Actions workflows handle the release pipeline:
+
+| Workflow | Trigger | Runner | What it does |
+|----------|---------|--------|--------------|
+| `.github/workflows/bump-build-number.yml` | PR merge to `main` | `ubuntu-latest` | Increments `CURRENT_PROJECT_VERSION` and the `MARKETING_VERSION` patch component, commits the bump, and pushes a `vX.Y.Z` tag |
+| `.github/workflows/publish-release.yml` | `v*` tag push | `ubuntu-latest` | Creates the GitHub release with auto-generated notes |
+| `.github/workflows/release-testflight.yml` | Manual dispatch + daily 13:00 UTC schedule | `[self-hosted, macOS, ARM64]` (`MacMiniM4_01`) | Tests, archives, exports a signed IPA via [`ci/ExportOptions.plist`](ci/ExportOptions.plist), and uploads it to internal TestFlight |
+
+Manual TestFlight upload for the current `main`:
+
+```sh
+gh workflow run release-testflight.yml --repo evanwtf/HealthExporter
+```
+
+Upload a specific tag or commit:
+
+```sh
+gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f ref=vX.Y.Z
+```
+
+The TestFlight workflow requires the `MACOS_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, and `ASC_API_KEY_P8` secrets, plus a `HealthExporter App Store` provisioning profile installed on the runner with HealthKit and Clinical Health Records capabilities. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
+
 ## Project Structure
 
 ```
@@ -142,7 +166,8 @@ HealthExporter/
 │   └── a1c/
 │       ├── QUICK_REFERENCE.md
 │       └── IMPLEMENTATION_GUIDE.md
-├── .github/workflows/ios-tests.yml
+├── .github/workflows/         # ios-tests, bump-build-number, publish-release, release-testflight
+├── ci/ExportOptions.plist
 └── README.md
 ```
 

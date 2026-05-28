@@ -23,7 +23,7 @@ struct PrivacyPolicyView: View {
                         • Weight
                         • Step Count
                         • Blood Glucose
-                        • Hemoglobin A1C
+                        • Selected clinical lab results, such as Hemoglobin A1C and lipid panel labs
 
                         You control exactly which data types to share through the Apple Health permissions dialog.
                         """)

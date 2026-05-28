@@ -341,6 +341,25 @@ final class CSVGeneratorTests: XCTestCase {
         XCTAssertTrue(csv.contains(",7.00,%,"))
     }
 
+    func testLabResultRow_usesZeroPrecision_forLipidMetrics() {
+        let sample = LabResultSample(
+            metricName: "Total Cholesterol",
+            loincCode: LOINCCode.totalCholesterol,
+            effectiveDateTime: referenceDate,
+            value: 201.6,
+            unit: "mg/dL",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Total Cholesterol,202,mg/dL,"))
+    }
+
     func testLabResultRow_unknownLoinc_defaultsToTwoDecimals() {
         // Registry has no entry for this code, so precision falls back to 2.
         let sample = LabResultSample(

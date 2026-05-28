@@ -27,11 +27,10 @@ struct GlucoseSampleMgDl {
 /// Common LOINC codes for lab results
 struct LOINCCode {
     static let hemoglobinA1C = "4548-4"
-    // Add future LOINC codes here:
-    // static let totalCholesterol = "2093-3"
-    // static let hdlCholesterol = "2085-9"
-    // static let ldlCholesterol = "2089-1"
-    // static let triglycerides = "2571-8"
+    static let totalCholesterol = "2093-3"
+    static let hdlCholesterol = "2085-9"
+    static let ldlCholesterolDirect = "2089-1"
+    static let triglycerides = "2571-8"
 }
 
 // MARK: - FHIR Lab Result Helper
@@ -144,4 +143,3 @@ struct LabResultSample {
         )
     }
 }
-

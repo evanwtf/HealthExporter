@@ -39,6 +39,30 @@ enum LabMetricRegistry {
             loincCode: LOINCCode.hemoglobinA1C,
             group: .other,
             valuePrecision: 2
+        ),
+        LabMetric(
+            name: "Total Cholesterol",
+            loincCode: LOINCCode.totalCholesterol,
+            group: .lipid,
+            valuePrecision: 0
+        ),
+        LabMetric(
+            name: "HDL Cholesterol",
+            loincCode: LOINCCode.hdlCholesterol,
+            group: .lipid,
+            valuePrecision: 0
+        ),
+        LabMetric(
+            name: "LDL Cholesterol",
+            loincCode: LOINCCode.ldlCholesterolDirect,
+            group: .lipid,
+            valuePrecision: 0
+        ),
+        LabMetric(
+            name: "Triglycerides",
+            loincCode: LOINCCode.triglycerides,
+            group: .lipid,
+            valuePrecision: 0
         )
     ]
 

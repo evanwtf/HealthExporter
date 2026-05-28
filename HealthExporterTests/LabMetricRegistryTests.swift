@@ -57,9 +57,25 @@ final class LabMetricRegistryTests: XCTestCase {
         XCTAssertTrue(others.contains { $0.loincCode == LOINCCode.hemoglobinA1C })
     }
 
-    func testRegistry_metricsForPanel_lipid_isInitiallyEmpty() {
-        // Lipid/CBC/CMP/Thyroid panels are scaffolded for future labs but seeded
-        // empty in this refactor — only A1C exists today.
-        XCTAssertTrue(LabMetricRegistry.metrics(in: .lipid).isEmpty)
+    func testRegistry_metricsForPanel_lipid_includesExpectedMetrics() {
+        let lipids = LabMetricRegistry.metrics(in: .lipid)
+        let expectedCodes: Set<String> = [
+            LOINCCode.totalCholesterol,
+            LOINCCode.hdlCholesterol,
+            LOINCCode.ldlCholesterolDirect,
+            LOINCCode.triglycerides
+        ]
+
+        XCTAssertEqual(Set(lipids.map(\.loincCode)), expectedCodes)
+        XCTAssertTrue(lipids.allSatisfy { $0.group == .lipid })
+        XCTAssertTrue(lipids.allSatisfy { $0.valuePrecision == 0 })
+    }
+
+    func testRegistry_lipidMetricsHaveExpectedNames() {
+        let metricsByCode = Dictionary(uniqueKeysWithValues: LabMetricRegistry.metrics(in: .lipid).map { ($0.loincCode, $0.name) })
+        XCTAssertEqual(metricsByCode[LOINCCode.totalCholesterol], "Total Cholesterol")
+        XCTAssertEqual(metricsByCode[LOINCCode.hdlCholesterol], "HDL Cholesterol")
+        XCTAssertEqual(metricsByCode[LOINCCode.ldlCholesterolDirect], "LDL Cholesterol")
+        XCTAssertEqual(metricsByCode[LOINCCode.triglycerides], "Triglycerides")
     }
 }

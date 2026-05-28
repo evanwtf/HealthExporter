@@ -5,7 +5,7 @@
 ## What It Does
 
 - Exports lab result values from Apple Health Clinical Records
-- Each metric is identified by its LOINC code (`4548-4` for Hemoglobin A1C)
+- Each metric is identified by its LOINC code (`4548-4` for Hemoglobin A1C; lipid panel codes `2093-3`, `2085-9`, `2089-1`, `2571-8`)
 - Includes matching lab rows in the same CSV as weight, steps, and glucose
 
 ## Key Files
@@ -49,6 +49,7 @@ Also make sure the target has HealthKit and Clinical Health Records capabilities
 ```csv
 Date,Metric,Value,Unit,Source
 2026-01-15 14:30:00,Hemoglobin A1C,7.50,%,Apple Health
+2026-01-15 14:31:00,Total Cholesterol,184,mg/dL,Apple Health
 ```
 
 ## Adding a New Lab
@@ -60,5 +61,5 @@ Date,Metric,Value,Unit,Source
 ## Notes
 
 - No labs are selected by default
-- Per-metric value precision comes from `LabMetric.valuePrecision`; A1C still renders to 2 decimal places
+- Per-metric value precision comes from `LabMetric.valuePrecision`; A1C renders to 2 decimal places and lipid panel labs render as integers
 - Existing export metrics are unaffected

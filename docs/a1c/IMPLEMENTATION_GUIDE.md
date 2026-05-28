@@ -2,7 +2,7 @@
 
 ## Overview
 
-Lab result export — including Hemoglobin A1C — is part of the current HealthExporter release. Users can opt into exporting Clinical Health Records lab results and the app will include matching records in the combined CSV output. The lab pipeline is registry-driven: adding a new lab requires only appending a `LabMetric` to `LabMetricRegistry.all`.
+Lab result export — including Hemoglobin A1C and lipid panel labs — is part of the current HealthExporter release. Users can opt into exporting Clinical Health Records lab results and the app will include matching records in the combined CSV output. The lab pipeline is registry-driven: adding a new lab requires only appending a `LabMetric` to `LabMetricRegistry.all`.
 
 > Testing status: A1C export has been verified working end-to-end on a physical device with Clinical Health Records enabled. Byte-identical CSV output is pinned by `A1CCSVBytePinningTests`.
 
@@ -13,7 +13,7 @@ Lab result export — including Hemoglobin A1C — is part of the current Health
 - `LabMetricRegistry.swift` defines the metric registry
 - `LabPanel` groups metrics into logical panels (`lipid`, `cbc`, `cmp`, `thyroid`, `other`)
 - `LabMetric` describes a single lab observation: `name`, `loincCode` (also `id`), `group`, and `valuePrecision`
-- `LabMetricRegistry.all` is the single source of truth; Hemoglobin A1C is currently the only registered entry
+- `LabMetricRegistry.all` is the single source of truth; current entries include Hemoglobin A1C plus Total Cholesterol, HDL Cholesterol, LDL Cholesterol, and Triglycerides
 - Helpers: `LabMetricRegistry.metric(forLoincCode:)` and `LabMetricRegistry.metrics(in:)`
 
 ### Data Model
@@ -21,7 +21,7 @@ Lab result export — including Hemoglobin A1C — is part of the current Health
 - `HealthSampleTypes.swift` defines `LabResultSample`, the generic lab result row
 - `LabResultSample` carries `metricName`, `loincCode`, `effectiveDateTime`, `value`, `unit`, and `source`
 - Initializers parse FHIR JSON (`init?(fromFHIRData:loincCode:source:)`) or an `HKClinicalRecord` (`init?(from:loincCode:)`)
-- LOINC `4548-4` identifies Hemoglobin A1C; new LOINC constants live alongside it in `LOINCCode`
+- LOINC `4548-4` identifies Hemoglobin A1C; lipid LOINC constants (`2093-3`, `2085-9`, `2089-1`, `2571-8`) live alongside it in `LOINCCode`
 
 ### HealthKit Authorization
 
@@ -46,8 +46,8 @@ Lab result export — including Hemoglobin A1C — is part of the current Health
 ### CSV Output
 
 - `CSVGenerator.appendLabResultRows(to:samples:dateFormat:sortOrder:)` appends rows to the combined export
-- The metric label comes from `LabMetric.name` (e.g. `Hemoglobin A1C`)
-- Per-metric precision comes from `LabMetric.valuePrecision`; A1C still renders to 2 decimal places
+- The metric label comes from `LabMetric.name` (e.g. `Hemoglobin A1C` or `Total Cholesterol`)
+- Per-metric precision comes from `LabMetric.valuePrecision`; A1C renders to 2 decimal places and lipid panel labs render as integers
 
 ## Required Configuration
 

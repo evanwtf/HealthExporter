@@ -23,4 +23,11 @@ final class HealthMetricConfigTests: XCTestCase {
         XCTAssertEqual(LOINCCode.hemoglobinA1C, "4548-4",
             "LOINC code for Hemoglobin A1C should be 4548-4")
     }
+
+    func testLOINCCode_lipidPanelConstants_areCorrect() {
+        XCTAssertEqual(LOINCCode.totalCholesterol, "2093-3")
+        XCTAssertEqual(LOINCCode.hdlCholesterol, "2085-9")
+        XCTAssertEqual(LOINCCode.ldlCholesterolDirect, "2089-1")
+        XCTAssertEqual(LOINCCode.triglycerides, "2571-8")
+    }
 }

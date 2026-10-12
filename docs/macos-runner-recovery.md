@@ -294,9 +294,16 @@ gh run watch "$(gh run list --repo evanwtf/HealthExporter \
 
 Steps to look at, in order: `Check required secrets` → `Run iOS tests` →
 `Unlock signing keychain` → `Archive` → `Export IPA`. The dry run skips
-`Upload IPA for Internal TestFlight`. When those steps are green, dispatch
-again without `-f upload=false` to upload. If the upload also goes green the
-runner is fully recovered. End-to-end runtime is normally
+`Upload IPA for Internal TestFlight`. When those steps are green, upload the
+newest tag if its upload failed (App Store Connect rejects a build number it
+already has):
+
+```sh
+gh workflow run release-testflight.yml --repo evanwtf/HealthExporter --ref vX.Y.Z
+```
+
+If the upload also goes green the runner is fully recovered. Otherwise the
+next merge to `main` proves it: the bump workflow dispatches the upload. End-to-end runtime is normally
 ~2–3 minutes when nothing is wrong (no app code changes); a from-scratch
 build is closer to ~10–15 minutes.
 
@@ -332,7 +339,11 @@ Things that would have cut this incident from "an hour of cert rebuilding" to
 
 ## 7. Reference — workflow, secrets, paths
 
-- Workflow: [`.github/workflows/release-testflight.yml`](../.github/workflows/release-testflight.yml)
+- Workflow: [`.github/workflows/release-testflight.yml`](../.github/workflows/release-testflight.yml).
+  It has no schedule.
+  [`bump-build-number.yml`](../.github/workflows/bump-build-number.yml)
+  dispatches it on the new `vX.Y.Z` tag after every merge to `main`, after it
+  creates the GitHub release.
 - Test script: [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh)
 - Export options: [`ci/ExportOptions.plist`](../ci/ExportOptions.plist)
   (`signingStyle = automatic`, no named profile)

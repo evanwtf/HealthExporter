@@ -96,8 +96,9 @@ This repo uses `XCTest`. Add tests in `HealthExporterTests/` with filenames like
 
 ## CI and releases
 - `iOS Tests` (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. Fork pull requests do not run on the runner.
-- Every pull request merged to `main` bumps the build and patch version and pushes a `vX.Y.Z` tag. Land changes through one pull request per work session. Do not push directly to `main`.
-- `release-testflight.yml` tests, archives, exports and uploads to TestFlight. Dry run (no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
+- Every pull request merged to `main` cuts a release. `bump-build-number.yml` (Linux runner) bumps the build and patch version, pushes a `vX.Y.Z` tag, creates the GitHub release and dispatches `release-testflight.yml` on the tag. That workflow then tests, archives, exports and uploads to TestFlight on the Mac runner. Nothing runs from a laptop. Land changes through one pull request per work session. Do not push directly to `main`.
+- `publish-release.yml` is only a fallback for tags pushed by hand.
+- TestFlight dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
 - The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. Signing is automatic; see `docs/macos-runner-recovery.md`.
 
 ## Commit & Pull Request Guidelines

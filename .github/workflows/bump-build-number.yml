@@ -22,7 +22,12 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump build number and patch version
+      # Labels on the merged PR choose the version part: `semver:major` or
+      # `semver:minor` (layout changes); no label bumps the patch.
+      - name: Bump build number and version
+        env:
+          BUMP_MAJOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:major') }}
+          BUMP_MINOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:minor') }}
         run: |
           FILE="HealthExporter.xcodeproj/project.pbxproj"
 
@@ -33,13 +38,18 @@ jobs:
           sed -i "s/CURRENT_PROJECT_VERSION = $CURRENT;/CURRENT_PROJECT_VERSION = $NEXT;/g" "$FILE"
           grep 'CURRENT_PROJECT_VERSION' "$FILE"
 
-          # Bump MARKETING_VERSION patch component (e.g. 2.4.6 -> 2.4.7)
+          # Bump MARKETING_VERSION: 2.4.6 -> 2.4.7, 2.5.0 (semver:minor) or 3.0.0 (semver:major)
           MARKETING=$(grep -m1 'MARKETING_VERSION' "$FILE" | sed 's/.*= //;s/;.*//')
           MAJOR=$(echo "$MARKETING" | cut -d. -f1)
           MINOR=$(echo "$MARKETING" | cut -d. -f2)
           PATCH=$(echo "$MARKETING" | cut -d. -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          if [ "$BUMP_MAJOR" = "true" ]; then
+            NEW_VERSION="$((MAJOR + 1)).0.0"
+          elif [ "$BUMP_MINOR" = "true" ]; then
+            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+          else
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
           echo "Bumping marketing version: $MARKETING -> $NEW_VERSION"
           sed -i "s/MARKETING_VERSION = $MARKETING;/MARKETING_VERSION = $NEW_VERSION;/g" "$FILE"
           grep 'MARKETING_VERSION' "$FILE"

@@ -94,6 +94,12 @@ CSV format details:
 ## Testing Guidelines
 This repo uses `XCTest`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift` and methods named `test...`. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.
 
+## CI and releases
+- `iOS Tests` (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. Fork pull requests do not run on the runner.
+- Every pull request merged to `main` bumps the build and patch version and pushes a `vX.Y.Z` tag. Land changes through one pull request per work session. Do not push directly to `main`.
+- `release-testflight.yml` tests, archives, exports and uploads to TestFlight. Dry run (no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
+- The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. Signing is automatic; see `docs/macos-runner-recovery.md`.
+
 ## Commit & Pull Request Guidelines
 Recent history favors short, imperative commit subjects such as `Fix: clear csvContent on export failure to free memory`, `Update docs to match current codebase`, and version bumps like `Bump build number to 18 [skip ci]`. Keep commits focused. PRs should describe the user-visible change, list testing performed, link related issues, and include screenshots for SwiftUI/UI updates. Note any device-only validation when HealthKit behavior cannot be reproduced in CI.
 When posting text blobs to GitHub, always write the content to a temporary file first and pass that file to the CLI. Use this for issue bodies, PR descriptions, comments, and similar multi-line text to avoid string-quoting problems.

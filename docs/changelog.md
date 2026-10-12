@@ -6,6 +6,8 @@ Release notes for each version of HealthExporter, newest first. The release job 
 
 <!-- One "- " line per change, in plain words for testers. -->
 
+## v2.5.5 (build 57), 2026-10-12
+
 - The privacy policy in Settings is updated. It now says how the app reads lab results, what the exported file holds, where it can go, and that GitHub issues are public. It also gives the current steps to turn off Health access.
 
 ## v2.5.4 (build 56), 2026-10-12

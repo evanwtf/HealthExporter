@@ -40,13 +40,5 @@ struct SelectionDetailView: View {
         .fontDesign(.rounded)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(title)
-                    .font(.headline)
-                    .fontDesign(.rounded)
-                    .accessibilityAddTraits(.isHeader)
-            }
-        }
     }
 }

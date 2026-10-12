@@ -84,14 +84,6 @@ struct PrivacyPolicyView: View {
         .fontDesign(.rounded)
         .navigationTitle("Privacy & Disclaimer")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Privacy & Disclaimer")
-                    .font(.headline)
-                    .fontDesign(.rounded)
-                    .accessibilityAddTraits(.isHeader)
-            }
-        }
     }
 
     private func sectionView(title: String, body: String, bullets: [String] = [], closing: String? = nil) -> some View {

@@ -500,11 +500,6 @@ struct DataSelectionView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Choose Data")
-                            .font(.largeTitle.bold())
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityAddTraits(.isHeader)
-
                         tileGrid(measurementTiles)
 
                         sectionHeading("Lab results")
@@ -535,14 +530,7 @@ struct DataSelectionView: View {
         }
         .fontDesign(.rounded)
         .navigationTitle("Choose Data")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // The large title is in the content, in SF Pro Rounded.
-            ToolbarItem(placement: .principal) {
-                Color.clear.frame(width: 1, height: 1)
-                    .accessibilityHidden(true)
-            }
-        }
+        .navigationBarTitleDisplayMode(.large)
         .onAppear { updateExportEnabled() }
         .onChange(of: settings.exportWeight) { updateExportEnabled() }
         .onChange(of: settings.exportSteps) { updateExportEnabled() }

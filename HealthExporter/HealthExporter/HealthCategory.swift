@@ -22,8 +22,8 @@ enum HealthCategory: CaseIterable {
 
     var systemImage: String {
         switch self {
-        case .weight: return "figure"
-        case .steps: return "flame.fill"
+        case .weight: return "scalemass.fill"
+        case .steps: return "figure.walk"
         case .glucose: return "drop.fill"
         case .vitals: return "heart.fill"
         case .labs: return "list.clipboard.fill"

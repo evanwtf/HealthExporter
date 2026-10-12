@@ -79,12 +79,6 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Settings")
-                        .font(.headline)
-                        .fontDesign(.rounded)
-                        .accessibilityAddTraits(.isHeader)
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()

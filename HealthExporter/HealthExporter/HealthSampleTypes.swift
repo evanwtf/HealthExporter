@@ -23,7 +23,8 @@ nonisolated struct GlucoseSampleMgDl: Sendable {
         let mgDlValue = sample.quantity.doubleValue(for: glucoseUnit)
         // Blood glucose values are typically 20-600 mg/dL, reject values < 20 (likely % misinterpreted)
         guard mgDlValue >= 20 else {
-            logger.debug("Filtered glucose value \(mgDlValue, privacy: .private) mg/dL (below 20 threshold) from \(sample.startDate, privacy: .private)")
+            // Log no value or date: health data stays out of the system log.
+            logger.debug("Filtered a glucose value below 20 mg/dL")
             return nil
         }
         startDate = sample.startDate

@@ -4,9 +4,12 @@ title: Privacy Policy
 permalink: /privacy-policy/
 ---
 
+<!-- The app shows the same text from HealthExporter/HealthExporter/PrivacyPolicy.swift.
+     PrivacyPolicyTests checks every line of that file against this page, so change both together. -->
+
 # Privacy Policy — HealthExporterCSV
 
-**Last updated:** May 2026
+**Last updated:** October 2026
 
 ## Overview
 
@@ -14,28 +17,33 @@ HealthExporterCSV is designed with your privacy as a core principle. All data pr
 
 ## Data We Access
 
-HealthExporterCSV requests read-only access to the following Apple HealthKit data types, only when you explicitly grant permission:
+HealthExporterCSV asks for read-only access to Apple Health. It asks only for the data types you select for an export:
 
 - Weight
 - Step Count
-- Blood Glucose
-- Selected clinical lab results, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
-- Selected vitals, such as blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature
+- Blood Glucose, with the meal time (before or after a meal) when a reading has one
+- Vitals: blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature
+- Lab results from Health Records, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, and thyroid labs
 
-You control exactly which data types to share through the Apple Health permissions dialog.
+For each value, the app also reads its date, its unit, and its source: the app or device that recorded it. Apple gives access to lab results as one data type, so the app reads the lab results in your date range and keeps only the labs you selected. You control exactly which data types to share through the Apple Health permissions dialog.
 
 ## How Your Data Is Used
 
 Your health data is used solely to generate CSV export files on your device. Specifically:
 
-- Data is read from HealthKit only when you initiate an export.
-- The CSV file is generated in memory and presented through the system file picker.
-- Health data is cleared from app memory immediately after export.
+- Data is read from Apple Health only when you start an export.
+- The app builds the CSV file in memory and passes it to the system file picker. The app does not keep a copy.
+- The app clears health data from memory after the export, and also when you cancel or the export fails.
 - No health data is stored persistently by the app.
+- On iOS 27 and later, you can limit an app to data from a start date. The app reads that date only to warn you when your export starts earlier.
+
+## Exported Files
+
+The CSV file holds your health data as plain text, and it is not encrypted. You choose where to save it in the file picker, for example On My iPhone, iCloud Drive, or another storage app, and the privacy terms of that place apply. After you save the file, HealthExporterCSV cannot see, change, or delete it. Share the file only with people you trust, such as your doctor.
 
 ## Data Storage
 
-The only data HealthExporterCSV stores persistently is your preferences (unit selections, date format, sort order, and metric toggle states) in the app's local UserDefaults. No health data, personal identifiers, or usage analytics are stored.
+The only data HealthExporterCSV stores persistently is your settings, in the app's local UserDefaults: units, date format, sort order, the metrics, vitals, lab panels, and labs you selected, and your date range choices. No health data, personal identifiers, or usage analytics are stored. Deleting the app deletes these settings.
 
 ## No Data Collection or Transmission
 
@@ -47,13 +55,17 @@ HealthExporterCSV does not:
 - Use advertising or marketing frameworks
 - Share data with any third parties
 
+## Report a Problem
+
+The Report a Problem link on the welcome screen opens a GitHub page in your browser. The app sends no data with it. GitHub issues are public, so do not put health data, screenshots of your data, or exported files in an issue. GitHub's privacy policy applies to anything you post there.
+
 ## Your Control
 
-You can revoke HealthExporterCSV's access to HealthKit data at any time through **Settings > Health > Data Access & Devices** on your iPhone. Revoking access does not affect any CSV files you have previously exported.
+You can turn off HealthExporterCSV's access to Apple Health at any time. Open the Health app, tap your profile picture, then under Privacy tap Apps, and tap HealthExporterCSV. Turning off access does not affect any CSV files you have already exported.
 
 ## Changes to This Policy
 
-If this privacy policy is updated, the revised version will be included in an app update. The "Last updated" date at the top will reflect the most recent revision.
+If this privacy policy changes, the new version is included in an app update and posted at [evanwtf.github.io/HealthExporter/privacy-policy](https://evanwtf.github.io/HealthExporter/privacy-policy/). The "Last updated" date at the top shows the most recent change.
 
 ---
 
@@ -79,4 +91,4 @@ HealthExporterCSV exports data as recorded in Apple HealthKit. The developer mak
 
 ## Contact
 
-For questions about this privacy policy, please open an issue at [github.com/evanwtf/HealthExporter/issues](https://github.com/evanwtf/HealthExporter/issues).
+For questions about this privacy policy, open an issue at [github.com/evanwtf/HealthExporter/issues](https://github.com/evanwtf/HealthExporter/issues). Issues are public.

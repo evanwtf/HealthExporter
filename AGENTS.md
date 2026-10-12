@@ -184,6 +184,8 @@ A pull request without `skip-release` cuts a release, so it must add lines under
 ## Security & Configuration Tips
 Do not commit real secrets; use `Secrets.plist.example` as the template. Keep HealthKit data on-device, avoid logging sensitive values, and preserve the privacy-first design.
 
+The privacy policy has two copies: `PrivacyPolicy.swift` (shown in Settings) and `docs/privacy-policy.md` (the public web page). `PrivacyPolicyTests` fails when a line differs, so change both in one commit and update `lastUpdated` and the web date. When a change alters what the app reads, stores, logs or sends, update the policy in the same pull request. Never log a health value or date, even as `.private`.
+
 Required capabilities and configuration:
 - HealthKit is always required.
 - Clinical Health Records is required for lab-result export (any LOINC-coded metric, including A1C).

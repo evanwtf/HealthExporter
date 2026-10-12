@@ -385,6 +385,7 @@ struct DataSelectionView: View {
                 exportData()
             }) {
                 Label("Export CSV", systemImage: "square.and.arrow.up")
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)

@@ -102,6 +102,7 @@ struct LaunchView: View {
         VStack(spacing: 16) {
             NavigationLink(destination: DataSelectionView(settings: settings)) {
                 Text("Choose Data")
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)

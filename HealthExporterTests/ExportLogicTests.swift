@@ -387,4 +387,16 @@ final class ExportLogicTests: XCTestCase {
         XCTAssertTrue(filename.hasPrefix("HealthExporter_2024-06-15_"))
         XCTAssertTrue(filename.hasSuffix(".csv"))
     }
+
+    func testExportFilename_exactOutputInUTC() {
+        let fixedDate = ISO8601DateFormatter().date(from: "2024-06-15T14:30:45Z")!
+        let filename = ExportLogic.exportFilename(for: fixedDate, timeZone: TimeZone(secondsFromGMT: 0)!)
+        XCTAssertEqual(filename, "HealthExporter_2024-06-15_143045.csv")
+    }
+
+    func testFilenameFormatter_usesGregorianPOSIX() {
+        let formatter = ExportLogic.makeFilenameFormatter(timeZone: TimeZone(secondsFromGMT: 0)!)
+        XCTAssertEqual(formatter.calendar.identifier, .gregorian)
+        XCTAssertEqual(formatter.locale.identifier, "en_US_POSIX")
+    }
 }

@@ -149,7 +149,7 @@ final class CSVGeneratorTests: XCTestCase {
             end: referenceDate
         )
         let csv = CSVGenerator.generateStepsCSV(from: [sample])
-        XCTAssertTrue(csv.contains(",12345,"), "Steps should be truncated to integer")
+        XCTAssertTrue(csv.contains(",12346,"), "Steps should be rounded to the nearest integer")
         XCTAssertFalse(csv.contains("12345.7"), "Steps should not include decimal point")
     }
 
@@ -645,6 +645,69 @@ final class CSVGeneratorTests: XCTestCase {
         let rowsDesc = dataRows(in: csvDesc)
         XCTAssertTrue(rowsDesc[0].contains("80.00"), "Descending: newer (80kg) should come first")
         XCTAssertTrue(rowsDesc[1].contains("70.00"), "Descending: older (70kg) should come second")
+    }
+
+    func testGenerateStepsCSV_roundsHalfUp() {
+        let sample = HKQuantitySample(
+            type: stepsType,
+            quantity: HKQuantity(unit: .count(), doubleValue: 12.5),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let csv = CSVGenerator.generateStepsCSV(from: [sample])
+        XCTAssertTrue(csv.contains(",Steps,,13,steps,"))
+    }
+
+    // MARK: - Date formatter locale and calendar
+
+    func testMakeDateFormatter_usesGregorianPOSIXForEveryOption() {
+        for option in DateFormatOption.allCases {
+            let formatter = CSVGenerator.makeDateFormatter(for: option)
+            XCTAssertEqual(formatter.calendar.identifier, .gregorian, "\(option)")
+            XCTAssertEqual(formatter.locale.identifier, "en_US_POSIX", "\(option)")
+        }
+    }
+
+    func testMakeDateFormatter_knownDateOutput() {
+        let formatter = CSVGenerator.makeDateFormatter(for: .yyyyMMddHHmmss)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        XCTAssertEqual(formatter.string(from: referenceDate), "2024-01-15 09:30:00")
+    }
+
+    // MARK: - csvEscape
+
+    func testCSVEscape_plainFieldUnchanged() {
+        XCTAssertEqual(CSVGenerator.csvEscape("Quest Diagnostics"), "Quest Diagnostics")
+    }
+
+    func testCSVEscape_commaAndQuote() {
+        XCTAssertEqual(CSVGenerator.csvEscape("a,b"), "\"a,b\"")
+        XCTAssertEqual(CSVGenerator.csvEscape("say \"hi\""), "\"say \"\"hi\"\"\"")
+    }
+
+    func testCSVEscape_newlineAndCarriageReturnAreQuoted() {
+        XCTAssertEqual(CSVGenerator.csvEscape("line1\nline2"), "\"line1\nline2\"")
+        XCTAssertEqual(CSVGenerator.csvEscape("line1\rline2"), "\"line1\rline2\"")
+        XCTAssertEqual(CSVGenerator.csvEscape("line1\r\nline2"), "\"line1\r\nline2\"")
+    }
+
+    func testLabResultRow_escapesUnitAndLOINC() {
+        let sample = LabResultSample(
+            metricName: "Mystery Lab",
+            loincCode: "0000,0",
+            effectiveDateTime: referenceDate,
+            value: 1.0,
+            unit: "x,y",
+            source: "Lab\nTwo"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms
+        )
+        XCTAssertTrue(csv.contains(",Mystery Lab,\"0000,0\",1.00,\"x,y\",\"Lab\nTwo\""))
     }
 
     // MARK: - Production entry point releases inputs

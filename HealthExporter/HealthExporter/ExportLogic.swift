@@ -118,9 +118,18 @@ enum ExportLogic {
     }
 
     /// Generates the export filename for a given date.
-    static func exportFilename(for date: Date = Date()) -> String {
+    static func exportFilename(for date: Date = Date(), timeZone: TimeZone = .current) -> String {
+        "HealthExporter_\(makeFilenameFormatter(timeZone: timeZone).string(from: date)).csv"
+    }
+
+    /// Fixed POSIX locale and Gregorian calendar, so a device set to another
+    /// calendar (for example Buddhist) still writes a Gregorian year.
+    static func makeFilenameFormatter(timeZone: TimeZone = .current) -> DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = timeZone
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
-        return "HealthExporter_\(formatter.string(from: date)).csv"
+        return formatter
     }
 }

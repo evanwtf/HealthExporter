@@ -54,8 +54,12 @@ class CSVGenerator {
     /// Use this as the starting buffer for every CSV export.
     static let csvPreamble = csvDisclaimer + "\n" + csvHeader + "\n"
 
-    private static func makeDateFormatter(for option: DateFormatOption) -> DateFormatter {
+    /// Fixed POSIX locale and Gregorian calendar, so a device set to another
+    /// calendar (for example Buddhist) still writes a Gregorian year.
+    static func makeDateFormatter(for option: DateFormatOption) -> DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = option.dateFormat
         if option.isUTC {
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -63,9 +67,9 @@ class CSVGenerator {
         return formatter
     }
 
-    /// Wraps a value in double quotes if it contains commas or quotes (RFC 4180).
-    private static func csvEscape(_ field: String) -> String {
-        if field.contains(",") || field.contains("\"") {
+    /// Wraps a value in double quotes if it contains a comma, quote, CR or LF (RFC 4180).
+    static func csvEscape(_ field: String) -> String {
+        if field.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" || $0 == "\r\n" }) {
             return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
         return field
@@ -83,7 +87,7 @@ class CSVGenerator {
         let date = dateFormatter.string(from: sample.startDate)
         let steps = sample.quantity.doubleValue(for: HKUnit.count())
         let source = csvEscape(sample.sourceRevision.source.name)
-        return "\(date),Steps,,\(Int(steps)),steps,\(source)\n"
+        return "\(date),Steps,,\(Int(steps.rounded())),steps,\(source)\n"
     }
 
     private static func glucoseRow(for sample: GlucoseSampleMgDl, dateFormatter: DateFormatter) -> String {
@@ -95,10 +99,12 @@ class CSVGenerator {
     private static func labResultRow(for sample: LabResultSample, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.effectiveDateTime)
         let metric = csvEscape(sample.metricName)
+        let loinc = csvEscape(sample.loincCode)
+        let unit = csvEscape(sample.unit)
         let source = csvEscape(sample.source)
         let precision = LabMetricRegistry.metric(forLoincCode: sample.loincCode)?.valuePrecision ?? 2
         let value = String(format: "%.\(precision)f", sample.value)
-        return "\(date),\(metric),\(sample.loincCode),\(value),\(sample.unit),\(source)\n"
+        return "\(date),\(metric),\(loinc),\(value),\(unit),\(source)\n"
     }
 
     private static func vitalRow(for sample: HKQuantitySample, component: VitalMetricComponent, temperatureUnit: TemperatureUnit, dateFormatter: DateFormatter) -> String {
@@ -106,7 +112,9 @@ class CSVGenerator {
         let source = csvEscape(sample.sourceRevision.source.name)
         let result = component.valueAndUnit(from: sample.quantity, temperatureUnit: temperatureUnit)
         let value = String(format: "%.\(component.valuePrecision)f", result.value)
-        return "\(date),\(component.displayName),,\(value),\(result.unit),\(source)\n"
+        let metric = csvEscape(component.displayName)
+        let unit = csvEscape(result.unit)
+        return "\(date),\(metric),,\(value),\(unit),\(source)\n"
     }
 
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)

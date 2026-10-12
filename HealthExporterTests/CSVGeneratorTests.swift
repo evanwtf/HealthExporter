@@ -55,6 +55,19 @@ struct CSVGeneratorTests {
         #expect(csv.contains("Not a medical record"), "Disclaimer should mention the file is not a medical record")
     }
 
+    /// Google Sheets and Excel do not skip `### ` lines, so a comma in a
+    /// disclaimer line split it across columns (seen in v2.5.2).
+    @Test func disclaimer_eachLineIsOneCSVField() {
+        let lines = CSVGenerator.csvDisclaimer.split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines.count == 3)
+        for line in lines {
+            #expect(line.hasPrefix("### "), "\(line)")
+            #expect(!line.contains(","), "\(line)")
+            #expect(!line.contains("\""), "\(line)")
+        }
+        #expect(lines.count > 1 && lines[1] == "### No warranty of accuracy or completeness or fitness for any purpose.")
+    }
+
     @Test func generateWeightCSV_kilograms_formatsCorrectly() {
         let sample = HKQuantitySample(
             type: weightType,

@@ -78,7 +78,7 @@ The exported CSV includes the following columns:
 Example:
 ```
 ### HealthExporterCSV: data exported as-is from Apple Health.
-### No warranty of accuracy, completeness, or fitness for any purpose.
+### No warranty of accuracy or completeness or fitness for any purpose.
 ### Not a medical record. Verify with your healthcare provider before any clinical use.
 Date,Metric,LOINC,Value,Unit,Source,Meal Time
 2026-01-09 10:30:00,Weight,,185.50,lbs,Withings,

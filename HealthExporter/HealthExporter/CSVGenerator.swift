@@ -3,10 +3,12 @@ import HealthKit
 nonisolated enum CSVGenerator {
 
     /// Three-line disclaimer prepended to every export. Each line begins with `### `
-    /// so common CSV parsers can be configured to treat them as comments.
+    /// so common CSV parsers can be configured to treat them as comments. A line
+    /// must hold no comma or double quote: a spreadsheet that does not skip the
+    /// `### ` lines splits a line into columns at each comma.
     static let csvDisclaimer = """
         ### HealthExporterCSV: data exported as-is from Apple Health.
-        ### No warranty of accuracy, completeness, or fitness for any purpose.
+        ### No warranty of accuracy or completeness or fitness for any purpose.
         ### Not a medical record. Verify with your healthcare provider before any clinical use.
         """
 

@@ -1,0 +1,124 @@
+name: App Store release
+
+# Prepares an App Store version from a TestFlight build and submits it for
+# App Review. The owner starts each run:
+#   gh workflow run release-appstore.yml --repo evanwtf/HealthExporter \
+#     -f version=2.5.5 -f mode=submit
+# The default mode is dry-run: it runs every check, logs the plan and writes
+# nothing. Mode prepare writes the version, the build and the metadata, but
+# does not submit. The runbook is docs/app-store-release.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App Store version, e.g. 2.5.5"
+        required: true
+      build:
+        description: "Build number, e.g. 57 (blank = newest VALID build of the version)"
+        required: false
+      mode:
+        description: "dry-run: check only. prepare: write, do not submit. submit: submit for App Review"
+        type: choice
+        options:
+          - dry-run
+          - prepare
+          - submit
+        default: dry-run
+      release_type:
+        description: "Release when App Review approves, or hold for a manual release"
+        type: choice
+        options:
+          - after-approval
+          - manual
+        default: after-approval
+      replace_whats_new:
+        description: "Replace What's New with the changelog section, even when it is set"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appstore-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Submit to App Review
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Stage App Store Connect API key
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key_dir="$RUNNER_TEMP/asc_private_keys"
+          mkdir -p "$key_dir"
+          printf '%s' "$ASC_API_KEY_P8" > "$key_dir/AuthKey.p8"
+          echo "ASC_KEY_DIR=$key_dir" >> "$GITHUB_ENV"
+          echo "ASC_KEY_PATH=$key_dir/AuthKey.p8" >> "$GITHUB_ENV"
+
+      # The inputs reach the shell through env, as data. Never interpolate
+      # them into the script text.
+      - name: Check and submit the App Store version
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ env.ASC_KEY_PATH }}
+          ASC_REVIEW_CONTACT_FIRST_NAME: ${{ secrets.ASC_REVIEW_CONTACT_FIRST_NAME }}
+          ASC_REVIEW_CONTACT_LAST_NAME: ${{ secrets.ASC_REVIEW_CONTACT_LAST_NAME }}
+          ASC_REVIEW_CONTACT_EMAIL: ${{ secrets.ASC_REVIEW_CONTACT_EMAIL }}
+          ASC_REVIEW_CONTACT_PHONE: ${{ secrets.ASC_REVIEW_CONTACT_PHONE }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD: ${{ inputs.build }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
+          INPUT_REPLACE_WHATS_NEW: ${{ inputs.replace_whats_new }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like 2.5.5, not '$INPUT_VERSION'"
+            exit 1
+          fi
+          if [ -n "$INPUT_BUILD" ] && ! [[ "$INPUT_BUILD" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build must be a number like 57, not '$INPUT_BUILD'"
+            exit 1
+          fi
+          case "$INPUT_MODE" in
+            dry-run|prepare|submit) ;;
+            *) echo "::error::mode must be dry-run, prepare or submit"; exit 1 ;;
+          esac
+          case "$INPUT_RELEASE_TYPE" in
+            after-approval|manual) ;;
+            *) echo "::error::release_type must be after-approval or manual"; exit 1 ;;
+          esac
+          args=(--version "$INPUT_VERSION" --mode "$INPUT_MODE" \
+            --release-type "$INPUT_RELEASE_TYPE")
+          if [ -n "$INPUT_BUILD" ]; then
+            args+=(--build "$INPUT_BUILD")
+          fi
+          if [ "$INPUT_REPLACE_WHATS_NEW" = "true" ]; then
+            args+=(--replace-whats-new)
+          fi
+          uv run --frozen scripts/submit_appstore_release.py "${args[@]}"
+
+      - name: Delete the API key
+        if: always()
+        run: |
+          if [ -n "${ASC_KEY_DIR:-}" ] && [ -d "$ASC_KEY_DIR" ]; then
+            rm -rf "$ASC_KEY_DIR"
+          fi

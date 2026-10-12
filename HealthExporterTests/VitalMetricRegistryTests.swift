@@ -1,19 +1,18 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct VitalMetricRegistryTests {
-
     @Test func vitalMetric_containsExpectedCases() {
         #expect(Set(VitalMetric.allCases) == Set([
-                .bloodPressure,
-                .restingHeartRate,
-                .heartRateVariabilitySDNN,
-                .oxygenSaturation,
-                .respiratoryRate,
-                .bodyTemperature
-            ]))
+            .bloodPressure,
+            .restingHeartRate,
+            .heartRateVariabilitySDNN,
+            .oxygenSaturation,
+            .respiratoryRate,
+            .bodyTemperature,
+        ]))
     }
 
     @Test func bloodPressureExpandsToSystolicAndDiastolicComponents() {

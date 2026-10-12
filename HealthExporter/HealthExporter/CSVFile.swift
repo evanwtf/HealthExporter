@@ -14,7 +14,7 @@ nonisolated struct CSVFile: Transferable, Sendable {
     init(content: String, rowCount: Int) {
         self.content = content
         self.rowCount = rowCount
-        self.byteCount = content.utf8.count
+        byteCount = content.utf8.count
     }
 
     var size: ExportSize {

@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct DayRangeSummaryFormatterTests {
-
     private var referenceDate: Date {
         var components = DateComponents()
         components.year = 2026

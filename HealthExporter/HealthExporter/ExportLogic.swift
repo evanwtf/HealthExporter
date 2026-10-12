@@ -3,7 +3,6 @@ import HealthKit
 
 /// Pure logic extracted from DataSelectionView for testability.
 nonisolated enum ExportLogic {
-
     /// Whether the export button should be enabled.
     static func isExportEnabled(
         exportWeight: Bool,
@@ -96,9 +95,9 @@ nonisolated enum ExportLogic {
     static func recordLimit(for option: DateRangeOption, lastXRecords: Int) -> Int {
         switch option {
         case .lastXDays, .allRecords, .specificDateRange:
-            return HKObjectQueryNoLimit
+            HKObjectQueryNoLimit
         case .lastXRecords:
-            return lastXRecords
+            lastXRecords
         }
     }
 
@@ -111,10 +110,10 @@ nonisolated enum ExportLogic {
         vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil
     ) -> Bool {
         (weightSamples?.isEmpty == false) ||
-        (stepsSamples?.isEmpty == false) ||
-        (glucoseSamples?.isEmpty == false) ||
-        (labResults?.isEmpty == false) ||
-        (vitalSamples?.values.contains { !$0.isEmpty } == true)
+            (stepsSamples?.isEmpty == false) ||
+            (glucoseSamples?.isEmpty == false) ||
+            (labResults?.isEmpty == false) ||
+            (vitalSamples?.values.contains { !$0.isEmpty } == true)
     }
 
     /// Generates the export filename for a given date.

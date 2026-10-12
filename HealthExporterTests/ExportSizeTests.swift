@@ -1,10 +1,9 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct ExportSizeTests {
-
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
     private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
@@ -24,7 +23,7 @@ struct ExportSizeTests {
     }
 
     @Test func summaryText_givesTheExactRowCountAndSize() {
-        let size = ExportSize(rowCount: 19_432, byteCount: 1_980_000)
+        let size = ExportSize(rowCount: 19432, byteCount: 1_980_000)
 
         #expect(size.summaryText == "This will export 19,432 rows (\(size.formattedByteCount)).")
         #expect(!size.summaryText.contains("around"))
@@ -49,7 +48,7 @@ struct ExportSizeTests {
     }
 
     @Test func shouldShowConfirmation_trueWhenRowCountExceedsThreshold() {
-        let size = ExportSize(rowCount: 501, byteCount: 5_000)
+        let size = ExportSize(rowCount: 501, byteCount: 5000)
 
         #expect(size.shouldShowConfirmation)
     }
@@ -69,7 +68,7 @@ struct ExportSizeTests {
         )
         let stepsSample = HKQuantitySample(
             type: stepsType,
-            quantity: HKQuantity(unit: .count(), doubleValue: 9_876),
+            quantity: HKQuantity(unit: .count(), doubleValue: 9876),
             start: referenceDate.addingTimeInterval(60),
             end: referenceDate.addingTimeInterval(60)
         )
@@ -79,7 +78,7 @@ struct ExportSizeTests {
             start: referenceDate.addingTimeInterval(120),
             end: referenceDate.addingTimeInterval(120)
         )
-        let glucoseSample = GlucoseSampleMgDl(from: glucoseHkSample)!
+        let glucoseSample = try #require(GlucoseSampleMgDl(from: glucoseHkSample))
         let labSample = LabResultSample(
             metricName: "Hemoglobin A1C",
             loincCode: LOINCCode.hemoglobinA1C,

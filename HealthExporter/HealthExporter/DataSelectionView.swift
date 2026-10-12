@@ -1,6 +1,6 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
-import os
 
 private let logger = Logger(subsystem: "com.HealthExporter", category: "DataSelection")
 
@@ -11,13 +11,17 @@ private struct PendingExport {
     let accessLimitNotice: String?
 
     var title: String {
-        if failureNotice != nil { return "Some Data Could Not Be Read" }
-        if accessLimitNotice != nil { return "Health Access Is Limited" }
+        if failureNotice != nil {
+            return "Some Data Could Not Be Read"
+        }
+        if accessLimitNotice != nil {
+            return "Health Access Is Limited"
+        }
         return "Export Size"
     }
 
     var message: String {
-        [failureNotice, accessLimitNotice, file.size.summaryText].compactMap { $0 }.joined(separator: "\n\n")
+        [failureNotice, accessLimitNotice, file.size.summaryText].compactMap(\.self).joined(separator: "\n\n")
     }
 }
 
@@ -48,8 +52,8 @@ struct DataSelectionView: View {
         dynamicTypeSize.isAccessibilitySize ? 1 : 2
     }
 
-    private static let dayOptions = Array(1...30) + [60, 90, 180, 365, 730]
-    private static let recordOptions = Array(stride(from: 100, through: 1_000, by: 100)) + Array(stride(from: 2_000, through: 10_000, by: 1_000))
+    private static let dayOptions = Array(1 ... 30) + [60, 90, 180, 365, 730]
+    private static let recordOptions = Array(stride(from: 100, through: 1000, by: 100)) + Array(stride(from: 2000, through: 10000, by: 1000))
     private static let saveSuccessAutoDismissSeconds = 5
 
     private var isValidDateRange: Bool {
@@ -58,10 +62,10 @@ struct DataSelectionView: View {
 
     private var hasSelectedMetric: Bool {
         settings.exportWeight ||
-        settings.exportSteps ||
-        settings.exportGlucose ||
-        hasSelectedLabs ||
-        hasSelectedVitals
+            settings.exportSteps ||
+            settings.exportGlucose ||
+            hasSelectedLabs ||
+            hasSelectedVitals
     }
 
     private var hasSelectedLabs: Bool {
@@ -192,7 +196,7 @@ struct DataSelectionView: View {
             .accessibilityIdentifier(identifier)
     }
 
-    private func tileWithDetails<Destination: View>(
+    private func tileWithDetails(
         _ category: HealthCategory,
         title: String,
         detail: String,
@@ -200,7 +204,7 @@ struct DataSelectionView: View {
         identifier: String,
         detailsIdentifier: String,
         detailsLabel: String,
-        @ViewBuilder destination: () -> Destination
+        @ViewBuilder destination: () -> some View
     ) -> some View {
         ZStack(alignment: .bottomTrailing) {
             Toggle(title, isOn: isOn)
@@ -299,7 +303,7 @@ struct DataSelectionView: View {
     private func tileGrid(_ tiles: [AnyView]) -> some View {
         let columns = tileColumnCount
         let rows = stride(from: 0, to: tiles.count, by: columns).map { start in
-            Array(tiles[start..<min(start + columns, tiles.count)].enumerated())
+            Array(tiles[start ..< min(start + columns, tiles.count)].enumerated())
         }
         return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             ForEach(rows.indices, id: \.self) { rowIndex in
@@ -338,10 +342,10 @@ struct DataSelectionView: View {
 
     private func segmentLabel(for option: DateRangeOption) -> String {
         switch option {
-        case .lastXDays:         return "Days"
-        case .lastXRecords:      return "Records"
-        case .specificDateRange: return "Range"
-        case .allRecords:        return "All"
+        case .lastXDays: "Days"
+        case .lastXRecords: "Records"
+        case .specificDateRange: "Range"
+        case .allRecords: "All"
         }
     }
 
@@ -434,7 +438,7 @@ struct DataSelectionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
+            if selectedDateRangeOption == .specificDateRange, !isValidDateRange {
                 Text("End date must be on or after start date")
                     .font(.caption)
                     .foregroundStyle(Color("ErrorText"))
@@ -515,10 +519,10 @@ struct DataSelectionView: View {
         ) { result in
             exportFile = nil
             switch result {
-            case .success(let url):
+            case let .success(url):
                 logger.info("File saved to: \(url.path)")
                 presentSaveSuccessConfirmation()
-            case .failure(let error):
+            case let .failure(error):
                 logger.error("Error saving file: \(error.localizedDescription)")
                 errorMessage = ExportError.fileWriteFailed(underlying: error).localizedDescription
                 showErrorAlert = true
@@ -548,7 +552,7 @@ struct DataSelectionView: View {
             Text(pending.message)
         }
         .alert("Export Error", isPresented: $showErrorAlert) {
-            Button("OK") { }
+            Button("OK") {}
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }

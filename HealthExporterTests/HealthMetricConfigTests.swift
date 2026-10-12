@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct HealthMetricConfigTests {
-
     // MARK: - HealthMetrics static properties
 
     @Test func weight_hasExpectedName() {

@@ -1,19 +1,18 @@
 import CoreTransferable
 import Foundation
+@testable import HealthExporter
 import HealthKit
 import Testing
 import UniformTypeIdentifiers
-@testable import HealthExporter
 
 /// `CSVFile` replaced `CSVDocument` as the item the file picker writes (#111).
 struct CSVFileTests {
-
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
 
     private func samples(_ type: HKQuantityType, unit: HKUnit, count: Int) -> [HKQuantitySample] {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
-        return (0..<count).map { index in
+        return (0 ..< count).map { index in
             let date = start.addingTimeInterval(Double(index) * 60)
             return HKQuantitySample(
                 type: type,
@@ -161,7 +160,9 @@ struct CSVFileTests {
                 weightUnit: .kilograms,
                 checkCancellation: {
                     checks += 1
-                    if checks == 2 { throw StopBuilding() }
+                    if checks == 2 {
+                        throw StopBuilding()
+                    }
                 }
             )
         }

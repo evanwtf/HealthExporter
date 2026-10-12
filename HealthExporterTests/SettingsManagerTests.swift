@@ -1,13 +1,12 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 /// Tests the real `SettingsManager` against a `UserDefaults` suite of its own.
 ///
 /// Swift Testing makes a new instance for each test, so `deinit` runs as the
 /// teardown and removes every suite that the test made.
 final class SettingsManagerTests {
-
     private var suiteNames: [String] = []
 
     deinit {
@@ -80,7 +79,7 @@ final class SettingsManagerTests {
         defaults.set(["cbc"], forKey: "expandedLabPanels")
         defaults.set(true, forKey: "expandedVitalsSection")
         defaults.set(7, forKey: "lastXDaysValue")
-        defaults.set(2_000, forKey: "lastXRecordsValue")
+        defaults.set(2000, forKey: "lastXRecordsValue")
     }
 
     @Test func suiteWrittenByV250_loadsUnchanged() {
@@ -103,7 +102,7 @@ final class SettingsManagerTests {
         #expect(settings.expandedLabPanels == [.cbc])
         #expect(settings.expandedVitalsSection)
         #expect(settings.lastXDaysValue == 7)
-        #expect(settings.lastXRecordsValue == 2_000)
+        #expect(settings.lastXRecordsValue == 2000)
     }
 
     @Test func changes_areWrittenWithTheV250KeysAndFormats() {
@@ -124,7 +123,7 @@ final class SettingsManagerTests {
         settings.expandedLabPanels = [.cbc]
         settings.expandedVitalsSection = true
         settings.lastXDaysValue = 7
-        settings.lastXRecordsValue = 2_000
+        settings.lastXRecordsValue = 2000
 
         #expect(defaults.string(forKey: "temperatureUnit") == "Celsius (°C)")
         #expect(defaults.string(forKey: "weightUnit") == "Kilograms (kg)")
@@ -140,7 +139,7 @@ final class SettingsManagerTests {
         #expect(defaults.array(forKey: "expandedLabPanels") as? [String] == ["cbc"])
         #expect(defaults.object(forKey: "expandedVitalsSection") as? Bool == true)
         #expect(defaults.object(forKey: "lastXDaysValue") as? Int == 7)
-        #expect(defaults.object(forKey: "lastXRecordsValue") as? Int == 2_000)
+        #expect(defaults.object(forKey: "lastXRecordsValue") as? Int == 2000)
     }
 
     @Test func changes_loadIntoANewInstance() {

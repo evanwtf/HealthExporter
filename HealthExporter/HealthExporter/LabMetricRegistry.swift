@@ -10,11 +10,11 @@ nonisolated enum LabPanel: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .lipid: return "Lipid panel"
-        case .cbc: return "CBC"
-        case .cmp: return "CMP / BMP"
-        case .thyroid: return "Thyroid"
-        case .other: return "Other"
+        case .lipid: "Lipid panel"
+        case .cbc: "CBC"
+        case .cmp: "CMP / BMP"
+        case .thyroid: "Thyroid"
+        case .other: "Other"
         }
     }
 }
@@ -30,9 +30,13 @@ nonisolated struct LabMetric: Identifiable, Hashable {
     let valuePrecision: Int
     var alternateLoincCodes: [String] = []
 
-    var id: String { loincCode }
+    var id: String {
+        loincCode
+    }
 
-    var allLoincCodes: [String] { [loincCode] + alternateLoincCodes }
+    var allLoincCodes: [String] {
+        [loincCode] + alternateLoincCodes
+    }
 }
 
 /// Centralized list of lab metrics the exporter knows how to render.
@@ -270,7 +274,7 @@ nonisolated enum LabMetricRegistry {
             loincCode: LOINCCode.highSensitivityCRP,
             group: .other,
             valuePrecision: 2
-        )
+        ),
     ]
 
     /// Every primary and alternate code in the registry, mapped to its metric.

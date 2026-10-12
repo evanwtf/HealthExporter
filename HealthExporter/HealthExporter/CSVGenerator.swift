@@ -1,16 +1,15 @@
 import HealthKit
 
 nonisolated enum CSVGenerator {
-
     /// Three-line disclaimer prepended to every export. Each line begins with `### `
     /// so common CSV parsers can be configured to treat them as comments. A line
     /// must hold no comma or double quote: a spreadsheet that does not skip the
     /// `### ` lines splits a line into columns at each comma.
     static let csvDisclaimer = """
-        ### HealthExporterCSV: data exported as-is from Apple Health.
-        ### No warranty of accuracy or completeness or fitness for any purpose.
-        ### Not a medical record. Verify with your healthcare provider before any clinical use.
-        """
+    ### HealthExporterCSV: data exported as-is from Apple Health.
+    ### No warranty of accuracy or completeness or fitness for any purpose.
+    ### Not a medical record. Verify with your healthcare provider before any clinical use.
+    """
 
     static let csvHeader = "Date,Metric,LOINC,Value,Unit,Source,Meal Time"
 
@@ -41,9 +40,9 @@ nonisolated enum CSVGenerator {
 
     static func mealTimeLabel(_ mealTime: HKBloodGlucoseMealTime?) -> String {
         switch mealTime {
-        case .preprandial: return "Before Meal"
-        case .postprandial: return "After Meal"
-        default: return ""
+        case .preprandial: "Before Meal"
+        case .postprandial: "After Meal"
+        default: ""
         }
     }
 
@@ -93,7 +92,7 @@ nonisolated enum CSVGenerator {
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)
 
     /// How many rows an append method writes between two cancellation checks.
-    static let rowsPerCancellationCheck = 4_096
+    static let rowsPerCancellationCheck = 4096
 
     /// Calls `checkCancellation` once every `rowsPerCancellationCheck` rows.
     private static func appendRows<Sample>(

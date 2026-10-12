@@ -1,12 +1,12 @@
 import Foundation
-import Testing
+@testable import HealthExporter
 import HealthKit
 import Synchronization
-@testable import HealthExporter
+import Testing
 
 /// A store that serves canned samples and can fail one metric.
 /// It honors `limit` and returns samples newest first, as HealthKit does.
-nonisolated private final class FakeHealthDataStore: HealthDataStore {
+private final nonisolated class FakeHealthDataStore: HealthDataStore {
     struct QuantityCall: Equatable {
         let identifier: HKQuantityTypeIdentifier
         let limit: Int?
@@ -27,8 +27,13 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
         self.earliestDates = earliestDates
     }
 
-    var requestedTypes: Set<HKObjectType>? { state.withLock { $0.types } }
-    var quantityCalls: [QuantityCall] { state.withLock { $0.calls } }
+    var requestedTypes: Set<HKObjectType>? {
+        state.withLock { $0.types }
+    }
+
+    var quantityCalls: [QuantityCall] {
+        state.withLock { $0.calls }
+    }
 
     func requestReadAuthorization(for types: Set<HKObjectType>) async throws {
         state.withLock { $0.types = types }
@@ -36,7 +41,7 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
 
     func quantitySamples(
         of identifier: HKQuantityTypeIdentifier,
-        dateRange: (startDate: Date, endDate: Date)?,
+        dateRange _: (startDate: Date, endDate: Date)?,
         limit: Int?
     ) async throws -> [HKQuantitySample] {
         state.withLock { $0.calls.append(QuantityCall(identifier: identifier, limit: limit)) }
@@ -46,7 +51,7 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
         return Array(newestFirst.prefix(limit))
     }
 
-    func labResultRecords(dateRange: (startDate: Date, endDate: Date)?) async throws -> [ClinicalRecordPayload] {
+    func labResultRecords(dateRange _: (startDate: Date, endDate: Date)?) async throws -> [ClinicalRecordPayload] {
         try labResult.get()
     }
 
@@ -56,7 +61,6 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
 }
 
 nonisolated struct ExportDataLoaderTests {
-
     private let referenceDate = Date(timeIntervalSince1970: 1_750_000_000)
     private let mgDl = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
@@ -74,11 +78,11 @@ nonisolated struct ExportDataLoaderTests {
     }
 
     private func weightSamples(_ count: Int) -> [HKQuantitySample] {
-        quantitySamples(.bodyMass, unit: .gramUnit(with: .kilo), values: (0..<count).map { 80 + Double($0) })
+        quantitySamples(.bodyMass, unit: .gramUnit(with: .kilo), values: (0 ..< count).map { 80 + Double($0) })
     }
 
     private func stepsSamples(_ count: Int) -> [HKQuantitySample] {
-        quantitySamples(.stepCount, unit: .count(), values: (0..<count).map { 1_000 + Double($0) })
+        quantitySamples(.stepCount, unit: .count(), values: (0 ..< count).map { 1000 + Double($0) })
     }
 
     private func a1cRecord(value: Double, date: String) -> ClinicalRecordPayload {
@@ -116,7 +120,7 @@ nonisolated struct ExportDataLoaderTests {
     }
 
     private let labsUnavailable = NSError(domain: "HealthKit", code: 3, userInfo: [
-        NSLocalizedDescriptionKey: "Clinical Lab Result type not available"
+        NSLocalizedDescriptionKey: "Clinical Lab Result type not available",
     ])
 
     // MARK: - #112: one failed metric does not discard the others
@@ -267,7 +271,7 @@ nonisolated struct ExportDataLoaderTests {
 
     @Test func load_glucoseLastRecords_filtersBeforeTheLimit() async {
         // 103 readings, newest first. Three of the newest 100 are below 20 mg/dL.
-        var values = (0..<103).map { 100 + Double($0 % 50) }
+        var values = (0 ..< 103).map { 100 + Double($0 % 50) }
         for invalidIndex in [1, 50, 99] {
             values[invalidIndex] = 5
         }
@@ -287,17 +291,17 @@ nonisolated struct ExportDataLoaderTests {
 
     @Test func load_glucoseLastRecords_longInvalidRun_keepsQueryingUntilFull() async {
         // The 30 newest readings are invalid; the limit is 10.
-        let values = Array(repeating: 5.0, count: 30) + (0..<40).map { 120 + Double($0) }
+        let values = Array(repeating: 5.0, count: 30) + (0 ..< 40).map { 120 + Double($0) }
         let samples = quantitySamples(.bloodGlucose, unit: mgDl, values: values)
         let store = FakeHealthDataStore(quantity: [.bloodGlucose: .success(samples)])
 
         let result = await ExportDataLoader(store: store).load(request(glucose: true, limit: 10))
 
-        #expect(result.glucoseSamples?.map(\.value) == ((0..<10).map { 120 + Double($0) }))
+        #expect(result.glucoseSamples?.map(\.value) == ((0 ..< 10).map { 120 + Double($0) }))
     }
 
     @Test func load_glucoseLastRecords_fewerValidThanLimit_returnsAllValid() async {
-        let values = (0..<30).map { $0 % 6 == 0 ? 10.0 : 110.0 }
+        let values = (0 ..< 30).map { $0 % 6 == 0 ? 10.0 : 110.0 }
         let samples = quantitySamples(.bloodGlucose, unit: mgDl, values: values)
         let store = FakeHealthDataStore(quantity: [.bloodGlucose: .success(samples)])
 
@@ -353,7 +357,7 @@ nonisolated struct ExportDataLoaderTests {
 
         #expect(result.accessLimits == [ExportAccessLimit(metric: .weight, earliestDate: march3)])
         #expect(result.accessLimitNotice(dateStyle: dateStyle)
-                == "Health access for Weight starts on Mar 3, 2026, so older samples are not in the file.")
+            == "Health access for Weight starts on Mar 3, 2026, so older samples are not in the file.")
         #expect(result.partialFailureNotice == nil)
     }
 
@@ -387,7 +391,8 @@ nonisolated struct ExportDataLoaderTests {
         #expect(result.accessLimits.map(\.metric) == [.weight, .vital(.restingHeartRate)])
         #expect(result.accessLimitNotice(dateStyle: dateStyle) == (
             "Health access for Weight starts on Mar 3, 2026, so older samples are not in the file.\n"
-                + "Health access for Resting Heart Rate starts on Mar 3, 2026, so older samples are not in the file."))
+                + "Health access for Resting Heart Rate starts on Mar 3, 2026, so older samples are not in the file."
+        ))
     }
 
     @Test func load_accessLookupFails_exportsWithNoAccessLine() async {

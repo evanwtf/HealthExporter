@@ -1,10 +1,9 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct GlucoseSampleTests {
-
     private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
@@ -131,8 +130,8 @@ struct GlucoseSampleTests {
         #expect(result?.mealTime == nil)
     }
 
-    // HealthKit rejects an unknown meal-time value when the sample is created,
-    // so the mapping is tested directly on the metadata dictionary.
+    /// HealthKit rejects an unknown meal-time value when the sample is created,
+    /// so the mapping is tested directly on the metadata dictionary.
     @Test func mealTimeFromMetadata_unknownRawValue_isNil() {
         #expect(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 99)]) == nil)
         #expect(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 0)]) == nil)

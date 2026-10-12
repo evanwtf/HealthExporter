@@ -1,10 +1,9 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct HealthKitQueryHelpersTests {
-
     private let calendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York")!
@@ -24,14 +23,14 @@ struct HealthKitQueryHelpersTests {
 
     // MARK: - readTypes
 
-    @Test func readTypes_withoutLabs_containsBaseTypes() {
+    @Test func readTypes_withoutLabs_containsBaseTypes() throws {
         let types = HealthKitQueryHelpers.readTypes(
             includeWeight: true, includeSteps: true, includeGlucose: true, includeLabs: false
         )
 
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-        let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+        let weightType = try #require(HKQuantityType.quantityType(forIdentifier: .bodyMass))
+        let stepsType = try #require(HKQuantityType.quantityType(forIdentifier: .stepCount))
+        let glucoseType = try #require(HKQuantityType.quantityType(forIdentifier: .bloodGlucose))
 
         #expect(types.contains(weightType))
         #expect(types.contains(stepsType))
@@ -39,14 +38,14 @@ struct HealthKitQueryHelpersTests {
         #expect(types.count == 3)
     }
 
-    @Test func readTypes_withLabs_containsClinicalType() {
+    @Test func readTypes_withLabs_containsClinicalType() throws {
         let types = HealthKitQueryHelpers.readTypes(
             includeWeight: true, includeSteps: true, includeGlucose: true, includeLabs: true
         )
 
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-        let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+        let weightType = try #require(HKQuantityType.quantityType(forIdentifier: .bodyMass))
+        let stepsType = try #require(HKQuantityType.quantityType(forIdentifier: .stepCount))
+        let glucoseType = try #require(HKQuantityType.quantityType(forIdentifier: .bloodGlucose))
 
         #expect(types.contains(weightType))
         #expect(types.contains(stepsType))
@@ -70,7 +69,7 @@ struct HealthKitQueryHelpersTests {
         }
     }
 
-    @Test func readTypes_withVitals_containsSelectedVitalQuantityTypes() {
+    @Test func readTypes_withVitals_containsSelectedVitalQuantityTypes() throws {
         let types = HealthKitQueryHelpers.readTypes(
             includeWeight: true,
             includeSteps: true,
@@ -79,9 +78,9 @@ struct HealthKitQueryHelpersTests {
             vitalMetrics: [.bloodPressure, .oxygenSaturation]
         )
 
-        let systolic = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)!
-        let diastolic = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)!
-        let oxygen = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+        let systolic = try #require(HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic))
+        let diastolic = try #require(HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic))
+        let oxygen = try #require(HKQuantityType.quantityType(forIdentifier: .oxygenSaturation))
 
         #expect(types.contains(systolic))
         #expect(types.contains(diastolic))
@@ -118,20 +117,20 @@ struct HealthKitQueryHelpersTests {
 
     // MARK: - dayAlignedRange
 
-    @Test func dayAlignedRange_alignsToStartOfDay() {
+    @Test func dayAlignedRange_alignsToStartOfDay() throws {
         let start = date(2024, 6, 15, 14, 30) // 2:30 PM
-        let end = date(2024, 6, 20, 9, 15)   // 9:15 AM
+        let end = date(2024, 6, 20, 9, 15) // 9:15 AM
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (start, end), calendar: calendar)
 
         #expect(result != nil)
-        let startComponents = calendar.dateComponents([.hour, .minute, .second], from: result!.start)
+        let startComponents = try calendar.dateComponents([.hour, .minute, .second], from: #require(result?.start))
         #expect(startComponents.hour == 0)
         #expect(startComponents.minute == 0)
         #expect(startComponents.second == 0)
     }
 
-    @Test func dayAlignedRange_endIsNextDayMidnight() {
+    @Test func dayAlignedRange_endIsNextDayMidnight() throws {
         let start = date(2024, 6, 15)
         let end = date(2024, 6, 20)
 
@@ -139,7 +138,7 @@ struct HealthKitQueryHelpersTests {
 
         #expect(result != nil)
         // End should be start of June 21
-        let endComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: result!.end)
+        let endComponents = try calendar.dateComponents([.year, .month, .day, .hour, .minute], from: #require(result?.end))
         #expect(endComponents.year == 2024)
         #expect(endComponents.month == 6)
         #expect(endComponents.day == 21)
@@ -147,26 +146,26 @@ struct HealthKitQueryHelpersTests {
         #expect(endComponents.minute == 0)
     }
 
-    @Test func dayAlignedRange_sameDay_coversFullDay() {
+    @Test func dayAlignedRange_sameDay_coversFullDay() throws {
         let day = date(2024, 6, 15, 14, 30)
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (day, day), calendar: calendar)
 
         #expect(result != nil)
-        let startDay = calendar.component(.day, from: result!.start)
-        let endDay = calendar.component(.day, from: result!.end)
+        let startDay = try calendar.component(.day, from: #require(result?.start))
+        let endDay = try calendar.component(.day, from: #require(result?.end))
         #expect(startDay == 15)
         #expect(endDay == 16) // Next day midnight
     }
 
-    @Test func dayAlignedRange_preservesStartDate() {
+    @Test func dayAlignedRange_preservesStartDate() throws {
         let start = date(2024, 1, 1, 23, 59)
         let end = date(2024, 1, 31, 0, 1)
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (start, end), calendar: calendar)
 
         #expect(result != nil)
-        let startComponents = calendar.dateComponents([.year, .month, .day], from: result!.start)
+        let startComponents = try calendar.dateComponents([.year, .month, .day], from: #require(result?.start))
         #expect(startComponents.year == 2024)
         #expect(startComponents.month == 1)
         #expect(startComponents.day == 1)
@@ -270,9 +269,9 @@ struct HealthKitQueryHelpersTests {
 
     // MARK: - generateWeightTestSamples
 
-    @Test func generateWeightTestSamples_createsSixtyDailyWeightRecords() {
+    @Test func generateWeightTestSamples_createsSixtyDailyWeightRecords() throws {
         var gmtCalendar = Calendar(identifier: .gregorian)
-        gmtCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        gmtCalendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
 
         var components = DateComponents()
         components.year = 2026
@@ -282,7 +281,7 @@ struct HealthKitQueryHelpersTests {
         components.minute = 0
         components.second = 0
         components.timeZone = TimeZone(secondsFromGMT: 0)
-        let referenceDate = gmtCalendar.date(from: components)!
+        let referenceDate = try #require(gmtCalendar.date(from: components))
 
         let samples = HealthKitQueryHelpers.generateWeightTestSamples(
             days: 60,
@@ -294,7 +293,7 @@ struct HealthKitQueryHelpersTests {
 
         #expect(samples.count == 60)
 
-        let firstDate = gmtCalendar.date(byAdding: .day, value: -59, to: referenceDate)!
+        let firstDate = try #require(gmtCalendar.date(byAdding: .day, value: -59, to: referenceDate))
         #expect(samples.first?.startDate == firstDate)
         #expect(samples.last?.startDate == referenceDate)
 
@@ -305,9 +304,9 @@ struct HealthKitQueryHelpersTests {
         }
     }
 
-    @Test func simulatorTestDataShareTypes_containsWeightType() {
+    @Test func simulatorTestDataShareTypes_containsWeightType() throws {
         let shareTypes = HealthKitQueryHelpers.simulatorTestDataShareTypes()
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+        let weightType = try #require(HKQuantityType.quantityType(forIdentifier: .bodyMass))
 
         #expect(shareTypes.count == 1)
         #expect(shareTypes.contains(weightType))
@@ -315,7 +314,7 @@ struct HealthKitQueryHelpersTests {
 
     @Test func simulatorTestDataFailureMessage_includesUnderlyingError() {
         let underlying = NSError(domain: "HealthKit", code: 42, userInfo: [
-            NSLocalizedDescriptionKey: "Permission denied"
+            NSLocalizedDescriptionKey: "Permission denied",
         ])
 
         let message = HealthKitQueryHelpers.simulatorTestDataFailureMessage(underlying)
@@ -342,7 +341,7 @@ struct HealthKitQueryHelpersTests {
             lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 2),
             lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 1),
             lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 5),
-            lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 4)
+            lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 4),
         ]
         let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 2)
         #expect(limited.count == 4)
@@ -351,7 +350,7 @@ struct HealthKitQueryHelpersTests {
     }
 
     @Test func limitPerMetric_oneMetricDoesNotStarveAnother() {
-        var samples = (1...20).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+        var samples = (1 ... 20).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
         samples.append(lab(LOINCCode.triglycerides, "Triglycerides", day: 1))
         let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 5)
         #expect((limited.filter { $0.loincCode == LOINCCode.hemoglobinA1C }.count) == 5)
@@ -362,14 +361,14 @@ struct HealthKitQueryHelpersTests {
         let samples = [
             lab(LOINCCode.ldlCholesterolDirect, "LDL Cholesterol", day: 1),
             lab("13457-7", "LDL Cholesterol", day: 2),
-            lab("18262-6", "LDL Cholesterol", day: 3)
+            lab("18262-6", "LDL Cholesterol", day: 3),
         ]
         let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 2)
         #expect(limited.map(\.loincCode) == ["13457-7", "18262-6"])
     }
 
     @Test func limitPerMetric_noLimitReturnsAll() {
-        let samples = (1...5).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+        let samples = (1 ... 5).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
         #expect(HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: HKObjectQueryNoLimit).count == 5)
     }
 }

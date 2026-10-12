@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct FHIRLabResultParserTests {
-
     // MARK: - Helpers
 
     private func makeFHIRJSON(
@@ -17,14 +16,14 @@ struct FHIRLabResultParserTests {
             "resourceType": "Observation",
             "code": [
                 "coding": [
-                    ["system": system, "code": loincCode, "display": "Hemoglobin A1c"]
-                ]
+                    ["system": system, "code": loincCode, "display": "Hemoglobin A1c"],
+                ],
             ],
             "effectiveDateTime": effectiveDateTime,
             "valueQuantity": [
                 "value": value,
-                "unit": unit
-            ]
+                "unit": unit,
+            ],
         ]
         return try! JSONSerialization.data(withJSONObject: json)
     }
@@ -34,14 +33,14 @@ struct FHIRLabResultParserTests {
             "resourceType": "Observation",
             "code": [
                 "coding": [
-                    ["system": "http://loinc.org", "code": "4548-4", "display": "Hemoglobin A1c"]
-                ]
+                    ["system": "http://loinc.org", "code": "4548-4", "display": "Hemoglobin A1c"],
+                ],
             ],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
             "valueQuantity": [
                 "value": 7.2,
-                "unit": "%"
-            ]
+                "unit": "%",
+            ],
         ]
         json.removeValue(forKey: keyToOmit)
         return try! JSONSerialization.data(withJSONObject: json)
@@ -49,22 +48,22 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Matching LOINC code
 
-    @Test func matchingLOINCCode_returnsResult() {
+    @Test func matchingLOINCCode_returnsResult() throws {
         let data = makeFHIRJSON(loincCode: "4548-4")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
 
         #expect(result != nil)
-        #expect(abs(result!.value - 7.2) <= 0.001)
+        #expect(try abs(#require(result?.value) - 7.2) <= 0.001)
         #expect(result?.unit == "%")
     }
 
-    @Test func matchingLOINCCode_parsesDateCorrectly() {
+    @Test func matchingLOINCCode_parsesDateCorrectly() throws {
         let data = makeFHIRJSON(effectiveDateTime: "2024-06-15T10:30:00Z")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
 
         #expect(result != nil)
         let calendar = Calendar(identifier: .gregorian)
-        let components = calendar.dateComponents(in: TimeZone(identifier: "UTC")!, from: result!.effectiveDateTime)
+        let components = try calendar.dateComponents(in: #require(TimeZone(identifier: "UTC")), from: #require(result?.effectiveDateTime))
         #expect(components.year == 2024)
         #expect(components.month == 6)
         #expect(components.day == 15)
@@ -99,8 +98,8 @@ struct FHIRLabResultParserTests {
         #expect(result == nil)
     }
 
-    @Test func emptyJSONObject_returnsNil() {
-        let data = try! JSONSerialization.data(withJSONObject: [:] as [String: Any])
+    @Test func emptyJSONObject_returnsNil() throws {
+        let data = try JSONSerialization.data(withJSONObject: [:] as [String: Any])
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
@@ -133,26 +132,26 @@ struct FHIRLabResultParserTests {
         #expect(result == nil)
     }
 
-    @Test func missingValueInValueQuantity_returnsNil() {
+    @Test func missingValueInValueQuantity_returnsNil() throws {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["unit": "%"]  // missing "value"
+            "valueQuantity": ["unit": "%"], // missing "value"
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
 
-    @Test func missingUnitInValueQuantity_fallsBackToEmptyUnit() {
+    @Test func missingUnitInValueQuantity_fallsBackToEmptyUnit() throws {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 7.2]  // missing "unit" and "code"
+            "valueQuantity": ["value": 7.2], // missing "unit" and "code"
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result?.unit == "")
         #expect(abs((result?.value ?? 0) - 7.2) <= 0.001)
@@ -160,48 +159,48 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Empty coding array
 
-    @Test func emptyCodingArray_returnsNil() {
+    @Test func emptyCodingArray_returnsNil() throws {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": ["coding": []],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 7.2, "unit": "%"]
+            "valueQuantity": ["value": 7.2, "unit": "%"],
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
 
     // MARK: - Multiple codings (one matching)
 
-    @Test func multipleCodings_oneMatchingLOINC_returnsResult() {
+    @Test func multipleCodings_oneMatchingLOINC_returnsResult() throws {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": [
                 "coding": [
                     ["system": "http://snomed.org", "code": "12345"],
-                    ["system": "http://loinc.org", "code": "4548-4", "display": "Hemoglobin A1c"]
-                ]
+                    ["system": "http://loinc.org", "code": "4548-4", "display": "Hemoglobin A1c"],
+                ],
             ],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 6.8, "unit": "%"]
+            "valueQuantity": ["value": 6.8, "unit": "%"],
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
 
         #expect(result != nil)
-        #expect(abs(result!.value - 6.8) <= 0.001)
+        #expect(try abs(#require(result?.value) - 6.8) <= 0.001)
     }
 
     // MARK: - Unit fallback
 
-    @Test func missingUnit_fallsBackToUCUMCode() {
+    @Test func missingUnit_fallsBackToUCUMCode() throws {
         let json: [String: Any] = [
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 7.2, "system": "http://unitsofmeasure.org", "code": "%"]
+            "valueQuantity": ["value": 7.2, "system": "http://unitsofmeasure.org", "code": "%"],
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         #expect(FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")?.unit == "%")
     }
 
@@ -211,7 +210,7 @@ struct FHIRLabResultParserTests {
         let json: [String: Any] = [
             "code": ["coding": [["system": "http://loinc.org", "code": "33914-3"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": valueQuantity
+            "valueQuantity": valueQuantity,
         ]
         return FHIRLabResultParser.parseObservation(fromFHIRData: try! JSONSerialization.data(withJSONObject: json))
     }
@@ -232,17 +231,17 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Codes
 
-    @Test func parseObservation_returnsLOINCCodesInRecordOrder() {
+    @Test func parseObservation_returnsLOINCCodesInRecordOrder() throws {
         let json: [String: Any] = [
             "code": ["coding": [
                 ["system": "http://loinc.org", "code": "13457-7"],
                 ["system": "http://snomed.org", "code": "12345"],
-                ["system": "http://loinc.org", "code": "2089-1"]
+                ["system": "http://loinc.org", "code": "2089-1"],
             ]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 100, "unit": "mg/dL"]
+            "valueQuantity": ["value": 100, "unit": "mg/dL"],
         ]
-        let result = FHIRLabResultParser.parseObservation(fromFHIRData: try! JSONSerialization.data(withJSONObject: json))
+        let result = try FHIRLabResultParser.parseObservation(fromFHIRData: JSONSerialization.data(withJSONObject: json))
         #expect(result?.loincCodes == ["13457-7", "2089-1"])
     }
 
@@ -262,16 +261,16 @@ struct FHIRLabResultParserTests {
         #expect(FHIRLabResultParser.parseDate("2024-06-15T10:30:00-04:00") == utc(2024, 6, 15, 14, 30))
     }
 
-    @Test func parseDate_fractionalSeconds() {
+    @Test func parseDate_fractionalSeconds() throws {
         let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.123Z")
         #expect(date != nil)
-        #expect(abs(date!.timeIntervalSince(utc(2024, 6, 15, 10, 30)) - 0.123) <= 0.001)
+        #expect(try abs(#require(date?.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.123) <= 0.001)
     }
 
-    @Test func parseDate_fractionalSecondsWithOffset() {
+    @Test func parseDate_fractionalSecondsWithOffset() throws {
         let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.5+02:00")
         #expect(date != nil)
-        #expect(abs(date!.timeIntervalSince(utc(2024, 6, 15, 8, 30)) - 0.5) <= 0.001)
+        #expect(try abs(#require(date?.timeIntervalSince(utc(2024, 6, 15, 8, 30))) - 0.5) <= 0.001)
     }
 
     @Test func parseDate_dateOnly_isStartOfDayUTC() {
@@ -341,16 +340,16 @@ struct FHIRLabResultParserTests {
     private func observationData(dateFields: [String: Any]) -> Data {
         var json: [String: Any] = [
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
-            "valueQuantity": ["value": 7.2, "unit": "%"]
+            "valueQuantity": ["value": 7.2, "unit": "%"],
         ]
         json.merge(dateFields) { _, new in new }
         return try! JSONSerialization.data(withJSONObject: json)
     }
 
-    @Test func effectiveInstant_usedWhenDateTimeAbsent() {
+    @Test func effectiveInstant_usedWhenDateTimeAbsent() throws {
         let data = observationData(dateFields: ["effectiveInstant": "2024-06-15T10:30:00.250Z"])
         let result = FHIRLabResultParser.parseObservation(fromFHIRData: data)
-        #expect(abs(result!.effectiveDateTime.timeIntervalSince(utc(2024, 6, 15, 10, 30)) - 0.25) <= 0.001)
+        #expect(try abs(#require(result?.effectiveDateTime.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.25) <= 0.001)
     }
 
     @Test func effectivePeriodStart_usedWhenDateTimeAndInstantAbsent() {
@@ -362,7 +361,7 @@ struct FHIRLabResultParserTests {
         let data = observationData(dateFields: [
             "effectiveDateTime": "2024-06-15T10:30:00Z",
             "effectiveInstant": "2023-01-01T00:00:00Z",
-            "effectivePeriod": ["start": "2022-01-01"]
+            "effectivePeriod": ["start": "2022-01-01"],
         ])
         #expect(FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime == utc(2024, 6, 15, 10, 30))
     }

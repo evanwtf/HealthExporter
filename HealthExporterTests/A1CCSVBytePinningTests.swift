@@ -1,13 +1,12 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 /// Locks the exact byte format of A1C CSV rows so the lab-pipeline refactor
 /// cannot accidentally change output. Uses `.iso8601` date format because it
 /// is forced to UTC by `CSVGenerator.makeDateFormatter`, giving a deterministic
 /// expected string independent of the test host's locale or timezone.
 struct A1CCSVBytePinningTests {
-
     private var fixedDate: Date {
         ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
     }
@@ -81,9 +80,9 @@ struct A1CCSVBytePinningTests {
 
     // MARK: - Ascending sort order (default)
 
-    @Test func a1cRow_ascendingSort_oldestFirst() {
-        let older = ISO8601DateFormatter().date(from: "2024-01-01T00:00:00Z")!
-        let newer = ISO8601DateFormatter().date(from: "2024-12-31T23:59:59Z")!
+    @Test func a1cRow_ascendingSort_oldestFirst() throws {
+        let older = try #require(ISO8601DateFormatter().date(from: "2024-01-01T00:00:00Z"))
+        let newer = try #require(ISO8601DateFormatter().date(from: "2024-12-31T23:59:59Z"))
         let samples = [
             a1cSample(date: newer, value: 7.5, unit: "%", source: "C"),
             a1cSample(date: older, value: 6.5, unit: "%", source: "C"),

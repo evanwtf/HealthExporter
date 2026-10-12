@@ -2,7 +2,6 @@ import HealthKit
 
 /// Pure helpers extracted from HealthKitManager for testability.
 nonisolated enum HealthKitQueryHelpers {
-
     /// The HealthKit types to request read access for: the selected metrics only.
     static func readTypes(
         includeWeight: Bool,
@@ -27,7 +26,8 @@ nonisolated enum HealthKitQueryHelpers {
         }
 
         if includeLabs,
-           let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
+           let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord)
+        {
             types.insert(clinicalType)
         }
 
@@ -95,14 +95,14 @@ nonisolated enum HealthKitQueryHelpers {
         days: Int = 60,
         referenceDate: Date = Date(),
         calendar: Calendar = .current,
-        valueGenerator: (Int) -> Double = { _ in Double.random(in: 80.0...95.0) }
+        valueGenerator: (Int) -> Double = { _ in Double.random(in: 80.0 ... 95.0) }
     ) -> [HKQuantitySample] {
         guard days > 0 else { return [] }
 
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let unit = HKUnit.gramUnit(with: .kilo)
 
-        return (0..<days).compactMap { index in
+        return (0 ..< days).compactMap { index in
             let offset = (days - 1) - index
             guard let date = calendar.date(byAdding: .day, value: -offset, to: referenceDate) else {
                 return nil
@@ -119,24 +119,24 @@ nonisolated enum HealthKitQueryHelpers {
     }
 
     #if targetEnvironment(simulator)
-    /// The sample types the simulator test-data generator needs permission to write.
-    static func simulatorTestDataShareTypes() -> Set<HKSampleType> {
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-        return [weightType]
-    }
-
-    /// Formats a simulator mock-data failure for display in the Settings debug UI.
-    static func simulatorTestDataFailureMessage(_ error: Error?) -> String {
-        if let error {
-            return "Failed to generate weight data: \(error.localizedDescription)"
+        /// The sample types the simulator test-data generator needs permission to write.
+        static func simulatorTestDataShareTypes() -> Set<HKSampleType> {
+            let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+            return [weightType]
         }
-        return "Failed to generate weight data."
-    }
+
+        /// Formats a simulator mock-data failure for display in the Settings debug UI.
+        static func simulatorTestDataFailureMessage(_ error: Error?) -> String {
+            if let error {
+                return "Failed to generate weight data: \(error.localizedDescription)"
+            }
+            return "Failed to generate weight data."
+        }
     #endif
 }
 
 /// The app's one `HKHealthStore`, behind the `HealthDataStore` seam.
-nonisolated final class HealthKitManager: HealthDataStore {
+final nonisolated class HealthKitManager: HealthDataStore {
     static let shared = HealthKitManager()
 
     private let healthStore: HKHealthStore
@@ -196,11 +196,11 @@ nonisolated final class HealthKitManager: HealthDataStore {
     }
 
     #if targetEnvironment(simulator)
-    func generateTestData() async throws {
-        let samples = HealthKitQueryHelpers.generateWeightTestSamples(days: 60)
-        let shareTypes = HealthKitQueryHelpers.simulatorTestDataShareTypes()
-        try await healthStore.requestAuthorization(toShare: shareTypes, read: [])
-        try await healthStore.save(samples)
-    }
+        func generateTestData() async throws {
+            let samples = HealthKitQueryHelpers.generateWeightTestSamples(days: 60)
+            let shareTypes = HealthKitQueryHelpers.simulatorTestDataShareTypes()
+            try await healthStore.requestAuthorization(toShare: shareTypes, read: [])
+            try await healthStore.save(samples)
+        }
     #endif
 }

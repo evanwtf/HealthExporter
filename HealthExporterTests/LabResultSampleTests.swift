@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct LabResultSampleTests {
-
     private var referenceDate: Date {
         ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
     }
@@ -47,7 +46,7 @@ struct LabResultSampleTests {
             "resourceType": "Observation",
             "code": ["coding": codes.map { ["system": "http://loinc.org", "code": $0] }],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": quantity
+            "valueQuantity": quantity,
         ]
         return try! JSONSerialization.data(withJSONObject: json)
     }

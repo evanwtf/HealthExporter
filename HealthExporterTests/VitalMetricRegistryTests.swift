@@ -1,58 +1,56 @@
-import XCTest
+import Foundation
+import Testing
 import HealthKit
 @testable import HealthExporter
 
-final class VitalMetricRegistryTests: XCTestCase {
+struct VitalMetricRegistryTests {
 
-    func testVitalMetric_containsExpectedCases() {
-        XCTAssertEqual(
-            Set(VitalMetric.allCases),
-            Set([
+    @Test func vitalMetric_containsExpectedCases() {
+        #expect(Set(VitalMetric.allCases) == Set([
                 .bloodPressure,
                 .restingHeartRate,
                 .heartRateVariabilitySDNN,
                 .oxygenSaturation,
                 .respiratoryRate,
                 .bodyTemperature
-            ])
-        )
+            ]))
     }
 
-    func testBloodPressureExpandsToSystolicAndDiastolicComponents() {
-        XCTAssertEqual(VitalMetric.bloodPressure.components, [.bloodPressureSystolic, .bloodPressureDiastolic])
+    @Test func bloodPressureExpandsToSystolicAndDiastolicComponents() {
+        #expect(VitalMetric.bloodPressure.components == [.bloodPressureSystolic, .bloodPressureDiastolic])
     }
 
-    func testVitalComponentsHaveUniqueRawValues() {
+    @Test func vitalComponentsHaveUniqueRawValues() {
         let rawValues = VitalMetricComponent.allCases.map(\.rawValue)
-        XCTAssertEqual(Set(rawValues).count, rawValues.count)
+        #expect(Set(rawValues).count == rawValues.count)
     }
 
-    func testVitalComponentHealthKitIdentifiers() {
-        XCTAssertEqual(VitalMetricComponent.bloodPressureSystolic.healthKitIdentifier, .bloodPressureSystolic)
-        XCTAssertEqual(VitalMetricComponent.bloodPressureDiastolic.healthKitIdentifier, .bloodPressureDiastolic)
-        XCTAssertEqual(VitalMetricComponent.restingHeartRate.healthKitIdentifier, .restingHeartRate)
-        XCTAssertEqual(VitalMetricComponent.heartRateVariabilitySDNN.healthKitIdentifier, .heartRateVariabilitySDNN)
-        XCTAssertEqual(VitalMetricComponent.oxygenSaturation.healthKitIdentifier, .oxygenSaturation)
-        XCTAssertEqual(VitalMetricComponent.respiratoryRate.healthKitIdentifier, .respiratoryRate)
-        XCTAssertEqual(VitalMetricComponent.bodyTemperature.healthKitIdentifier, .bodyTemperature)
+    @Test func vitalComponentHealthKitIdentifiers() {
+        #expect(VitalMetricComponent.bloodPressureSystolic.healthKitIdentifier == .bloodPressureSystolic)
+        #expect(VitalMetricComponent.bloodPressureDiastolic.healthKitIdentifier == .bloodPressureDiastolic)
+        #expect(VitalMetricComponent.restingHeartRate.healthKitIdentifier == .restingHeartRate)
+        #expect(VitalMetricComponent.heartRateVariabilitySDNN.healthKitIdentifier == .heartRateVariabilitySDNN)
+        #expect(VitalMetricComponent.oxygenSaturation.healthKitIdentifier == .oxygenSaturation)
+        #expect(VitalMetricComponent.respiratoryRate.healthKitIdentifier == .respiratoryRate)
+        #expect(VitalMetricComponent.bodyTemperature.healthKitIdentifier == .bodyTemperature)
     }
 
-    func testOxygenSaturationConvertsHealthKitFractionToPercent() {
+    @Test func oxygenSaturationConvertsHealthKitFractionToPercent() {
         let quantity = HKQuantity(unit: .percent(), doubleValue: 0.985)
         let result = VitalMetricComponent.oxygenSaturation.valueAndUnit(from: quantity, temperatureUnit: .fahrenheit)
 
-        XCTAssertEqual(result.value, 98.5, accuracy: 0.0001)
-        XCTAssertEqual(result.unit, "%")
+        #expect(abs(result.value - 98.5) <= 0.0001)
+        #expect(result.unit == "%")
     }
 
-    func testBodyTemperatureUsesSelectedUnit() {
+    @Test func bodyTemperatureUsesSelectedUnit() {
         let quantity = HKQuantity(unit: .degreeCelsius(), doubleValue: 37.0)
         let fahrenheit = VitalMetricComponent.bodyTemperature.valueAndUnit(from: quantity, temperatureUnit: .fahrenheit)
         let celsius = VitalMetricComponent.bodyTemperature.valueAndUnit(from: quantity, temperatureUnit: .celsius)
 
-        XCTAssertEqual(fahrenheit.value, 98.6, accuracy: 0.01)
-        XCTAssertEqual(fahrenheit.unit, "°F")
-        XCTAssertEqual(celsius.value, 37.0, accuracy: 0.01)
-        XCTAssertEqual(celsius.unit, "°C")
+        #expect(abs(fahrenheit.value - 98.6) <= 0.01)
+        #expect(fahrenheit.unit == "°F")
+        #expect(abs(celsius.value - 37.0) <= 0.01)
+        #expect(celsius.unit == "°C")
     }
 }

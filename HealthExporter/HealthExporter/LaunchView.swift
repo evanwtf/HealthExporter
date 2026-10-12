@@ -68,7 +68,8 @@ struct LaunchView: View {
 
             Text("HealthExporterCSV")
                 .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
                 .accessibilityIdentifier("appTitle")
 
             Text("Export your health data to CSV")
@@ -122,6 +123,7 @@ struct LaunchView: View {
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        .background(Color(uiColor: .systemBackground))
     }
 }
 

@@ -1,104 +1,225 @@
 name: Bump Build Number
 
+# pull_request_target, not pull_request: a fork pull request gets a read-only
+# GITHUB_TOKEN and no secrets under pull_request, so its merge could not push
+# the release. This job runs the workflow and the scripts from main, never
+# from the pull request head: it checks out main and reads only the event's
+# labels, number and title, and passes those through env.
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
     branches: [main]
 
 permissions:
   contents: write
-  actions: write
+  actions: write # dispatches release-testflight.yml
+
+# One release at a time; never cancel one half way.
+concurrency:
+  group: bump-version-main
+  cancel-in-progress: false
 
 jobs:
   bump:
-    name: Increment CURRENT_PROJECT_VERSION
+    name: Release the merge
     if: github.event.pull_request.merged == true
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    env:
+      SKIP_RELEASE: ${{ contains(github.event.pull_request.labels.*.name, 'skip-release') }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # RELEASE_DEPLOY_KEY is optional. When the secret is set, checkout
+      # clones over SSH with the deploy key, and the pushes below use it: the
+      # deploy key can bypass the ruleset on main, and GITHUB_TOKEN cannot.
+      # When the secret is not set, the expression gives an empty string,
+      # checkout skips the SSH setup and uses `token` over HTTPS, as before.
+      - name: Check out main
+        uses: actions/checkout@v7
         with:
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          token: ${{ github.token }}
 
-      # Labels on the merged PR choose the version part: `semver:major` or
-      # `semver:minor` (layout changes); no label bumps the patch.
-      - name: Bump build number and version
+      - name: Check the release labels
+        id: labels
         env:
-          BUMP_MAJOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:major') }}
-          BUMP_MINOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:minor') }}
+          SEMVER_MAJOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:major') }}
+          SEMVER_MINOR: ${{ contains(github.event.pull_request.labels.*.name, 'semver:minor') }}
+          SEMVER_PATCH: ${{ contains(github.event.pull_request.labels.*.name, 'semver:patch') }}
+          HAS_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY != '' }}
         run: |
-          FILE="HealthExporter.xcodeproj/project.pbxproj"
-
-          # Bump CURRENT_PROJECT_VERSION (build number)
-          CURRENT=$(grep -m1 'CURRENT_PROJECT_VERSION' "$FILE" | sed 's/[^0-9]//g')
-          NEXT=$((CURRENT + 1))
-          echo "Bumping build number: $CURRENT -> $NEXT"
-          sed -i "s/CURRENT_PROJECT_VERSION = $CURRENT;/CURRENT_PROJECT_VERSION = $NEXT;/g" "$FILE"
-          grep 'CURRENT_PROJECT_VERSION' "$FILE"
-
-          # Bump MARKETING_VERSION: 2.4.6 -> 2.4.7, 2.5.0 (semver:minor) or 3.0.0 (semver:major)
-          MARKETING=$(grep -m1 'MARKETING_VERSION' "$FILE" | sed 's/.*= //;s/;.*//')
-          MAJOR=$(echo "$MARKETING" | cut -d. -f1)
-          MINOR=$(echo "$MARKETING" | cut -d. -f2)
-          PATCH=$(echo "$MARKETING" | cut -d. -f3)
-          if [ "$BUMP_MAJOR" = "true" ]; then
-            NEW_VERSION="$((MAJOR + 1)).0.0"
-          elif [ "$BUMP_MINOR" = "true" ]; then
-            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+          if [ "$HAS_DEPLOY_KEY" = "true" ]; then
+            echo "Pushes use the RELEASE_DEPLOY_KEY deploy key."
           else
-            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            echo "RELEASE_DEPLOY_KEY is not set: pushes use GITHUB_TOKEN."
           fi
-          echo "Bumping marketing version: $MARKETING -> $NEW_VERSION"
-          sed -i "s/MARKETING_VERSION = $MARKETING;/MARKETING_VERSION = $NEW_VERSION;/g" "$FILE"
-          grep 'MARKETING_VERSION' "$FILE"
+          semver_count=0
+          for flag in "$SEMVER_MAJOR" "$SEMVER_MINOR" "$SEMVER_PATCH"; do
+            if [ "$flag" = "true" ]; then
+              semver_count=$((semver_count + 1))
+            fi
+          done
+          if [ "$SKIP_RELEASE" = "true" ] && [ "$semver_count" -gt 0 ]; then
+            echo "::error::The pull request has skip-release and a semver:* label. Use one, not both, then release by hand if a release is due."
+            exit 1
+          fi
+          if [ "$semver_count" -gt 1 ]; then
+            echo "::warning::More than one semver:* label; the largest bump wins."
+          fi
+          if [ "$SEMVER_MAJOR" = "true" ]; then
+            part="major"
+          elif [ "$SEMVER_MINOR" = "true" ]; then
+            part="minor"
+          else
+            part="patch"
+          fi
+          echo "part=$part" >> "$GITHUB_OUTPUT"
+          if [ "$SKIP_RELEASE" = "true" ]; then
+            echo "skip-release: no bump, no commit, no tag, no release and no TestFlight upload."
+          else
+            echo "Release part: $part"
+          fi
 
-      - name: Commit and push
+      - name: Set up uv
+        if: env.SKIP_RELEASE != 'true'
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Read the project version
+        id: current
+        if: env.SKIP_RELEASE != 'true'
+        # Fails when the project's version entries disagree.
+        run: uv run --frozen scripts/check_version.py --github-output "$GITHUB_OUTPUT"
+
+      - name: Find the latest tag
+        id: latest_tag
+        if: env.SKIP_RELEASE != 'true'
         run: |
+          latest_tag="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
+          echo "Latest tag: ${latest_tag:-<none>}"
+          echo "value=${latest_tag}" >> "$GITHUB_OUTPUT"
+
+      # A run that pushed the release commit but no tag leaves main ahead of
+      # the latest tag. A new bump would skip that version, so finish it.
+      # With the atomic push below this needs a failure outside git, but the
+      # check costs nothing.
+      - name: Detect stranded release
+        id: stranded
+        if: env.SKIP_RELEASE != 'true'
+        env:
+          LATEST_TAG: ${{ steps.latest_tag.outputs.value }}
+          MARKETING: ${{ steps.current.outputs.version }}
+        run: |
+          latest="${LATEST_TAG#v}"
+          latest="${latest:-0.0.0}"
+          newest="$(printf '%s\n%s\n' "$MARKETING" "$latest" | sort -V | tail -n 1)"
+          if [ "$MARKETING" = "$latest" ] || [ "$newest" != "$MARKETING" ]; then
+            echo "No stranded release."
+            exit 0
+          fi
+          commit="$(git log -n 1 --format=%H --fixed-strings --grep="Release v${MARKETING} (build " main)"
+          if [ -z "$commit" ]; then
+            echo "::warning::MARKETING_VERSION ${MARKETING} is ahead of ${LATEST_TAG:-no tag}, but no release commit names it. Bumping as usual."
+            exit 0
+          fi
+          echo "::warning::v${MARKETING} is on main with no tag. Finishing that release instead of bumping again."
+          {
+            echo "pending=true"
+            echo "version=${MARKETING}"
+            echo "commit=${commit}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Complete stranded release
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending == 'true'
+        env:
+          VERSION: ${{ steps.stranded.outputs.version }}
+          COMMIT: ${{ steps.stranded.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git show --no-patch --format='Tagging %h: %s' "$COMMIT"
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --quiet --detach "$COMMIT"
+          uv run --frozen scripts/check_version.py --tag "v${VERSION}"
+          git tag -d "v${VERSION}" 2>/dev/null || true
+          git tag -a "v${VERSION}" -m "v${VERSION}" "$COMMIT"
+          git push origin "refs/tags/v${VERSION}"
+          git checkout --quiet main
+
+      - name: Bump the version
+        id: version
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
+        env:
+          PART: ${{ steps.labels.outputs.part }}
+          LATEST_TAG: ${{ steps.latest_tag.outputs.value }}
+        run: |
+          uv run --frozen scripts/bump_version.py \
+            --part "$PART" \
+            --latest-tag "$LATEST_TAG" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Check the bumped version against the tag
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: uv run --frozen scripts/check_version.py --tag "v${VERSION}"
+
+      - name: Commit, tag and push the release
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+          SOURCE_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SOURCE_PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add HealthExporter.xcodeproj/project.pbxproj
-          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' HealthExporter.xcodeproj/project.pbxproj | sed 's/[^0-9]//g')
-          VERSION=$(grep -m1 'MARKETING_VERSION' HealthExporter.xcodeproj/project.pbxproj | sed 's/.*= //;s/;.*//')
-          git commit -m "Bump version to $VERSION (build $BUILD) [skip ci]"
-          git push
+          # The title comes from env, so the shell treats it as data.
+          message="$RUNNER_TEMP/release-commit-message.txt"
+          printf 'Release v%s (build %s)\n\nSource merge: #%s (%s)\n\n[skip ci]\n' \
+            "$VERSION" "$BUILD" "$SOURCE_PR_NUMBER" "$SOURCE_PR_TITLE" > "$message"
+          git commit --quiet --file "$message"
+          git log -n 1 --format=%B
+          # The self-hosted workspace is reused: drop a stale local tag.
+          git tag -d "v${VERSION}" 2>/dev/null || true
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          # Atomic: main and the tag land together or not at all, so a failed
+          # push cannot leave the release commit on main with no tag.
+          git push --atomic origin main "refs/tags/v${VERSION}"
 
-      - name: Tag release
-        id: tag
-        run: |
-          FILE="HealthExporter.xcodeproj/project.pbxproj"
-          TAG="v$(grep -m1 'MARKETING_VERSION' "$FILE" | sed 's/[^0-9.]//g')"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists"
-            exit 0
-          fi
-
-          # The self-hosted workspace is reused: drop a stale local tag from a failed run.
-          git tag -d "$TAG" 2>/dev/null || true
-          git tag -a "$TAG" -m "$TAG"
-          git push origin "$TAG"
-
-      # A tag pushed with GITHUB_TOKEN does not trigger other workflows, so this
-      # job creates the release and starts the TestFlight upload itself.
-      # A workflow_dispatch made with GITHUB_TOKEN does create a run.
-      - name: Create GitHub release
+      - name: Publish GitHub release
+        id: release
+        if: env.SKIP_RELEASE != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.stranded.outputs.pending == 'true' && steps.stranded.outputs.version || steps.version.outputs.version }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists; skipping."
             exit 0
           fi
-          gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          # A deploy-key tag push also starts publish-release.yml, which can
+          # win the race. Accept a release that now exists.
+          if ! gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes --verify-tag; then
+            gh release view "v${VERSION}" >/dev/null
+            echo "Release v${VERSION} was created by another job"
+          fi
 
+      # A tag pushed with GITHUB_TOKEN starts no workflow, so this job starts
+      # the TestFlight upload itself. A dispatch made with GITHUB_TOKEN does
+      # create a run.
       - name: Start TestFlight upload
+        if: env.SKIP_RELEASE != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: gh workflow run release-testflight.yml --ref "$TAG"

@@ -466,7 +466,7 @@ struct DataSelectionView: View {
         .fileExporter(
             isPresented: $showingExporter,
             document: CSVDocument(content: csvContent),
-            contentType: .commaSeparatedText,
+            contentTypes: [.commaSeparatedText],
             defaultFilename: fileName
         ) { result in
             switch result {

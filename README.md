@@ -171,7 +171,7 @@ HealthExporter/
 │       ├── VitalMetricRegistry.swift    # HealthKit vital metric registry
 │       ├── HealthSampleTypes.swift      # Glucose, LOINC constants, FHIR parsing
 │       ├── CSVGenerator.swift           # CSV generation & unit conversion
-│       ├── CSVDocument.swift            # FileDocument for saving
+│       ├── CSVFile.swift                # Transferable CSV for the Files picker
 │       ├── SettingsManager.swift        # UserDefaults persistence
 │       ├── DateRangeOption.swift        # Date range selection enum
 │       ├── ExportError.swift            # Localized error types

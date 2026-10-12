@@ -3,7 +3,7 @@ import Testing
 import HealthKit
 @testable import HealthExporter
 
-struct ExportPreviewEstimateTests {
+struct ExportSizeTests {
 
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -23,39 +23,44 @@ struct ExportPreviewEstimateTests {
         return Calendar(identifier: .gregorian).date(from: components)!
     }
 
-    @Test func roundedRowCount_underThousandRoundsToNearestHundred() {
-        let estimate = ExportPreviewEstimate(rowCount: 720, estimatedByteCount: 7_240)
+    @Test func summaryText_givesTheExactRowCountAndSize() {
+        let size = ExportSize(rowCount: 19_432, byteCount: 1_980_000)
 
-        #expect(estimate.roundedRowCount == 700)
-        #expect(estimate.summaryText.contains("around 700 rows"))
+        #expect(size.summaryText == "This will export 19,432 rows (\(size.formattedByteCount)).")
+        #expect(!size.summaryText.contains("around"))
     }
 
-    @Test func roundedRowCount_overThousandRoundsToNearestThousand() {
-        let estimate = ExportPreviewEstimate(rowCount: 19_432, estimatedByteCount: 1_980_000)
+    @Test func summaryText_singularRow() {
+        let size = ExportSize(rowCount: 1, byteCount: 300)
 
-        #expect(estimate.roundedRowCount == 19_000)
-        #expect(estimate.summaryText.contains("around 19,000 rows"))
+        #expect(size.summaryText.hasPrefix("This will export 1 row ("))
+    }
+
+    @Test func formattedByteCount_usesFileStyle() {
+        let size = ExportSize(rowCount: 10, byteCount: 1_500_000)
+
+        #expect(size.formattedByteCount == ByteCountFormatter.string(fromByteCount: 1_500_000, countStyle: .file))
     }
 
     @Test func shouldShowConfirmation_falseWhenRowsAndBytesAreUnderThreshold() {
-        let estimate = ExportPreviewEstimate(rowCount: 500, estimatedByteCount: 1_000_000)
+        let size = ExportSize(rowCount: 500, byteCount: 1_000_000)
 
-        #expect(!estimate.shouldShowConfirmation)
+        #expect(!size.shouldShowConfirmation)
     }
 
     @Test func shouldShowConfirmation_trueWhenRowCountExceedsThreshold() {
-        let estimate = ExportPreviewEstimate(rowCount: 501, estimatedByteCount: 5_000)
+        let size = ExportSize(rowCount: 501, byteCount: 5_000)
 
-        #expect(estimate.shouldShowConfirmation)
+        #expect(size.shouldShowConfirmation)
     }
 
     @Test func shouldShowConfirmation_trueWhenByteCountExceedsThreshold() {
-        let estimate = ExportPreviewEstimate(rowCount: 10, estimatedByteCount: 1_000_001)
+        let size = ExportSize(rowCount: 10, byteCount: 1_000_001)
 
-        #expect(estimate.shouldShowConfirmation)
+        #expect(size.shouldShowConfirmation)
     }
 
-    @Test func makePreviewEstimate_matchesGeneratedCSVByteCount() {
+    @Test func makeFile_sizeAndBytesMatchGeneratedCSV() async throws {
         let weightSample = HKQuantitySample(
             type: weightType,
             quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 80.0),
@@ -90,14 +95,19 @@ struct ExportPreviewEstimateTests {
             end: referenceDate.addingTimeInterval(240)
         )
 
-        let estimate = CSVGenerator.makePreviewEstimate(
+        let fetched = ExportFetchResult(
             weightSamples: [weightSample],
             stepsSamples: [stepsSample],
             glucoseSamples: [glucoseSample],
             labResults: [labSample],
-            vitalSamples: [.oxygenSaturation: [oxygenSample]],
+            vitalSamples: [.oxygenSaturation: [oxygenSample]]
+        )
+        let file = try await CSVGenerator.makeFile(
+            from: fetched,
             weightUnit: .pounds,
-            dateFormat: .yyyyMMddHHmmss
+            temperatureUnit: .fahrenheit,
+            dateFormat: .yyyyMMddHHmmss,
+            sortOrder: .ascending
         )
         let csv = CSVGenerator.generateCombinedCSV(
             weightSamples: [weightSample],
@@ -109,7 +119,9 @@ struct ExportPreviewEstimateTests {
             dateFormat: .yyyyMMddHHmmss
         )
 
-        #expect(estimate.rowCount == 5)
-        #expect(estimate.estimatedByteCount == csv.utf8.count)
+        #expect(file.content == csv)
+        #expect(file.rowCount == 5)
+        #expect(file.byteCount == csv.utf8.count)
+        #expect(file.size == ExportSize(rowCount: 5, byteCount: csv.utf8.count))
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var settings: SettingsManager
+    @Bindable var settings: SettingsManager
     @Environment(\.dismiss) var dismiss
     @State private var testDataMessage = ""
     @State private var showTestDataFailureAlert = false

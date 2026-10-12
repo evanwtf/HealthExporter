@@ -1,37 +1,32 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import HealthKit
 import os
 
 private let logger = Logger(subsystem: "com.HealthExporter", category: "DataSelection")
 
-private struct PendingExportPayload {
-    var weightSamples: [HKQuantitySample]?
-    var stepsSamples: [HKQuantitySample]?
-    var glucoseSamples: [GlucoseSampleMgDl]?
-    var labResults: [LabResultSample]?
-    var vitalSamples: [VitalMetricComponent: [HKQuantitySample]]
-    var failureNotice: String?
+/// A built file that waits for the user to confirm its size or a partial export.
+private struct PendingExport {
+    let file: CSVFile
+    let failureNotice: String?
 }
 
 struct DataSelectionView: View {
     @State private var showingExporter = false
-    @State private var csvContent = ""
+    @State private var exportFile: CSVFile?
     @State private var fileName = ""
     @State private var selectedDateRangeOption: DateRangeOption = .lastXDays
     @State private var startDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var endDate = Date()
     @State private var showingSaveSuccess = false
     @State private var saveSuccessDismissTask: Task<Void, Never>?
-    @State private var showingEstimateConfirmation = false
+    @State private var showingSizeConfirmation = false
     @State private var isPreparingExport = false
-    @State private var exportEnabled = false
+    @State private var exportTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
-    @State private var pendingExportPayload: PendingExportPayload?
-    @State private var pendingExportEstimate: ExportPreviewEstimate?
+    @State private var pendingExport: PendingExport?
 
-    @ObservedObject var settings: SettingsManager
+    @Bindable var settings: SettingsManager
     var healthStore: any HealthDataStore = HealthKitManager.shared
 
     @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
@@ -73,8 +68,9 @@ struct DataSelectionView: View {
         !settings.selectedVitalMetrics.isEmpty
     }
 
-    private func updateExportEnabled() {
-        exportEnabled = ExportLogic.isExportEnabled(
+    /// Computed from the inputs, so every input gates the Export button (#120).
+    private var exportEnabled: Bool {
+        ExportLogic.isExportEnabled(
             exportWeight: settings.exportWeight,
             exportSteps: settings.exportSteps,
             exportGlucose: settings.exportGlucose,
@@ -88,49 +84,15 @@ struct DataSelectionView: View {
 
     private func labSelectionBinding(for loincCode: String) -> Binding<Bool> {
         Binding(
-            get: {
-                if settings.favoriteLabCodes.contains(loincCode) {
-                    return true
-                }
-                guard let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group else {
-                    return false
-                }
-                return settings.selectedLabPanels.contains(panel)
-            },
-            set: { newValue in
-                if newValue {
-                    settings.favoriteLabCodes.insert(loincCode)
-                } else {
-                    if let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group,
-                       settings.selectedLabPanels.contains(panel) {
-                        let remainingCodes = LabMetricRegistry.metrics(in: panel)
-                            .map(\.loincCode)
-                            .filter { $0 != loincCode }
-                        settings.selectedLabPanels.remove(panel)
-                        settings.favoriteLabCodes.formUnion(remainingCodes)
-                    }
-                    settings.favoriteLabCodes.remove(loincCode)
-                }
-            }
+            get: { settings.labSelection.isSelected(loincCode: loincCode) },
+            set: { settings.labSelection.setSelected($0, loincCode: loincCode) }
         )
     }
 
     private func labPanelSelectionBinding(for panel: LabPanel) -> Binding<Bool> {
         Binding(
-            get: {
-                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
-                return settings.selectedLabPanels.contains(panel) || (!codes.isEmpty && codes.allSatisfy { settings.favoriteLabCodes.contains($0) })
-            },
-            set: { newValue in
-                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
-                if newValue {
-                    settings.favoriteLabCodes.formUnion(codes)
-                    settings.selectedLabPanels.insert(panel)
-                } else {
-                    settings.favoriteLabCodes.subtract(codes)
-                    settings.selectedLabPanels.remove(panel)
-                }
-            }
+            get: { settings.labSelection.isSelected(panel: panel) },
+            set: { settings.labSelection.setSelected($0, panel: panel) }
         )
     }
 
@@ -163,11 +125,7 @@ struct DataSelectionView: View {
     }
 
     private func panelSelectedCount(_ panel: LabPanel) -> Int {
-        LabMetricRegistry.metrics(in: panel).reduce(0) { count, metric in
-            let isSelected = settings.favoriteLabCodes.contains(metric.loincCode) ||
-                settings.selectedLabPanels.contains(panel)
-            return count + (isSelected ? 1 : 0)
-        }
+        settings.labSelection.selectedCount(in: panel)
     }
 
     private func presentSaveSuccessConfirmation() {
@@ -261,7 +219,6 @@ struct DataSelectionView: View {
 
     func labPanelDetail(_ panel: LabPanel) -> some View {
         SelectionDetailView(
-            settings: settings,
             title: panel.displayName,
             category: .labs,
             rows: LabMetricRegistry.metrics(in: panel).map { metric in
@@ -278,7 +235,6 @@ struct DataSelectionView: View {
 
     func vitalsDetail() -> some View {
         SelectionDetailView(
-            settings: settings,
             title: "Vitals",
             category: .vitals,
             rows: VitalMetric.allCases.map { metric in
@@ -522,54 +478,44 @@ struct DataSelectionView: View {
                 Color.black.opacity(0.15)
                     .ignoresSafeArea()
 
-                ProgressView("Preparing export...")
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                VStack(spacing: 12) {
+                    ProgressView("Preparing export...")
+                    Button("Cancel", role: .cancel) {
+                        cancelExport()
+                    }
+                    .accessibilityIdentifier("cancelExportButton")
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
         .fontDesign(.rounded)
         .tint(Color("AccentColor"))
         .navigationTitle("Choose Data")
         .navigationBarTitleDisplayMode(.large)
-        .onAppear { updateExportEnabled() }
-        .onChange(of: settings.exportWeight) { updateExportEnabled() }
-        .onChange(of: settings.exportSteps) { updateExportEnabled() }
-        .onChange(of: settings.exportGlucose) { updateExportEnabled() }
-        .onChange(of: settings.favoriteLabCodes) { updateExportEnabled() }
-        .onChange(of: settings.selectedLabPanels) { updateExportEnabled() }
-        .onChange(of: settings.selectedVitalMetrics) { updateExportEnabled() }
-        .onChange(of: selectedDateRangeOption) { updateExportEnabled() }
-        .onChange(of: startDate) { updateExportEnabled() }
-        .onChange(of: endDate) { updateExportEnabled() }
         .fileExporter(
             isPresented: $showingExporter,
-            document: CSVDocument(content: csvContent),
+            item: exportFile,
             contentTypes: [.commaSeparatedText],
             defaultFilename: fileName
         ) { result in
+            exportFile = nil
             switch result {
             case .success(let url):
                 logger.info("File saved to: \(url.path)")
                 presentSaveSuccessConfirmation()
-                csvContent = ""
-                isPreparingExport = false
             case .failure(let error):
                 logger.error("Error saving file: \(error.localizedDescription)")
-                csvContent = ""
-                isPreparingExport = false
                 errorMessage = ExportError.fileWriteFailed(underlying: error).localizedDescription
                 showErrorAlert = true
             }
         } onCancellation: {
-            csvContent = ""
-            isPreparingExport = false
+            exportFile = nil
         }
         .onDisappear {
-            csvContent = ""
-            isPreparingExport = false
+            cancelExport()
             cancelSaveSuccessDismissTask()
-            clearPendingExport()
         }
         .alert("File saved!", isPresented: $showingSaveSuccess) {
             Button("Close") {
@@ -578,15 +524,15 @@ struct DataSelectionView: View {
         } message: {
             Text("File \(fileName) has been saved!")
         }
-        .alert(pendingExportPayload?.failureNotice == nil ? "Export Estimate" : "Some Data Could Not Be Read", isPresented: $showingEstimateConfirmation, presenting: pendingExportEstimate) { _ in
+        .alert(pendingExport?.failureNotice == nil ? "Export Size" : "Some Data Could Not Be Read", isPresented: $showingSizeConfirmation, presenting: pendingExport) { _ in
             Button("Cancel", role: .cancel) {
-                clearPendingExport()
+                pendingExport = nil
             }
             Button("Continue") {
                 continuePendingExport()
             }
-        } message: { estimate in
-            Text([pendingExportPayload?.failureNotice, estimate.summaryText].compactMap { $0 }.joined(separator: "\n\n"))
+        } message: { pending in
+            Text([pending.failureNotice, pending.file.size.summaryText].compactMap { $0 }.joined(separator: "\n\n"))
         }
         .alert("Export Error", isPresented: $showErrorAlert) {
             Button("OK") { }
@@ -597,6 +543,7 @@ struct DataSelectionView: View {
 
     private func exportData() {
         dismissSaveSuccessConfirmation()
+        cancelExport()
         isPreparingExport = true
 
         let request = ExportRequest(
@@ -613,89 +560,87 @@ struct DataSelectionView: View {
             ),
             recordLimit: ExportLogic.recordLimit(for: selectedDateRangeOption, lastXRecords: settings.lastXRecordsValue)
         )
+        let weightUnit = settings.weightUnit
+        let temperatureUnit = settings.temperatureUnit
+        let dateFormat = settings.dateFormat
+        let sortOrder = settings.sortOrder
         let loader = ExportDataLoader(store: healthStore)
-        Task {
+
+        // After each step, a cancelled task returns without touching the
+        // view state: cancelExport() has already reset it.
+        exportTask = Task {
             do {
                 try await loader.requestAuthorization(for: request)
             } catch {
-                isPreparingExport = false
+                guard !Task.isCancelled else { return }
+                finishPreparingExport()
                 logger.error("Authorization failed: \(error.localizedDescription)")
                 errorMessage = ExportError.healthKitAuthorizationFailed(underlying: error).localizedDescription
                 showErrorAlert = true
                 return
             }
+            guard !Task.isCancelled else { return }
 
-            let result = await loader.load(request)
-            if let message = result.blockingErrorMessage {
-                isPreparingExport = false
+            let fetched = await loader.load(request)
+            guard !Task.isCancelled else { return }
+            if let message = fetched.blockingErrorMessage {
+                finishPreparingExport()
                 errorMessage = message
                 showErrorAlert = true
                 return
             }
 
-            let payload = PendingExportPayload(
-                weightSamples: result.weightSamples,
-                stepsSamples: result.stepsSamples,
-                glucoseSamples: result.glucoseSamples,
-                labResults: result.labResults,
-                vitalSamples: result.vitalSamples,
-                failureNotice: result.partialFailureNotice
-            )
-            let estimate = CSVGenerator.makePreviewEstimate(
-                weightSamples: payload.weightSamples,
-                stepsSamples: payload.stepsSamples,
-                glucoseSamples: payload.glucoseSamples,
-                labResults: payload.labResults,
-                vitalSamples: payload.vitalSamples,
-                weightUnit: settings.weightUnit,
-                temperatureUnit: settings.temperatureUnit,
-                dateFormat: settings.dateFormat
-            )
+            let failureNotice = fetched.partialFailureNotice
+            let file: CSVFile
+            do {
+                file = try await CSVGenerator.makeFile(
+                    from: consume fetched,
+                    weightUnit: weightUnit,
+                    temperatureUnit: temperatureUnit,
+                    dateFormat: dateFormat,
+                    sortOrder: sortOrder
+                )
+            } catch {
+                // makeFile throws only CancellationError.
+                return
+            }
+            guard !Task.isCancelled else { return }
 
-            clearPendingExport()
-            pendingExportPayload = payload
-            pendingExportEstimate = estimate
-
-            if estimate.shouldShowConfirmation || payload.failureNotice != nil {
-                isPreparingExport = false
-                showingEstimateConfirmation = true
+            finishPreparingExport()
+            if file.size.shouldShowConfirmation || failureNotice != nil {
+                pendingExport = PendingExport(file: file, failureNotice: failureNotice)
+                showingSizeConfirmation = true
             } else {
-                continuePendingExport()
+                presentExporter(for: file)
             }
         }
     }
 
-    private func continuePendingExport() {
-        guard var payload = pendingExportPayload else { return }
-
-        isPreparingExport = true
-        clearPendingExport()
-
-        let dateFormat = settings.dateFormat
-        let sortOrder = settings.sortOrder
-        let weightUnit = settings.weightUnit
-        let temperatureUnit = settings.temperatureUnit
-        csvContent = CSVGenerator.generateCombinedCSV(
-            weightSamples: &payload.weightSamples,
-            stepsSamples: &payload.stepsSamples,
-            glucoseSamples: &payload.glucoseSamples,
-            labResults: &payload.labResults,
-            vitalSamples: &payload.vitalSamples,
-            weightUnit: weightUnit,
-            temperatureUnit: temperatureUnit,
-            dateFormat: dateFormat,
-            sortOrder: sortOrder
-        )
-
-        fileName = ExportLogic.exportFilename()
-
+    /// Stops the export at any stage and frees the samples and the CSV.
+    /// The Cancel button in the progress overlay calls it; no alert follows.
+    private func cancelExport() {
+        exportTask?.cancel()
+        exportTask = nil
         isPreparingExport = false
-        showingExporter = true
+        pendingExport = nil
+        exportFile = nil
     }
 
-    private func clearPendingExport() {
-        pendingExportPayload = nil
-        pendingExportEstimate = nil
+    private func finishPreparingExport() {
+        exportTask = nil
+        isPreparingExport = false
+    }
+
+    private func continuePendingExport() {
+        guard let pending = pendingExport else { return }
+        pendingExport = nil
+        presentExporter(for: pending.file)
+    }
+
+    private func presentExporter(for file: CSVFile) {
+        exportFile = file
+        fileName = ExportLogic.exportFilename()
+        showingExporter = true
     }
 }
 

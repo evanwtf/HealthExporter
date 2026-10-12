@@ -105,6 +105,15 @@ nonisolated struct ExportFetchResult: Sendable {
     var failures: [ExportMetricFailure] = []
     var requestedMetricCount = 0
 
+    /// The number of CSV rows: one per sample.
+    var rowCount: Int {
+        (weightSamples?.count ?? 0)
+            + (stepsSamples?.count ?? 0)
+            + (glucoseSamples?.count ?? 0)
+            + (labResults?.count ?? 0)
+            + vitalSamples.values.reduce(0) { $0 + $1.count }
+    }
+
     var hasAnyData: Bool {
         ExportLogic.hasAnyData(
             weightSamples: weightSamples,

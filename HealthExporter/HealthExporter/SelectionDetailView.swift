@@ -12,7 +12,6 @@ struct SelectionDetailRow: Identifiable {
 /// The individual labs of one panel, or the individual vitals. The rows carry
 /// the bindings from `DataSelectionView`, so the selection rules stay there.
 struct SelectionDetailView: View {
-    @ObservedObject var settings: SettingsManager
     let title: String
     let category: HealthCategory
     let rows: [SelectionDetailRow]

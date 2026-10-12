@@ -2,7 +2,7 @@ import HealthKit
 
 /// Higher-level vitals users can select in the export UI.
 /// Some selections expand to multiple CSV rows, such as Blood Pressure.
-enum VitalMetric: String, CaseIterable, Codable, Identifiable, Hashable {
+nonisolated enum VitalMetric: String, CaseIterable, Codable, Identifiable, Hashable {
     case bloodPressure
     case restingHeartRate
     case heartRateVariabilitySDNN
@@ -44,7 +44,7 @@ enum VitalMetric: String, CaseIterable, Codable, Identifiable, Hashable {
 }
 
 /// Concrete HealthKit quantity rows emitted for selected vitals.
-enum VitalMetricComponent: String, CaseIterable, Identifiable, Hashable {
+nonisolated enum VitalMetricComponent: String, CaseIterable, Identifiable, Hashable {
     case bloodPressureSystolic
     case bloodPressureDiastolic
     case restingHeartRate

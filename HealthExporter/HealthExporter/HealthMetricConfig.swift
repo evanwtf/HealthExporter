@@ -1,12 +1,12 @@
 import Foundation
 
 /// Configuration for supported health metrics.
-struct HealthMetricConfig {
+nonisolated struct HealthMetricConfig: Sendable {
     let name: String
 }
 
 /// Centralized configuration for all health metrics
-enum HealthMetrics {
+nonisolated enum HealthMetrics {
     static let weight = HealthMetricConfig(
         name: "Weight"
     )

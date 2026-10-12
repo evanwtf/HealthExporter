@@ -1,7 +1,7 @@
 import Foundation
 
 /// Logical grouping of lab metrics surfaced as panel-level toggles in the UI.
-enum LabPanel: String, CaseIterable, Codable {
+nonisolated enum LabPanel: String, CaseIterable, Codable {
     case lipid
     case cbc
     case cmp
@@ -23,7 +23,7 @@ enum LabPanel: String, CaseIterable, Codable {
 /// `id == loincCode` so the registry is keyed by the primary LOINC code
 /// throughout. `alternateLoincCodes` are other codes labs use for the same
 /// measurement; they match records but never change the identity.
-struct LabMetric: Identifiable, Hashable {
+nonisolated struct LabMetric: Identifiable, Hashable {
     let name: String
     let loincCode: String
     let group: LabPanel
@@ -37,7 +37,7 @@ struct LabMetric: Identifiable, Hashable {
 
 /// Centralized list of lab metrics the exporter knows how to render.
 /// Add new entries here to expose them in the UI and CSV pipeline.
-enum LabMetricRegistry {
+nonisolated enum LabMetricRegistry {
     static let all: [LabMetric] = [
         LabMetric(
             name: "Hemoglobin A1C",

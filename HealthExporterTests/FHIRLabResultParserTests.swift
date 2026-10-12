@@ -292,6 +292,52 @@ final class FHIRLabResultParserTests: XCTestCase {
         }
     }
 
+    /// `parseDate` used two `ISO8601DateFormatter`s before it moved to
+    /// `Date.ISO8601FormatStyle`. Pin the date-time results to the old ones.
+    func testParseDate_dateTimeMatchesISO8601DateFormatter() {
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let inputs = [
+            "2024-06-15T10:30:00Z",
+            "2024-06-15T10:30:00-04:00",
+            "2024-06-15T10:30:00+14:00",
+            "2024-06-15T10:30:00.123Z",
+            "2024-06-15T10:30:00.5+02:00",
+            "2024-06-15T10:30:00.123456Z",
+            "2024-06-15T10:30:00.Z",
+            "2024-06-15T10:30:00",
+            "2024-06-15T10:30Z",
+            "2024-06-15T10:30",
+            "2024-06-15T10:30:00+0200",
+            "2024-06-15T10:30:00+02",
+            "2024-06-15T10:30:00z",
+            "2024-06-15T25:00:00Z",
+            "2024-06-15T24:00:00Z",
+            "2024-06-15T24:30:00Z",
+            "2024-06-15T24:00:01Z",
+            "2024-06-15T23:60:00Z",
+            "2024-06-15T23:59:60Z",
+            "2024-06-15T23:59:59Z",
+            "2024-06-15T00:00:00Z",
+            "2024-06-15T23:59:59.999+05:30",
+            "2024-02-30T10:00:00Z",
+            "20240615T103000Z",
+            "2024-06-15T",
+            "T10:30:00Z",
+        ]
+        for input in inputs {
+            let expected = fractional.date(from: input) ?? plain.date(from: input)
+            let actual = FHIRLabResultParser.parseDate(input)
+            XCTAssertEqual(actual == nil, expected == nil, "\(input): expected \(String(describing: expected)), got \(String(describing: actual))")
+            if let expected, let actual {
+                XCTAssertEqual(actual.timeIntervalSinceReferenceDate, expected.timeIntervalSinceReferenceDate, accuracy: 0.001, input)
+            }
+        }
+    }
+
     // MARK: - Effective date fallbacks
 
     private func observationData(dateFields: [String: Any]) -> Data {

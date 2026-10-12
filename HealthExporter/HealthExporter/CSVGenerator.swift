@@ -1,6 +1,6 @@
 import HealthKit
 
-struct ExportPreviewEstimate {
+nonisolated struct ExportPreviewEstimate: Sendable {
     static let confirmationRowThreshold = 500
     static let confirmationByteThreshold = 1_000_000
 
@@ -38,7 +38,7 @@ struct ExportPreviewEstimate {
     }
 }
 
-class CSVGenerator {
+nonisolated enum CSVGenerator {
 
     /// Three-line disclaimer prepended to every export. Each line begins with `### `
     /// so common CSV parsers can be configured to treat them as comments.

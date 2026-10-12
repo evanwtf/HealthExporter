@@ -24,7 +24,9 @@ final class HealthKitQueryHelpersTests: XCTestCase {
     // MARK: - readTypes
 
     func testReadTypes_withoutLabs_containsBaseTypes() {
-        let types = HealthKitQueryHelpers.readTypes(includeLabs: false)
+        let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: true, includeSteps: true, includeGlucose: true, includeLabs: false
+        )
 
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -37,7 +39,9 @@ final class HealthKitQueryHelpersTests: XCTestCase {
     }
 
     func testReadTypes_withLabs_containsClinicalType() {
-        let types = HealthKitQueryHelpers.readTypes(includeLabs: true)
+        let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: true, includeSteps: true, includeGlucose: true, includeLabs: true
+        )
 
         let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
         let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -57,7 +61,9 @@ final class HealthKitQueryHelpersTests: XCTestCase {
     }
 
     func testReadTypes_withoutLabs_doesNotContainClinical() {
-        let types = HealthKitQueryHelpers.readTypes(includeLabs: false)
+        let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: true, includeSteps: true, includeGlucose: true, includeLabs: false
+        )
         if let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
             XCTAssertFalse(types.contains(clinicalType))
         }
@@ -65,6 +71,9 @@ final class HealthKitQueryHelpersTests: XCTestCase {
 
     func testReadTypes_withVitals_containsSelectedVitalQuantityTypes() {
         let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: true,
+            includeSteps: true,
+            includeGlucose: true,
             includeLabs: false,
             vitalMetrics: [.bloodPressure, .oxygenSaturation]
         )
@@ -77,6 +86,33 @@ final class HealthKitQueryHelpersTests: XCTestCase {
         XCTAssertTrue(types.contains(diastolic))
         XCTAssertTrue(types.contains(oxygen))
         XCTAssertEqual(types.count, 6)
+    }
+
+    func testReadTypes_vitalsOnly_omitsWeightStepsAndGlucose() {
+        let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: false,
+            includeSteps: false,
+            includeGlucose: false,
+            includeLabs: false,
+            vitalMetrics: [.bloodPressure]
+        )
+
+        XCTAssertEqual(types, [
+            HKQuantityType(.bloodPressureSystolic),
+            HKQuantityType(.bloodPressureDiastolic),
+        ])
+    }
+
+    func testReadTypes_labsOnly_containsOnlyClinicalType() {
+        let types = HealthKitQueryHelpers.readTypes(
+            includeWeight: false, includeSteps: false, includeGlucose: false, includeLabs: true
+        )
+
+        if let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) {
+            XCTAssertEqual(types, [clinicalType])
+        } else {
+            XCTAssertTrue(types.isEmpty)
+        }
     }
 
     // MARK: - dayAlignedRange

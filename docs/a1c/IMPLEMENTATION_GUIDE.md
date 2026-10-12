@@ -25,13 +25,13 @@ Lab result export — including Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thy
 
 ### HealthKit Authorization
 
-- `HealthKitManager.requestAuthorization(includeLabs:vitalMetrics:completion:)` adds the clinical-records read type when any lab metric is selected
+- `ExportDataLoader.requestAuthorization(for:)` adds the clinical-records read type when any lab metric is selected
 - Production authorization is read-only; `toShare` is an empty set
 - The app targets iOS 26+, while the clinical-records code path is guarded with `#available(iOS 15.0, *)`
 
 ### Fetch Path
 
-- `HealthKitManager.fetchLabResults(metrics:dateRange:limit:completion:)` runs a single `HKSampleQuery` against `HKClinicalType.labResultRecord`
+- `HealthKitManager.labResultRecords(dateRange:)` runs a single `HKSampleQueryDescriptor` against `HKClinicalType.labResultRecord`; `ExportDataLoader` parses the records
 - Each returned record is parsed once. The first LOINC coding (in record order) that matches a requested metric's primary or alternate code makes one `LabResultSample` row; the LOINC column shows that code
 - With "Last X Records", the query has no limit and the newest X rows are kept for each lab
 - Date filtering happens after parsing via `HealthKitQueryHelpers.filterLabResultsByDateRange`
@@ -71,7 +71,7 @@ The Clinical Health Records usage string should clearly explain why the app need
 1. User toggles lab sections or individual labs in `DataSelectionView`
 2. `ExportLogic.resolveLabMetrics` produces the deduplicated list of `LabMetric`s
 3. The app requests HealthKit read access; clinical records are included when the list is non-empty
-4. `HealthKitManager.fetchLabResults` runs a single clinical-records query
+4. `ExportDataLoader` runs a single clinical-records query through `HealthKitManager.labResultRecords`
 5. Matching FHIR payloads are parsed into `LabResultSample` values
 6. `CSVGenerator.appendLabResultRows` appends rows into the combined CSV
 7. The system file picker handles the save/export step

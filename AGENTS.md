@@ -89,7 +89,7 @@ Memory management matters because HealthKit datasets can be large:
 - Profile memory if a change could expand retained sample data.
 
 CSV format details:
-- Every export begins with `CSVGenerator.csvDisclaimer` (three `### `-prefixed lines) followed by the column header on the next line. Use `CSVGenerator.csvPreamble` (disclaimer + header + newline) as the starting buffer.
+- Every export begins with `CSVGenerator.csvDisclaimer` (three `### `-prefixed lines) followed by the column header on the next line. A disclaimer line holds no comma or double quote: spreadsheets do not skip `### ` lines and would split one into columns (`disclaimer_eachLineIsOneCSVField`). Use `CSVGenerator.csvPreamble` (disclaimer + header + newline) as the starting buffer.
 - Columns are `Date,Metric,LOINC,Value,Unit,Source,Meal Time`; every row has all seven fields
 - The `LOINC` column carries the LOINC code found in the clinical record for lab rows and is empty for HealthKit-native metrics (weight, steps, glucose, vitals)
 - The `Meal Time` column is `Before Meal` or `After Meal` for glucose rows tagged with `HKMetadataKeyBloodGlucoseMealTime`, and empty for untagged glucose rows and all other metrics

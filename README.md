@@ -159,7 +159,6 @@ HealthExporter/
 ├── HealthExporter/
 │   ├── HealthExporter.xcodeproj/
 │   ├── HealthExporter.entitlements
-│   ├── Info.plist
 │   └── HealthExporter/
 │       ├── HealthExporterApp.swift      # App entry point, NavigationStack
 │       ├── LaunchView.swift             # Splash screen with spinner + settings access

@@ -1,6 +1,6 @@
 import Foundation
 
-enum ExportError: LocalizedError {
+nonisolated enum ExportError: LocalizedError {
     case healthKitAuthorizationFailed(underlying: Error?)
     case healthKitQueryFailed(metric: String, underlying: Error?)
     case noDataFound

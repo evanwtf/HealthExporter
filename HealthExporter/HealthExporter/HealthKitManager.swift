@@ -2,7 +2,7 @@ import HealthKit
 import os
 
 /// Pure helpers extracted from HealthKitManager for testability.
-enum HealthKitQueryHelpers {
+nonisolated enum HealthKitQueryHelpers {
 
     /// The set of HealthKit types to request read access for.
     static func readTypes(includeLabs: Bool, vitalMetrics: Set<VitalMetric> = []) -> Set<HKObjectType> {

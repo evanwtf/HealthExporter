@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 
 /// Pure logic extracted from DataSelectionView for testability.
-enum ExportLogic {
+nonisolated enum ExportLogic {
 
     /// Whether the export button should be enabled.
     static func isExportEnabled(

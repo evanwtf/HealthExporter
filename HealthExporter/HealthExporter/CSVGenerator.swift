@@ -218,27 +218,44 @@ class CSVGenerator {
         return csv
     }
 
-    static func generateCombinedCSV(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil, weightUnit: WeightUnit, temperatureUnit: TemperatureUnit = .fahrenheit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
+    /// Builds the full export. Each array is set to nil (or emptied) as soon as
+    /// its rows are written, so the caller's copy is released while later
+    /// sections are still being generated.
+    static func generateCombinedCSV(
+        weightSamples: inout [HKQuantitySample]?,
+        stepsSamples: inout [HKQuantitySample]?,
+        glucoseSamples: inout [GlucoseSampleMgDl]?,
+        labResults: inout [LabResultSample]?,
+        vitalSamples: inout [VitalMetricComponent: [HKQuantitySample]],
+        weightUnit: WeightUnit,
+        temperatureUnit: TemperatureUnit = .fahrenheit,
+        dateFormat: DateFormatOption = .yyyyMMddHHmmss,
+        sortOrder: SortOrder = .ascending
+    ) -> String {
         var csv = csvPreamble
 
         if var samples = weightSamples {
+            weightSamples = nil
             appendWeightRows(to: &csv, samples: &samples, unit: weightUnit, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         if var samples = stepsSamples {
+            stepsSamples = nil
             appendStepsRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         if var samples = glucoseSamples {
+            glucoseSamples = nil
             appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         if var samples = labResults {
+            labResults = nil
             appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
-        if var samplesByComponent = vitalSamples {
-            appendVitalRows(to: &csv, samplesByComponent: &samplesByComponent, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
+        if !vitalSamples.isEmpty {
+            appendVitalRows(to: &csv, samplesByComponent: &vitalSamples, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
         }
 
         return csv

@@ -646,4 +646,75 @@ final class CSVGeneratorTests: XCTestCase {
         XCTAssertTrue(rowsDesc[0].contains("80.00"), "Descending: newer (80kg) should come first")
         XCTAssertTrue(rowsDesc[1].contains("70.00"), "Descending: older (70kg) should come second")
     }
+
+    // MARK: - Production entry point releases inputs
+
+    func testGenerateCombinedCSV_inout_releasesConsumedArrays() {
+        let weightSample = HKQuantitySample(
+            type: weightType,
+            quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 75.0),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let oxygenSample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.97),
+            start: referenceDate,
+            end: referenceDate
+        )
+        var weight: [HKQuantitySample]? = [weightSample]
+        var steps: [HKQuantitySample]? = []
+        var glucose: [GlucoseSampleMgDl]? = nil
+        var labs: [LabResultSample]? = []
+        var vitals: [VitalMetricComponent: [HKQuantitySample]] = [.oxygenSaturation: [oxygenSample]]
+
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: &weight,
+            stepsSamples: &steps,
+            glucoseSamples: &glucose,
+            labResults: &labs,
+            vitalSamples: &vitals,
+            weightUnit: .kilograms
+        )
+
+        XCTAssertEqual(dataRows(in: csv).count, 2)
+        XCTAssertNil(weight)
+        XCTAssertNil(steps)
+        XCTAssertNil(glucose)
+        XCTAssertNil(labs)
+        XCTAssertTrue(vitals.isEmpty)
+    }
+}
+
+/// Test-only convenience over the production `inout` entry point, so tests can
+/// pass literals. It forwards to the same function the export flow calls.
+extension CSVGenerator {
+    static func generateCombinedCSV(
+        weightSamples: [HKQuantitySample]?,
+        stepsSamples: [HKQuantitySample]?,
+        glucoseSamples: [GlucoseSampleMgDl]?,
+        labResults: [LabResultSample]?,
+        vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil,
+        weightUnit: WeightUnit,
+        temperatureUnit: TemperatureUnit = .fahrenheit,
+        dateFormat: DateFormatOption = .yyyyMMddHHmmss,
+        sortOrder: HealthExporter.SortOrder = .ascending
+    ) -> String {
+        var weight = weightSamples
+        var steps = stepsSamples
+        var glucose = glucoseSamples
+        var labs = labResults
+        var vitals = vitalSamples ?? [:]
+        return generateCombinedCSV(
+            weightSamples: &weight,
+            stepsSamples: &steps,
+            glucoseSamples: &glucose,
+            labResults: &labs,
+            vitalSamples: &vitals,
+            weightUnit: weightUnit,
+            temperatureUnit: temperatureUnit,
+            dateFormat: dateFormat,
+            sortOrder: sortOrder
+        )
+    }
 }

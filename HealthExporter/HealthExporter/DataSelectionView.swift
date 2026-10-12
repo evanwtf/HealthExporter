@@ -697,33 +697,17 @@ struct DataSelectionView: View {
         let sortOrder = settings.sortOrder
         let weightUnit = settings.weightUnit
         let temperatureUnit = settings.temperatureUnit
-        var csv = CSVGenerator.csvPreamble
-
-        if var samples = payload.weightSamples {
-            payload.weightSamples = nil
-            CSVGenerator.appendWeightRows(to: &csv, samples: &samples, unit: weightUnit, dateFormat: dateFormat, sortOrder: sortOrder)
-        }
-
-        if var samples = payload.stepsSamples {
-            payload.stepsSamples = nil
-            CSVGenerator.appendStepsRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
-        }
-
-        if var samples = payload.glucoseSamples {
-            payload.glucoseSamples = nil
-            CSVGenerator.appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
-        }
-
-        if var samples = payload.labResults {
-            payload.labResults = nil
-            CSVGenerator.appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
-        }
-
-        if !payload.vitalSamples.isEmpty {
-            CSVGenerator.appendVitalRows(to: &csv, samplesByComponent: &payload.vitalSamples, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
-        }
-
-        csvContent = csv
+        csvContent = CSVGenerator.generateCombinedCSV(
+            weightSamples: &payload.weightSamples,
+            stepsSamples: &payload.stepsSamples,
+            glucoseSamples: &payload.glucoseSamples,
+            labResults: &payload.labResults,
+            vitalSamples: &payload.vitalSamples,
+            weightUnit: weightUnit,
+            temperatureUnit: temperatureUnit,
+            dateFormat: dateFormat,
+            sortOrder: sortOrder
+        )
 
         fileName = ExportLogic.exportFilename()
 

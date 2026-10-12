@@ -59,7 +59,7 @@ final class ScreenshotTests: XCTestCase {
         let settings = sharedSettings()
         capture("01-launch") {
             NavigationStack {
-                LaunchView(settings: settings, isLaunching: .constant(false))
+                LaunchView(settings: settings)
             }
         }
     }

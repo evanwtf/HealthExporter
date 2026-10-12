@@ -56,6 +56,24 @@ jobs:
             echo "should_upload=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check required secrets
+        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
+        env:
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in MACOS_KEYCHAIN_PASSWORD ASC_API_KEY_ID ASC_API_ISSUER_ID ASC_API_KEY_P8; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing secret $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Run iOS tests
         if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
         run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestFlightTestResults.xcresult"

@@ -147,7 +147,7 @@ The TestFlight workflow needs these secrets. Its "Check required secrets" step f
 - Repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`: an App Store Connect API key with the App Manager role. One team key serves all the team's apps.
 - Organization secret `MACOS_KEYCHAIN_PASSWORD`: the password for the runner's login keychain. Its selected repositories must include `HealthExporter`.
 
-Signing is automatic, with the API key and `-allowProvisioningUpdates`. The archive signs with a development identity. The export re-signs the IPA with the runner's local `Apple Distribution` identity for team `94S5PZTVPY` (`signingCertificate` in [`ci/ExportOptions.plist`](ci/ExportOptions.plist)) and the Xcode-managed App Store profile, which `xcodebuild` fetches through the API key. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
+The archive signs automatically for development. The export signs manually ([`ci/ExportOptions.plist`](ci/ExportOptions.plist)) with the runner's local `Apple Distribution` identity for team `94S5PZTVPY` and the `HealthExporter App Store` profile. The workflow downloads that profile by name through the API key on every run ([`ci/install_profile.swift`](ci/install_profile.swift), read-only). An Admin creates or renews the profile once a year in the Apple Developer portal; nothing is installed on the runner by hand. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
 
 ## Project Structure
 
@@ -189,7 +189,8 @@ HealthExporter/
 │       └── IMPLEMENTATION_GUIDE.md
 ├── .github/workflows/         # ios-tests, bump-build-number, publish-release, release-testflight
 ├── ci/
-│   ├── ExportOptions.plist        # Export options (automatic signing)
+│   ├── ExportOptions.plist        # Export options (manual signing)
+│   ├── install_profile.swift      # Downloads the App Store profile by name
 │   └── run_ios_tests.sh           # Simulator unit tests, used by CI
 └── README.md
 ```

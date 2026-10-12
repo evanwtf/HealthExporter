@@ -16,9 +16,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: changelog-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group. A required check is judged by its most recently
+# created run. With cancel-in-progress, a busy runner can start the older run
+# after the newer one is cancelled: the newest run then reads "cancelled" and
+# blocks the merge (#136). Each run takes seconds, so every run finishes, and
+# the newest one, which saw the latest labels, decides.
 
 jobs:
   check:

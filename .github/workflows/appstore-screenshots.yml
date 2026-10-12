@@ -1,0 +1,138 @@
+name: App Store screenshots
+
+# Replaces the iPhone screenshots of one App Store version with the set in
+# ci/appstore-screenshots.txt, in that order. The images come from the
+# `screenshots` artifact of a CI run. The owner starts each upload:
+#   gh workflow run appstore-screenshots.yml --repo evanwtf/HealthExporter \
+#     -f version=2.5.5 -f dry_run=false
+# The default is a dry run: it checks the images and the version, logs the
+# plan and writes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App Store version, e.g. 2.5.5 (must be editable: Prepare for Submission)"
+        required: true
+      run_id:
+        description: "CI run whose screenshots artifact to use (blank = newest successful TestFlight run on tag v<version>)"
+        required: false
+      dry_run:
+        description: "Dry run: check and log the plan, upload nothing"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  actions: read # gh run list, gh run view and gh run download
+
+concurrency:
+  group: appstore-screenshots
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload App Store screenshots
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # The inputs reach the shell through env, as data. Never interpolate
+      # them into the script text.
+      - name: Find the screenshots run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like 2.5.5, not '$INPUT_VERSION'"
+            exit 1
+          fi
+          tag="v$INPUT_VERSION"
+          run_id="$INPUT_RUN_ID"
+          if [ -z "$run_id" ]; then
+            run_id="$(gh run list --repo "$REPO" --workflow release-testflight.yml \
+              --branch "$tag" --status success --limit 1 \
+              --json databaseId --jq '.[0].databaseId // empty')"
+            if [ -z "$run_id" ]; then
+              echo "::error::No successful release-testflight.yml run on $tag. Pass -f run_id=<id> of a run with a screenshots artifact."
+              exit 1
+            fi
+            echo "Newest successful release-testflight.yml run on $tag: $run_id"
+          elif ! [[ "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::run_id must be a number, not '$run_id'"
+            exit 1
+          fi
+          gh run view "$run_id" --repo "$REPO" \
+            --json databaseId,workflowName,headBranch,headSha,event,conclusion,createdAt,url \
+            --jq '"Run \(.databaseId): \(.workflowName) on \(.headBranch) (\(.headSha[0:12])), \(.event), \(.conclusion), \(.createdAt)\n\(.url)"'
+          branch="$(gh run view "$run_id" --repo "$REPO" --json headBranch --jq .headBranch)"
+          if [ "$branch" != "$tag" ]; then
+            echo "::warning::Run $run_id ran on $branch, not $tag. The screenshots can show another version number."
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download the screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/screenshots"
+          # A run from before the export step, or older than the artifact
+          # retention, has no screenshots artifact.
+          if ! gh run download "$RUN_ID" --repo "$REPO" --name screenshots --dir "$dir"; then
+            echo "::error::Run $RUN_ID has no screenshots artifact. Pass -f run_id=<id> of an iOS tests or TestFlight run that has one."
+            exit 1
+          fi
+          echo "Files in the screenshots artifact of run $RUN_ID:"
+          ls -l "$dir"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Stage App Store Connect API key
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key_dir="$RUNNER_TEMP/asc_private_keys"
+          mkdir -p "$key_dir"
+          printf '%s' "$ASC_API_KEY_P8" > "$key_dir/AuthKey.p8"
+          echo "ASC_KEY_DIR=$key_dir" >> "$GITHUB_ENV"
+          echo "ASC_KEY_PATH=$key_dir/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Upload the screenshots to App Store Connect
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ env.ASC_KEY_PATH }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--version "$INPUT_VERSION" --source-dir "$RUNNER_TEMP/screenshots")
+          # Anything but an explicit false is a dry run.
+          if [ "$INPUT_DRY_RUN" != "false" ]; then
+            args+=(--dry-run)
+          fi
+          uv run --frozen scripts/upload_appstore_screenshots.py "${args[@]}"
+
+      - name: Delete the API key
+        if: always()
+        run: |
+          if [ -n "${ASC_KEY_DIR:-}" ] && [ -d "$ASC_KEY_DIR" ]; then
+            rm -rf "$ASC_KEY_DIR"
+          fi

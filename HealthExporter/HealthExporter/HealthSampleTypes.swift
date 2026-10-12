@@ -172,14 +172,15 @@ nonisolated struct FHIRLabResultParser {
 
     /// `Date.ISO8601FormatStyle` rolls an out-of-range time over (`T25:00:00Z`
     /// becomes 01:00 the next day). `ISO8601DateFormatter` rejected it, so
-    /// reject an hour above 23, or a minute or second above 59.
+    /// reject an hour above 24, or a minute or second above 59. Both accept
+    /// `T24:00:00` as midnight at the end of the day.
     /// Other malformed input is left to the format style.
     private static func hasValidTimeFields(_ string: String) -> Bool {
         guard let tIndex = string.firstIndex(of: "T") else {
             return false
         }
         let fields = string[string.index(after: tIndex)...].prefix(8).split(separator: ":")
-        let limits = [23, 59, 59]
+        let limits = [24, 59, 59]
         for (field, limit) in zip(fields, limits) {
             if let value = Int(field.prefix(while: { $0.isASCII && $0.isNumber })), value > limit {
                 return false

@@ -335,6 +335,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthExporterCSV;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "HealthExporterCSV needs access to your clinical health records to export selected lab results.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthExporterCSV reads your weight, steps, blood glucose, and vitals (blood pressure, heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature) to export them to a CSV file on your device. It sends nothing anywhere.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthExporterCSV may write sample HealthKit data during simulator-only development and testing. The production app does not write your health data.";
@@ -372,6 +373,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthExporterCSV;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "HealthExporterCSV needs access to your clinical health records to export selected lab results.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthExporterCSV reads your weight, steps, blood glucose, and vitals (blood pressure, heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature) to export them to a CSV file on your device. It sends nothing anywhere.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthExporterCSV may write sample HealthKit data during simulator-only development and testing. The production app does not write your health data.";

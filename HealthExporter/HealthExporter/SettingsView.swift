@@ -6,7 +6,7 @@ struct SettingsView: View {
     @State private var testDataMessage = ""
     @State private var showTestDataFailureAlert = false
 
-    let healthManager = HealthKitManager()
+    var healthManager: HealthKitManager = .shared
 
     var body: some View {
         NavigationStack {
@@ -97,10 +97,11 @@ struct SettingsView: View {
 
     #if targetEnvironment(simulator)
     private func generateTestData() {
-        healthManager.generateTestData { success, error in
-            if success {
+        Task {
+            do {
+                try await healthManager.generateTestData()
                 testDataMessage = "✓ Weight data generated (60 days)"
-            } else {
+            } catch {
                 testDataMessage = "✗ \(HealthKitQueryHelpers.simulatorTestDataFailureMessage(error))"
                 showTestDataFailureAlert = true
             }

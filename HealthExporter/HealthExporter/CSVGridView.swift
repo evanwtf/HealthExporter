@@ -41,19 +41,22 @@ struct CSVGridView: View {
             .background(Color("GridLine"))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
+        // The grid pictures a file, so its text stops growing at xxLarge.
+        // VoiceOver reads a summary instead of the cells.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 
     private func cell(_ text: String, isVisible: Bool = true) -> some View {
         Text(text.isEmpty ? " " : text)
-            .font(.footnote)
+            .font(.caption)
             .fontDesign(.monospaced)
             .lineLimit(1)
             .fixedSize()
             .opacity(isVisible ? 1 : 0)
             .offset(y: isVisible ? 0 : 4)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }

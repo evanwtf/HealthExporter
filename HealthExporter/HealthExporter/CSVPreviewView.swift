@@ -13,6 +13,7 @@ struct CSVPreviewView: View {
     let dateFormat: DateFormatOption
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     static let maxRows = 4
 
@@ -138,7 +139,9 @@ struct CSVPreviewView: View {
     }
 
     var body: some View {
-        let rows = exampleRows
+        // At accessibility sizes, keep the toggles in view: show two rows.
+        let rowLimit = dynamicTypeSize.isAccessibilitySize ? 2 : Self.maxRows
+        let rows = Array(exampleRows.prefix(rowLimit))
         let moreCount = max(0, selectedMetricCount - rows.count)
 
         VStack(alignment: .leading, spacing: 8) {

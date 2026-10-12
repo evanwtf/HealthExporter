@@ -53,6 +53,22 @@ Any of the following in a `release-testflight.yml` run usually points here:
   'com.evanhoffman.HealthExporter' were found`. Automatic signing could not
   get a profile through the App Store Connect API key — check that the key
   still exists and has the App Manager role (Section 4.4).
+
+  **Open problem (2026-10-12).** The first dry runs on `MacMiniM6_01` fail
+  in `Export IPA` with this error before the one above, also with
+  `signingCertificate = Apple Distribution` in the export options:
+
+  ```
+  error: exportArchive Cloud signing permission error
+  ```
+
+  Xcode adds: "You haven't been given access to cloud-managed distribution
+  certificates." The API key does not have access to cloud-managed
+  distribution certificates, and the export does not find an App Store
+  profile for the local identity. The fix is on the Apple account side: an
+  Admin or the Account Holder must give the key that access, or create the
+  App Store profile for the local `Apple Distribution` cert. Re-run the dry
+  run (Section 5) after the change.
 - A queued job stays queued for many minutes with `MacMiniM6_01` showing
   "Offline" in https://github.com/organizations/evanwtf/settings/actions/runners
   even though `Runner.Listener` is in `ps`.
@@ -70,9 +86,11 @@ The TestFlight workflow depends on three independent things on the runner:
    (`Apple Development` and `Apple Distribution`, both team `94S5PZTVPY`).
 3. An App Store provisioning profile for `com.evanhoffman.HealthExporter`.
    The archive and [`ci/ExportOptions.plist`](../ci/ExportOptions.plist) both
-   use automatic signing, so `xcodebuild` fetches or creates the
-   Xcode-managed `iOS Team Store Provisioning Profile:
-   com.evanhoffman.HealthExporter` through the App Store Connect API key
+   use automatic signing. The archive signs with a development identity. The
+   export re-signs with the runner's local `Apple Distribution` identity
+   (`signingCertificate = Apple Distribution`) and the Xcode-managed
+   `iOS Team Store Provisioning Profile: com.evanhoffman.HealthExporter`,
+   which `xcodebuild` fetches or creates through the App Store Connect API key
    (`-allowProvisioningUpdates`). It caches the profile in
    `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. The profile
    must include both the HealthKit and the Clinical Health Records
@@ -346,7 +364,8 @@ Things that would have cut this incident from "an hour of cert rebuilding" to
   creates the GitHub release.
 - Test script: [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh)
 - Export options: [`ci/ExportOptions.plist`](../ci/ExportOptions.plist)
-  (`signingStyle = automatic`, no named profile)
+  (`signingStyle = automatic`, `signingCertificate = Apple Distribution`,
+  no named profile)
 - Required secrets:
   - Organization secret `MACOS_KEYCHAIN_PASSWORD` — the login keychain unlock
     password. Its selected repositories must include `HealthExporter`.

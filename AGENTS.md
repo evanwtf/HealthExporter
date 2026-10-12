@@ -11,7 +11,7 @@ Key components:
 | File | Role |
 |------|------|
 | `HealthKitManager.swift` | The app's one `HKHealthStore` (`HealthKitManager.shared`), behind the `HealthDataStore` protocol. Async `HKSampleQueryDescriptor` queries for quantity samples and lab-result clinical records. `HealthKitQueryHelpers.readTypes` builds the read set from the selected metrics only |
-| `ExportDataLoader.swift` | Fetches the selected metrics in a task group, one result per metric, so a failed metric does not discard the others (#112). Filters glucose below 20 mg/dL before the record limit (#113). Builds the partial-failure notice and the blocking error text. Tests inject a fake `HealthDataStore` |
+| `ExportDataLoader.swift` | Fetches the selected metrics in a task group, one result per metric, so a failed metric does not discard the others (#112). Filters glucose below 20 mg/dL before the record limit (#113). Builds the partial-failure notice and the blocking error text. On iOS 27 it reads each type's limited-history start (`earliestAuthorizedSampleDates`) and builds the access-limit notice. Tests inject a fake `HealthDataStore` |
 | `HealthMetricConfig.swift` | Built-in metric registry (`HealthMetrics`) for the always-available metrics (weight, steps, glucose) |
 | `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == primary LOINC; `alternateLoincCodes` also match records), and `LabMetricRegistry.all`. Adding a lab is a single append here |
 | `HealthSampleTypes.swift` | `GlucoseSampleMgDl`, generic `LabResultSample`, `LOINCCode` constants, and `FHIRLabResultParser` |
@@ -54,9 +54,9 @@ Export sequence:
 1. User selects built-in metric toggles, panel/favorite labs, and a date range in `DataSelectionView`.
 2. `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:)` produces the deduplicated list of `LabMetric`s to fetch.
 3. `DataSelectionView` builds an `ExportRequest` and requests HealthKit read access for the selected metrics.
-4. `ExportDataLoader.load` fetches the selected metrics in parallel; lab results come from a single clinical-records query. If some metrics fail, the export continues with the others. If every metric fails, or no data loaded, the export stops with an error.
+4. `ExportDataLoader.load` fetches the selected metrics in parallel; lab results come from a single clinical-records query. If some metrics fail, the export continues with the others. If every metric fails, or no data loaded, the export stops with an error. On iOS 27 a user can grant read access that starts at a date (`HKHealthStore.earliestAuthorizedSampleDate(for:)`). When that date is after the export's start, or the export has no start date, `ExportFetchResult.accessLimitNotice()` gives one line per metric.
 5. `CSVGenerator.makeFile(from:...)` builds the CSV once, off the main actor (#111). It consumes the fetch result and releases each sample array as its rows are written. The result is a `CSVFile` with the exact row and byte count.
-6. If the file has more than 500 rows or 1 MB, or some metrics failed, an alert gives the exact size and names each failed metric. Cancel drops the file.
+6. If the file has more than 500 rows or 1 MB, some metrics failed, or access to some metrics starts late, an alert gives the exact size, names each failed metric and gives each access start date. Cancel drops the file.
 7. SwiftUI `.fileExporter(isPresented:item:contentTypes:defaultFilename:onCompletion:onCancellation:)` presents the Files picker with the `CSVFile`. The filename comes from `ExportLogic.exportFilename`.
 8. `exportFile` is cleared after the export, a failure or a cancel in the picker.
 

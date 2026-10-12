@@ -14,14 +14,17 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
 
     private let quantityResults: [HKQuantityTypeIdentifier: Result<[HKQuantitySample], any Error>]
     private let labResult: Result<[ClinicalRecordPayload], any Error>
+    private let earliestDates: Result<[HKObjectType: Date], any Error>
     private let state = Mutex<(types: Set<HKObjectType>?, calls: [QuantityCall])>((nil, []))
 
     init(
         quantity: [HKQuantityTypeIdentifier: Result<[HKQuantitySample], any Error>] = [:],
-        labs: Result<[ClinicalRecordPayload], any Error> = .success([])
+        labs: Result<[ClinicalRecordPayload], any Error> = .success([]),
+        earliestDates: Result<[HKObjectType: Date], any Error> = .success([:])
     ) {
         quantityResults = quantity
         labResult = labs
+        self.earliestDates = earliestDates
     }
 
     var requestedTypes: Set<HKObjectType>? { state.withLock { $0.types } }
@@ -45,6 +48,10 @@ nonisolated private final class FakeHealthDataStore: HealthDataStore {
 
     func labResultRecords(dateRange: (startDate: Date, endDate: Date)?) async throws -> [ClinicalRecordPayload] {
         try labResult.get()
+    }
+
+    func earliestAuthorizedSampleDates(for types: Set<HKObjectType>) async throws -> [HKObjectType: Date] {
+        try earliestDates.get().filter { types.contains($0.key) }
     }
 }
 
@@ -90,6 +97,7 @@ nonisolated struct ExportDataLoaderTests {
         glucose: Bool = false,
         labs: [LabMetric] = [],
         vitals: Set<VitalMetric> = [],
+        dateRange: (startDate: Date, endDate: Date)? = nil,
         limit: Int = HKObjectQueryNoLimit
     ) -> ExportRequest {
         ExportRequest(
@@ -98,7 +106,7 @@ nonisolated struct ExportDataLoaderTests {
             includeGlucose: glucose,
             labMetrics: labs,
             vitalMetrics: vitals,
-            dateRange: nil,
+            dateRange: dateRange,
             recordLimit: limit
         )
     }
@@ -306,6 +314,94 @@ nonisolated struct ExportDataLoaderTests {
 
         #expect(result.glucoseSamples?.map(\.value) == [110, 95, 20])
         #expect(store.quantityCalls == [.init(identifier: .bloodGlucose, limit: nil)])
+    }
+
+    // MARK: - #119 WP12: limited-history read access (iOS 27)
+
+    /// A fixed style, so the expected text does not depend on the test machine.
+    private let dateStyle = Date.FormatStyle(
+        date: .abbreviated,
+        time: .omitted,
+        locale: Locale(identifier: "en_US"),
+        timeZone: TimeZone(identifier: "UTC")!
+    )
+
+    /// 2026-03-03T12:00:00Z.
+    private let march3 = Date(timeIntervalSince1970: 1_772_539_200)
+    /// 2026-01-01T12:00:00Z to 2026-06-01T12:00:00Z.
+    private let januaryToJune = (
+        startDate: Date(timeIntervalSince1970: 1_767_268_800),
+        endDate: Date(timeIntervalSince1970: 1_780_315_200)
+    )
+
+    @Test func load_fullAccess_addsNoAccessLine() async {
+        let store = FakeHealthDataStore(quantity: [.bodyMass: .success(weightSamples(2))])
+
+        let result = await ExportDataLoader(store: store).load(request(weight: true, dateRange: januaryToJune))
+
+        #expect(result.accessLimits.isEmpty)
+        #expect(result.accessLimitNotice(dateStyle: dateStyle) == nil)
+    }
+
+    @Test func load_accessStartsAfterTheExportStart_addsALineWithTheDate() async {
+        let store = FakeHealthDataStore(
+            quantity: [.bodyMass: .success(weightSamples(2)), .stepCount: .success(stepsSamples(2))],
+            earliestDates: .success([HKQuantityType(.bodyMass): march3])
+        )
+
+        let result = await ExportDataLoader(store: store).load(request(weight: true, steps: true, dateRange: januaryToJune))
+
+        #expect(result.accessLimits == [ExportAccessLimit(metric: .weight, earliestDate: march3)])
+        #expect(result.accessLimitNotice(dateStyle: dateStyle)
+                == "Health access for Weight starts on Mar 3, 2026, so older samples are not in the file.")
+        #expect(result.partialFailureNotice == nil)
+    }
+
+    @Test func load_accessStartsBeforeTheExportStart_addsNoAccessLine() async {
+        let december = Date(timeIntervalSince1970: 1_764_590_400) // 2025-12-01T12:00:00Z
+        let store = FakeHealthDataStore(
+            quantity: [.bodyMass: .success(weightSamples(2))],
+            earliestDates: .success([HKQuantityType(.bodyMass): december])
+        )
+
+        let result = await ExportDataLoader(store: store).load(request(weight: true, dateRange: januaryToJune))
+
+        #expect(result.accessLimits.isEmpty)
+        #expect(result.accessLimitNotice(dateStyle: dateStyle) == nil)
+    }
+
+    @Test func load_allRecordsWithALimit_addsALinePerLimitedMetric() async {
+        let store = FakeHealthDataStore(
+            quantity: [
+                .bodyMass: .success(weightSamples(2)),
+                .restingHeartRate: .success(quantitySamples(.restingHeartRate, unit: .count().unitDivided(by: .minute()), values: [60])),
+            ],
+            earliestDates: .success([
+                HKQuantityType(.bodyMass): march3,
+                HKQuantityType(.restingHeartRate): march3,
+            ])
+        )
+
+        let result = await ExportDataLoader(store: store).load(request(weight: true, vitals: [.restingHeartRate]))
+
+        #expect(result.accessLimits.map(\.metric) == [.weight, .vital(.restingHeartRate)])
+        #expect(result.accessLimitNotice(dateStyle: dateStyle) == (
+            "Health access for Weight starts on Mar 3, 2026, so older samples are not in the file.\n"
+                + "Health access for Resting Heart Rate starts on Mar 3, 2026, so older samples are not in the file."))
+    }
+
+    @Test func load_accessLookupFails_exportsWithNoAccessLine() async {
+        let failure = NSError(domain: "HealthKit", code: 7, userInfo: [NSLocalizedDescriptionKey: "lookup failed"])
+        let store = FakeHealthDataStore(
+            quantity: [.bodyMass: .success(weightSamples(2))],
+            earliestDates: .failure(failure)
+        )
+
+        let result = await ExportDataLoader(store: store).load(request(weight: true))
+
+        #expect(result.weightSamples?.count == 2)
+        #expect(result.failures.isEmpty)
+        #expect(result.accessLimitNotice(dateStyle: dateStyle) == nil)
     }
 
     // MARK: - #114: request read access for the selected metrics only

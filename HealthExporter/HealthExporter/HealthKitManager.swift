@@ -190,6 +190,11 @@ nonisolated final class HealthKitManager: HealthDataStore {
         }
     }
 
+    func earliestAuthorizedSampleDates(for types: Set<HKObjectType>) async throws -> [HKObjectType: Date] {
+        guard #available(iOS 27, *) else { return [:] }
+        return try await healthStore.earliestAuthorizedSampleDate(for: types)
+    }
+
     #if targetEnvironment(simulator)
     func generateTestData() async throws {
         let samples = HealthKitQueryHelpers.generateWeightTestSamples(days: 60)

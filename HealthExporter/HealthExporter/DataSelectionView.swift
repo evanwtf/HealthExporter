@@ -31,7 +31,7 @@ struct DataSelectionView: View {
     @State private var pendingExportPayload: PendingExportPayload?
     @State private var pendingExportEstimate: ExportPreviewEstimate?
 
-    @ObservedObject var settings: SettingsManager
+    @Bindable var settings: SettingsManager
     var healthStore: any HealthDataStore = HealthKitManager.shared
 
     @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
@@ -88,49 +88,15 @@ struct DataSelectionView: View {
 
     private func labSelectionBinding(for loincCode: String) -> Binding<Bool> {
         Binding(
-            get: {
-                if settings.favoriteLabCodes.contains(loincCode) {
-                    return true
-                }
-                guard let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group else {
-                    return false
-                }
-                return settings.selectedLabPanels.contains(panel)
-            },
-            set: { newValue in
-                if newValue {
-                    settings.favoriteLabCodes.insert(loincCode)
-                } else {
-                    if let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group,
-                       settings.selectedLabPanels.contains(panel) {
-                        let remainingCodes = LabMetricRegistry.metrics(in: panel)
-                            .map(\.loincCode)
-                            .filter { $0 != loincCode }
-                        settings.selectedLabPanels.remove(panel)
-                        settings.favoriteLabCodes.formUnion(remainingCodes)
-                    }
-                    settings.favoriteLabCodes.remove(loincCode)
-                }
-            }
+            get: { settings.labSelection.isSelected(loincCode: loincCode) },
+            set: { settings.labSelection.setSelected($0, loincCode: loincCode) }
         )
     }
 
     private func labPanelSelectionBinding(for panel: LabPanel) -> Binding<Bool> {
         Binding(
-            get: {
-                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
-                return settings.selectedLabPanels.contains(panel) || (!codes.isEmpty && codes.allSatisfy { settings.favoriteLabCodes.contains($0) })
-            },
-            set: { newValue in
-                let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
-                if newValue {
-                    settings.favoriteLabCodes.formUnion(codes)
-                    settings.selectedLabPanels.insert(panel)
-                } else {
-                    settings.favoriteLabCodes.subtract(codes)
-                    settings.selectedLabPanels.remove(panel)
-                }
-            }
+            get: { settings.labSelection.isSelected(panel: panel) },
+            set: { settings.labSelection.setSelected($0, panel: panel) }
         )
     }
 
@@ -163,11 +129,7 @@ struct DataSelectionView: View {
     }
 
     private func panelSelectedCount(_ panel: LabPanel) -> Int {
-        LabMetricRegistry.metrics(in: panel).reduce(0) { count, metric in
-            let isSelected = settings.favoriteLabCodes.contains(metric.loincCode) ||
-                settings.selectedLabPanels.contains(panel)
-            return count + (isSelected ? 1 : 0)
-        }
+        settings.labSelection.selectedCount(in: panel)
     }
 
     private func presentSaveSuccessConfirmation() {
@@ -261,7 +223,6 @@ struct DataSelectionView: View {
 
     func labPanelDetail(_ panel: LabPanel) -> some View {
         SelectionDetailView(
-            settings: settings,
             title: panel.displayName,
             category: .labs,
             rows: LabMetricRegistry.metrics(in: panel).map { metric in
@@ -278,7 +239,6 @@ struct DataSelectionView: View {
 
     func vitalsDetail() -> some View {
         SelectionDetailView(
-            settings: settings,
             title: "Vitals",
             category: .vitals,
             rows: VitalMetric.allCases.map { metric in

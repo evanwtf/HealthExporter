@@ -3,7 +3,7 @@ import UIKit
 
 @main
 struct HealthExporterApp: App {
-    @StateObject private var settings = SettingsManager()
+    @State private var settings = SettingsManager()
 
     init() {
         Self.useRoundedNavigationTitles()

@@ -2,10 +2,7 @@ import Foundation
 import Testing
 @testable import HealthExporter
 
-/// Tests for SettingsManager behavior by testing through UserDefaults directly.
-/// Creating a second SettingsManager instance crashes in the test host environment
-/// due to a Combine/@Published conflict with the app's @main StateObject, so we
-/// test the read/write logic indirectly.
+/// Tests the real `SettingsManager` against a `UserDefaults` suite of its own.
 ///
 /// Swift Testing makes a new instance for each test, so `deinit` runs as the
 /// teardown and removes every suite that the test made.
@@ -26,179 +23,198 @@ final class SettingsManagerTests {
         return defaults
     }
 
-    // MARK: - Default value logic (mirrors SettingsManager.init)
+    // MARK: - Defaults when no key is set
 
-    @Test func defaultTemperatureUnit_whenKeyMissing_isFahrenheit() {
-        let defaults = makeDefaults()
-        let raw = defaults.string(forKey: "temperatureUnit") ?? TemperatureUnit.fahrenheit.rawValue
-        #expect(TemperatureUnit(rawValue: raw) == .fahrenheit)
+    @Test func emptySuite_loadsTheDefaults() {
+        let settings = SettingsManager(defaults: makeDefaults())
+
+        #expect(settings.temperatureUnit == .fahrenheit)
+        #expect(settings.weightUnit == .pounds)
+        #expect(settings.dateFormat == .yyyyMMddHHmmss)
+        #expect(settings.sortOrder == .ascending)
+        #expect(settings.autoDismissSaveConfirmation)
+        #expect(settings.exportWeight)
+        #expect(settings.exportSteps)
+        #expect(!settings.exportGlucose)
+        #expect(settings.selectedLabPanels.isEmpty)
+        #expect(settings.favoriteLabCodes.isEmpty)
+        #expect(settings.selectedVitalMetrics.isEmpty)
+        #expect(settings.expandedLabPanels.isEmpty)
+        #expect(!settings.expandedVitalsSection)
+        #expect(settings.lastXDaysValue == 30)
+        #expect(settings.lastXRecordsValue == 100)
     }
 
-    @Test func defaultWeightUnit_whenKeyMissing_isPounds() {
+    @Test func loading_writesNothingToTheSuite() {
         let defaults = makeDefaults()
-        let raw = defaults.string(forKey: "weightUnit") ?? WeightUnit.pounds.rawValue
-        #expect(WeightUnit(rawValue: raw) == .pounds)
+
+        _ = SettingsManager(defaults: defaults)
+
+        for key in Self.persistedKeys {
+            #expect(defaults.object(forKey: key) == nil, "\(key)")
+        }
     }
 
-    @Test func defaultDateFormat_whenKeyMissing_isYYYYMMddHHmmss() {
-        let defaults = makeDefaults()
-        let raw = defaults.string(forKey: "dateFormat") ?? DateFormatOption.yyyyMMddHHmmss.rawValue
-        #expect(DateFormatOption(rawValue: raw) == .yyyyMMddHHmmss)
-    }
+    // MARK: - Existing users keep their settings
 
-    @Test func defaultSortOrder_whenKeyMissing_isAscending() {
-        let defaults = makeDefaults()
-        let raw = defaults.string(forKey: "sortOrder") ?? SortOrder.ascending.rawValue
-        #expect(SortOrder(rawValue: raw) == .ascending)
-    }
+    /// Every key, written in the format that v2.5.0 and earlier wrote.
+    private static let persistedKeys = [
+        "temperatureUnit", "weightUnit", "dateFormat", "sortOrder",
+        "autoDismissSaveConfirmation", "exportWeight", "exportSteps", "exportGlucose",
+        "selectedLabPanels", "favoriteLabCodes", "selectedVitalMetrics",
+        "expandedLabPanels", "expandedVitalsSection", "lastXDaysValue", "lastXRecordsValue",
+    ]
 
-    @Test func defaultAutoDismissSaveConfirmation_whenKeyMissing_isTrue() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "autoDismissSaveConfirmation") as? Bool ?? true
-        #expect(value)
-    }
-
-    @Test func defaultExportWeight_whenKeyMissing_isTrue() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "exportWeight") as? Bool ?? true
-        #expect(value)
-    }
-
-    @Test func defaultExportSteps_whenKeyMissing_isTrue() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "exportSteps") as? Bool ?? true
-        #expect(value)
-    }
-
-    @Test func defaultExportGlucose_whenKeyMissing_isFalse() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "exportGlucose") as? Bool ?? false
-        #expect(!value)
-    }
-
-    @Test func defaultLastXDaysValue_whenKeyMissing_is30() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "lastXDaysValue") as? Int ?? 30
-        #expect(value == 30)
-    }
-
-    @Test func defaultLastXRecordsValue_whenKeyMissing_is100() {
-        let defaults = makeDefaults()
-        let value = defaults.object(forKey: "lastXRecordsValue") as? Int ?? 100
-        #expect(value == 100)
-    }
-
-    // MARK: - Reads persisted values
-
-    @Test func readsPersistedEnumValues() {
-        let defaults = makeDefaults()
-        defaults.set(TemperatureUnit.celsius.rawValue, forKey: "temperatureUnit")
-        defaults.set(WeightUnit.kilograms.rawValue, forKey: "weightUnit")
-        defaults.set(DateFormatOption.iso8601.rawValue, forKey: "dateFormat")
-        defaults.set(SortOrder.descending.rawValue, forKey: "sortOrder")
-
-        #expect(TemperatureUnit(rawValue: defaults.string(forKey: "temperatureUnit")!) == .celsius)
-        #expect(WeightUnit(rawValue: defaults.string(forKey: "weightUnit")!) == .kilograms)
-        #expect(DateFormatOption(rawValue: defaults.string(forKey: "dateFormat")!) == .iso8601)
-        #expect(SortOrder(rawValue: defaults.string(forKey: "sortOrder")!) == .descending)
-    }
-
-    @Test func readsPersistedBoolValues() {
-        let defaults = makeDefaults()
+    private func writeV250Settings(to defaults: UserDefaults) {
+        defaults.set("Celsius (°C)", forKey: "temperatureUnit")
+        defaults.set("Kilograms (kg)", forKey: "weightUnit")
+        defaults.set("ISO8601", forKey: "dateFormat")
+        defaults.set("Newest → Oldest", forKey: "sortOrder")
         defaults.set(false, forKey: "autoDismissSaveConfirmation")
         defaults.set(false, forKey: "exportWeight")
         defaults.set(false, forKey: "exportSteps")
         defaults.set(true, forKey: "exportGlucose")
-
-        #expect(!defaults.bool(forKey: "autoDismissSaveConfirmation"))
-        #expect(!defaults.bool(forKey: "exportWeight"))
-        #expect(!defaults.bool(forKey: "exportSteps"))
-        #expect(defaults.bool(forKey: "exportGlucose"))
+        defaults.set(["lipid", "thyroid"], forKey: "selectedLabPanels")
+        defaults.set(["4548-4", "2093-3"], forKey: "favoriteLabCodes")
+        defaults.set(["bloodPressure", "restingHeartRate"], forKey: "selectedVitalMetrics")
+        defaults.set(["cbc"], forKey: "expandedLabPanels")
+        defaults.set(true, forKey: "expandedVitalsSection")
+        defaults.set(7, forKey: "lastXDaysValue")
+        defaults.set(2_000, forKey: "lastXRecordsValue")
     }
 
-    @Test func readsPersistedIntValues() {
+    @Test func suiteWrittenByV250_loadsUnchanged() {
         let defaults = makeDefaults()
-        defaults.set(7, forKey: "lastXDaysValue")
-        defaults.set(50, forKey: "lastXRecordsValue")
+        writeV250Settings(to: defaults)
 
-        #expect(defaults.integer(forKey: "lastXDaysValue") == 7)
-        #expect(defaults.integer(forKey: "lastXRecordsValue") == 50)
+        let settings = SettingsManager(defaults: defaults)
+
+        #expect(settings.temperatureUnit == .celsius)
+        #expect(settings.weightUnit == .kilograms)
+        #expect(settings.dateFormat == .iso8601)
+        #expect(settings.sortOrder == .descending)
+        #expect(!settings.autoDismissSaveConfirmation)
+        #expect(!settings.exportWeight)
+        #expect(!settings.exportSteps)
+        #expect(settings.exportGlucose)
+        #expect(settings.selectedLabPanels == [.lipid, .thyroid])
+        #expect(settings.favoriteLabCodes == ["4548-4", "2093-3"])
+        #expect(settings.selectedVitalMetrics == [.bloodPressure, .restingHeartRate])
+        #expect(settings.expandedLabPanels == [.cbc])
+        #expect(settings.expandedVitalsSection)
+        #expect(settings.lastXDaysValue == 7)
+        #expect(settings.lastXRecordsValue == 2_000)
+    }
+
+    @Test func changes_areWrittenWithTheV250KeysAndFormats() {
+        let defaults = makeDefaults()
+        let settings = SettingsManager(defaults: defaults)
+
+        settings.temperatureUnit = .celsius
+        settings.weightUnit = .kilograms
+        settings.dateFormat = .iso8601
+        settings.sortOrder = .descending
+        settings.autoDismissSaveConfirmation = false
+        settings.exportWeight = false
+        settings.exportSteps = false
+        settings.exportGlucose = true
+        settings.selectedLabPanels = [.lipid]
+        settings.favoriteLabCodes = ["4548-4"]
+        settings.selectedVitalMetrics = [.bloodPressure]
+        settings.expandedLabPanels = [.cbc]
+        settings.expandedVitalsSection = true
+        settings.lastXDaysValue = 7
+        settings.lastXRecordsValue = 2_000
+
+        #expect(defaults.string(forKey: "temperatureUnit") == "Celsius (°C)")
+        #expect(defaults.string(forKey: "weightUnit") == "Kilograms (kg)")
+        #expect(defaults.string(forKey: "dateFormat") == "ISO8601")
+        #expect(defaults.string(forKey: "sortOrder") == "Newest → Oldest")
+        #expect(defaults.object(forKey: "autoDismissSaveConfirmation") as? Bool == false)
+        #expect(defaults.object(forKey: "exportWeight") as? Bool == false)
+        #expect(defaults.object(forKey: "exportSteps") as? Bool == false)
+        #expect(defaults.object(forKey: "exportGlucose") as? Bool == true)
+        #expect(defaults.array(forKey: "selectedLabPanels") as? [String] == ["lipid"])
+        #expect(defaults.array(forKey: "favoriteLabCodes") as? [String] == ["4548-4"])
+        #expect(defaults.array(forKey: "selectedVitalMetrics") as? [String] == ["bloodPressure"])
+        #expect(defaults.array(forKey: "expandedLabPanels") as? [String] == ["cbc"])
+        #expect(defaults.object(forKey: "expandedVitalsSection") as? Bool == true)
+        #expect(defaults.object(forKey: "lastXDaysValue") as? Int == 7)
+        #expect(defaults.object(forKey: "lastXRecordsValue") as? Int == 2_000)
+    }
+
+    @Test func changes_loadIntoANewInstance() {
+        let defaults = makeDefaults()
+        let first = SettingsManager(defaults: defaults)
+        first.weightUnit = .kilograms
+        first.favoriteLabCodes = [LOINCCode.hemoglobinA1C]
+        first.selectedVitalMetrics = [.bodyTemperature]
+        first.lastXRecordsValue = 300
+
+        let second = SettingsManager(defaults: defaults)
+
+        #expect(second.weightUnit == .kilograms)
+        #expect(second.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(second.selectedVitalMetrics == [.bodyTemperature])
+        #expect(second.lastXRecordsValue == 300)
+    }
+
+    @Test func instances_doNotShareASuite() {
+        let first = SettingsManager(defaults: makeDefaults())
+        let second = SettingsManager(defaults: makeDefaults())
+
+        first.exportGlucose = true
+
+        #expect(!second.exportGlucose)
     }
 
     // MARK: - Fallback for invalid raw values
 
-    @Test func fallback_invalidTemperatureUnit() {
+    @Test func invalidRawValues_fallBackToTheDefaults() {
         let defaults = makeDefaults()
-        defaults.set("invalid", forKey: "temperatureUnit")
-        let raw = defaults.string(forKey: "temperatureUnit") ?? TemperatureUnit.fahrenheit.rawValue
-        #expect((TemperatureUnit(rawValue: raw) ?? .fahrenheit) == .fahrenheit)
+        for key in ["temperatureUnit", "weightUnit", "dateFormat", "sortOrder"] {
+            defaults.set("invalid", forKey: key)
+        }
+        defaults.set(["notAPanel", "lipid"], forKey: "selectedLabPanels")
+        defaults.set(["notAVital", "bloodPressure"], forKey: "selectedVitalMetrics")
+
+        let settings = SettingsManager(defaults: defaults)
+
+        #expect(settings.temperatureUnit == .fahrenheit)
+        #expect(settings.weightUnit == .pounds)
+        #expect(settings.dateFormat == .yyyyMMddHHmmss)
+        #expect(settings.sortOrder == .ascending)
+        #expect(settings.selectedLabPanels == [.lipid])
+        #expect(settings.selectedVitalMetrics == [.bloodPressure])
     }
 
-    @Test func fallback_invalidWeightUnit() {
+    // MARK: - Lab selection
+
+    @Test func labSelection_writesBothSets() {
         let defaults = makeDefaults()
-        defaults.set("invalid", forKey: "weightUnit")
-        let raw = defaults.string(forKey: "weightUnit") ?? WeightUnit.pounds.rawValue
-        #expect((WeightUnit(rawValue: raw) ?? .pounds) == .pounds)
+        let settings = SettingsManager(defaults: defaults)
+
+        settings.labSelection.setSelected(true, loincCode: LOINCCode.hemoglobinA1C)
+        settings.labSelection.setSelected(true, panel: .lipid)
+
+        #expect(settings.labSelection.isSelected(loincCode: LOINCCode.hemoglobinA1C))
+        #expect(settings.labSelection.isSelected(panel: .lipid))
+        #expect(defaults.array(forKey: "favoriteLabCodes") as? [String] != nil)
+        #expect(defaults.array(forKey: "selectedLabPanels") as? [String] == ["lipid"])
     }
 
-    @Test func fallback_invalidDateFormat() {
+    /// #115 through the real settings: the A1C selection survives a reload.
+    @Test func labPanelOnThenOff_keepsASingleLabAfterReload() {
         let defaults = makeDefaults()
-        defaults.set("invalid", forKey: "dateFormat")
-        let raw = defaults.string(forKey: "dateFormat") ?? DateFormatOption.yyyyMMddHHmmss.rawValue
-        #expect((DateFormatOption(rawValue: raw) ?? .yyyyMMddHHmmss) == .yyyyMMddHHmmss)
-    }
+        let settings = SettingsManager(defaults: defaults)
+        settings.labSelection.setSelected(true, loincCode: LOINCCode.hemoglobinA1C)
 
-    @Test func fallback_invalidSortOrder() {
-        let defaults = makeDefaults()
-        defaults.set("invalid", forKey: "sortOrder")
-        let raw = defaults.string(forKey: "sortOrder") ?? SortOrder.ascending.rawValue
-        #expect((SortOrder(rawValue: raw) ?? .ascending) == .ascending)
-    }
+        settings.labSelection.setSelected(true, panel: .other)
+        settings.labSelection.setSelected(false, panel: .other)
 
-    // MARK: - Lab panels and favorites
-
-    @Test func defaultSelectedLabPanels_whenKeyMissing_isEmpty() {
-        let defaults = makeDefaults()
-        let raw = defaults.array(forKey: "selectedLabPanels") as? [String] ?? []
-        #expect(raw.isEmpty)
-    }
-
-    @Test func defaultFavoriteLabCodes_whenKeyMissing_isEmpty() {
-        let defaults = makeDefaults()
-        let raw = defaults.array(forKey: "favoriteLabCodes") as? [String] ?? []
-        #expect(raw.isEmpty)
-    }
-
-    @Test func defaultSelectedVitalMetrics_whenKeyMissing_isEmpty() {
-        let defaults = makeDefaults()
-        let raw = defaults.array(forKey: "selectedVitalMetrics") as? [String] ?? []
-        #expect(raw.isEmpty)
-    }
-
-    @Test func readsPersistedSelectedLabPanels() {
-        let defaults = makeDefaults()
-        defaults.set([LabPanel.lipid.rawValue, LabPanel.thyroid.rawValue], forKey: "selectedLabPanels")
-        let raw = defaults.array(forKey: "selectedLabPanels") as? [String] ?? []
-        let panels = Set(raw.compactMap(LabPanel.init(rawValue:)))
-        #expect(panels == [.lipid, .thyroid])
-    }
-
-    @Test func readsPersistedFavoriteLabCodes() {
-        let defaults = makeDefaults()
-        defaults.set(["4548-4", "2093-3"], forKey: "favoriteLabCodes")
-        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
-        #expect(codes == ["4548-4", "2093-3"])
-    }
-
-    @Test func readsPersistedSelectedVitalMetrics() {
-        let defaults = makeDefaults()
-        defaults.set(
-            [VitalMetric.bloodPressure.rawValue, VitalMetric.restingHeartRate.rawValue],
-            forKey: "selectedVitalMetrics"
-        )
-        let raw = defaults.array(forKey: "selectedVitalMetrics") as? [String] ?? []
-        let metrics = Set(raw.compactMap(VitalMetric.init(rawValue:)))
-        #expect(metrics == [.bloodPressure, .restingHeartRate])
+        let reloaded = SettingsManager(defaults: defaults)
+        #expect(reloaded.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(reloaded.selectedLabPanels.isEmpty)
     }
 
     // MARK: - Legacy exportA1C migration
@@ -207,26 +223,28 @@ final class SettingsManagerTests {
         let defaults = makeDefaults()
         defaults.set(true, forKey: "exportA1C")
 
-        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+        let settings = SettingsManager(defaults: defaults)
 
-        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
-        #expect(codes == [LOINCCode.hemoglobinA1C])
+        #expect(settings.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(defaults.array(forKey: "favoriteLabCodes") as? [String] == [LOINCCode.hemoglobinA1C])
     }
 
     @Test func migration_legacyExportA1CFalse_doesNotSeedFavorites() {
         let defaults = makeDefaults()
         defaults.set(false, forKey: "exportA1C")
 
-        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+        let settings = SettingsManager(defaults: defaults)
 
+        #expect(settings.favoriteLabCodes.isEmpty)
         #expect(defaults.object(forKey: "favoriteLabCodes") == nil)
     }
 
     @Test func migration_noLegacyKey_doesNotSeedFavorites() {
         let defaults = makeDefaults()
 
-        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+        let settings = SettingsManager(defaults: defaults)
 
+        #expect(settings.favoriteLabCodes.isEmpty)
         #expect(defaults.object(forKey: "favoriteLabCodes") == nil)
     }
 
@@ -235,9 +253,29 @@ final class SettingsManagerTests {
         defaults.set(true, forKey: "exportA1C")
         defaults.set(["2093-3"], forKey: "favoriteLabCodes") // user already picked something
 
-        SettingsManager.migrateLegacyA1CSetting(in: defaults)
+        let settings = SettingsManager(defaults: defaults)
 
-        let codes = Set(defaults.array(forKey: "favoriteLabCodes") as? [String] ?? [])
-        #expect(codes == ["2093-3"], "Migration must not clobber existing user choices")
+        #expect(settings.favoriteLabCodes == ["2093-3"], "Migration must not clobber existing user choices")
+    }
+
+    @Test func migration_doesNotOverrideAnEmptyFavoriteList() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "exportA1C")
+        defaults.set([String](), forKey: "favoriteLabCodes") // user cleared every lab
+
+        let settings = SettingsManager(defaults: defaults)
+
+        #expect(settings.favoriteLabCodes.isEmpty)
+    }
+
+    @Test func migration_runsOnce() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "exportA1C")
+        let first = SettingsManager(defaults: defaults)
+        first.favoriteLabCodes = []
+
+        let second = SettingsManager(defaults: defaults)
+
+        #expect(second.favoriteLabCodes.isEmpty)
     }
 }

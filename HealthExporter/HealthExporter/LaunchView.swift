@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LaunchView: View {
-    @ObservedObject var settings: SettingsManager
+    let settings: SettingsManager
     @State private var showingSettings = false
 
     private var versionText: String {

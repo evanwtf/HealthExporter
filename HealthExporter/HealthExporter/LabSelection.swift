@@ -3,7 +3,8 @@ import Foundation
 /// The lab selection rules of the Choose Data screen.
 ///
 /// A lab is selected when its panel is selected, or when the user selected it
-/// on its own (a favorite).
+/// on its own (a favorite). The two sets stay apart: turning a panel on or off
+/// changes `panels`, not the labs the user selected on their own (#115).
 nonisolated struct LabSelection: Equatable, Sendable {
     var panels: Set<LabPanel>
     var favoriteCodes: Set<String>
@@ -46,13 +47,15 @@ nonisolated struct LabSelection: Equatable, Sendable {
     }
 
     mutating func setSelected(_ selected: Bool, panel: LabPanel) {
-        let codes = LabMetricRegistry.metrics(in: panel).map(\.loincCode)
         if selected {
-            favoriteCodes.formUnion(codes)
             panels.insert(panel)
-        } else {
-            favoriteCodes.subtract(codes)
-            panels.remove(panel)
+            return
+        }
+        panels.remove(panel)
+        // The panel was on only because each of its labs was a favorite.
+        // Turning it off must turn it off, so clear those labs.
+        if isEveryLabFavorite(in: panel) {
+            favoriteCodes.subtract(LabMetricRegistry.metrics(in: panel).map(\.loincCode))
         }
     }
 

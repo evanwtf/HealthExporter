@@ -1,43 +1,5 @@
 import HealthKit
 
-nonisolated struct ExportPreviewEstimate: Sendable {
-    static let confirmationRowThreshold = 500
-    static let confirmationByteThreshold = 1_000_000
-
-    let rowCount: Int
-    let estimatedByteCount: Int
-
-    var roundedRowCount: Int {
-        Self.roundedRowCount(for: rowCount)
-    }
-
-    var formattedRowCount: String {
-        roundedRowCount.formatted()
-    }
-
-    var formattedByteCount: String {
-        ByteCountFormatter.string(fromByteCount: Int64(estimatedByteCount), countStyle: .file)
-    }
-
-    var summaryText: String {
-        "This will export around \(formattedRowCount) rows (\(formattedByteCount))."
-    }
-
-    var shouldShowConfirmation: Bool {
-        rowCount > Self.confirmationRowThreshold || estimatedByteCount > Self.confirmationByteThreshold
-    }
-
-    static func roundedRowCount(for count: Int) -> Int {
-        guard count > 0 else { return 0 }
-
-        if count < 1_000 {
-            return max(100, ((count + 50) / 100) * 100)
-        }
-
-        return ((count + 500) / 1_000) * 1_000
-    }
-}
-
 nonisolated enum CSVGenerator {
 
     /// Three-line disclaimer prepended to every export. Each line begins with `### `
@@ -128,95 +90,67 @@ nonisolated enum CSVGenerator {
 
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)
 
-    static func appendWeightRows(to csv: inout String, samples: inout [HKQuantitySample], unit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
-        let dateFormatter = makeDateFormatter(for: dateFormat)
-        samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
-        for sample in samples {
-            csv.append(weightRow(for: sample, unit: unit, dateFormatter: dateFormatter))
+    /// How many rows an append method writes between two cancellation checks.
+    static let rowsPerCancellationCheck = 4_096
+
+    /// Calls `checkCancellation` once every `rowsPerCancellationCheck` rows.
+    private static func appendRows<Sample>(
+        to csv: inout String,
+        samples: [Sample],
+        checkCancellation: () throws -> Void,
+        row: (Sample) -> String
+    ) rethrows {
+        for (index, sample) in samples.enumerated() {
+            if index > 0, index.isMultiple(of: rowsPerCancellationCheck) {
+                try checkCancellation()
+            }
+            csv.append(row(sample))
         }
     }
 
-    static func appendStepsRows(to csv: inout String, samples: inout [HKQuantitySample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
+    static func appendWeightRows(to csv: inout String, samples: inout [HKQuantitySample], unit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending, checkCancellation: () throws -> Void) rethrows {
         let dateFormatter = makeDateFormatter(for: dateFormat)
         samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
-        for sample in samples {
-            csv.append(stepsRow(for: sample, dateFormatter: dateFormatter))
+        try appendRows(to: &csv, samples: samples, checkCancellation: checkCancellation) {
+            weightRow(for: $0, unit: unit, dateFormatter: dateFormatter)
         }
     }
 
-    static func appendGlucoseRows(to csv: inout String, samples: inout [GlucoseSampleMgDl], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
+    static func appendStepsRows(to csv: inout String, samples: inout [HKQuantitySample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending, checkCancellation: () throws -> Void) rethrows {
         let dateFormatter = makeDateFormatter(for: dateFormat)
         samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
-        for sample in samples {
-            csv.append(glucoseRow(for: sample, dateFormatter: dateFormatter))
+        try appendRows(to: &csv, samples: samples, checkCancellation: checkCancellation) {
+            stepsRow(for: $0, dateFormatter: dateFormatter)
         }
     }
 
-    static func appendLabResultRows(to csv: inout String, samples: inout [LabResultSample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
+    static func appendGlucoseRows(to csv: inout String, samples: inout [GlucoseSampleMgDl], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending, checkCancellation: () throws -> Void) rethrows {
+        let dateFormatter = makeDateFormatter(for: dateFormat)
+        samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
+        try appendRows(to: &csv, samples: samples, checkCancellation: checkCancellation) {
+            glucoseRow(for: $0, dateFormatter: dateFormatter)
+        }
+    }
+
+    static func appendLabResultRows(to csv: inout String, samples: inout [LabResultSample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending, checkCancellation: () throws -> Void) rethrows {
         let dateFormatter = makeDateFormatter(for: dateFormat)
         samples.sort { sortOrder == .ascending ? $0.effectiveDateTime < $1.effectiveDateTime : $0.effectiveDateTime > $1.effectiveDateTime }
-        for sample in samples {
-            csv.append(labResultRow(for: sample, dateFormatter: dateFormatter))
+        try appendRows(to: &csv, samples: samples, checkCancellation: checkCancellation) {
+            labResultRow(for: $0, dateFormatter: dateFormatter)
         }
     }
 
-    static func appendVitalRows(to csv: inout String, samplesByComponent: inout [VitalMetricComponent: [HKQuantitySample]], temperatureUnit: TemperatureUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) {
+    static func appendVitalRows(to csv: inout String, samplesByComponent: inout [VitalMetricComponent: [HKQuantitySample]], temperatureUnit: TemperatureUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending, checkCancellation: () throws -> Void) rethrows {
         let dateFormatter = makeDateFormatter(for: dateFormat)
         for component in VitalMetricComponent.allCases {
             guard var samples = samplesByComponent[component] else { continue }
             samplesByComponent[component] = nil
+            try checkCancellation()
             samples.sort { sortOrder == .ascending ? $0.startDate < $1.startDate : $0.startDate > $1.startDate }
-            for sample in samples {
-                csv.append(vitalRow(for: sample, component: component, temperatureUnit: temperatureUnit, dateFormatter: dateFormatter))
+            try appendRows(to: &csv, samples: samples, checkCancellation: checkCancellation) {
+                vitalRow(for: $0, component: component, temperatureUnit: temperatureUnit, dateFormatter: dateFormatter)
             }
         }
-    }
-
-    static func makePreviewEstimate(weightSamples: [HKQuantitySample]?, stepsSamples: [HKQuantitySample]?, glucoseSamples: [GlucoseSampleMgDl]?, labResults: [LabResultSample]?, vitalSamples: [VitalMetricComponent: [HKQuantitySample]]? = nil, weightUnit: WeightUnit, temperatureUnit: TemperatureUnit = .fahrenheit, dateFormat: DateFormatOption = .yyyyMMddHHmmss) -> ExportPreviewEstimate {
-        let weightCount = weightSamples?.count ?? 0
-        let stepsCount = stepsSamples?.count ?? 0
-        let glucoseCount = glucoseSamples?.count ?? 0
-        let labCount = labResults?.count ?? 0
-        let vitalCount = vitalSamples?.values.reduce(0) { $0 + $1.count } ?? 0
-        let rowCount = weightCount + stepsCount + glucoseCount + labCount + vitalCount
-
-        let dateFormatter = makeDateFormatter(for: dateFormat)
-        var estimatedByteCount = csvPreamble.utf8.count
-
-        if let samples = weightSamples {
-            for sample in samples {
-                estimatedByteCount += weightRow(for: sample, unit: weightUnit, dateFormatter: dateFormatter).utf8.count
-            }
-        }
-
-        if let samples = stepsSamples {
-            for sample in samples {
-                estimatedByteCount += stepsRow(for: sample, dateFormatter: dateFormatter).utf8.count
-            }
-        }
-
-        if let samples = glucoseSamples {
-            for sample in samples {
-                estimatedByteCount += glucoseRow(for: sample, dateFormatter: dateFormatter).utf8.count
-            }
-        }
-
-        if let samples = labResults {
-            for sample in samples {
-                estimatedByteCount += labResultRow(for: sample, dateFormatter: dateFormatter).utf8.count
-            }
-        }
-
-        if let samplesByComponent = vitalSamples {
-            for component in VitalMetricComponent.allCases {
-                guard let samples = samplesByComponent[component] else { continue }
-                for sample in samples {
-                    estimatedByteCount += vitalRow(for: sample, component: component, temperatureUnit: temperatureUnit, dateFormatter: dateFormatter).utf8.count
-                }
-            }
-        }
-
-        return ExportPreviewEstimate(rowCount: rowCount, estimatedByteCount: estimatedByteCount)
     }
 
     // MARK: - Legacy convenience methods (used by tests and single-metric exports)
@@ -224,14 +158,14 @@ nonisolated enum CSVGenerator {
     static func generateWeightCSV(from samples: [HKQuantitySample], unit: WeightUnit, dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
         var csv = csvPreamble
         var mutableSamples = samples
-        appendWeightRows(to: &csv, samples: &mutableSamples, unit: unit, dateFormat: dateFormat, sortOrder: sortOrder)
+        appendWeightRows(to: &csv, samples: &mutableSamples, unit: unit, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: {})
         return csv
     }
 
     static func generateStepsCSV(from samples: [HKQuantitySample], dateFormat: DateFormatOption = .yyyyMMddHHmmss, sortOrder: SortOrder = .ascending) -> String {
         var csv = csvPreamble
         var mutableSamples = samples
-        appendStepsRows(to: &csv, samples: &mutableSamples, dateFormat: dateFormat, sortOrder: sortOrder)
+        appendStepsRows(to: &csv, samples: &mutableSamples, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: {})
         return csv
     }
 
@@ -249,33 +183,97 @@ nonisolated enum CSVGenerator {
         dateFormat: DateFormatOption = .yyyyMMddHHmmss,
         sortOrder: SortOrder = .ascending
     ) -> String {
+        generateCombinedCSV(
+            weightSamples: &weightSamples,
+            stepsSamples: &stepsSamples,
+            glucoseSamples: &glucoseSamples,
+            labResults: &labResults,
+            vitalSamples: &vitalSamples,
+            weightUnit: weightUnit,
+            temperatureUnit: temperatureUnit,
+            dateFormat: dateFormat,
+            sortOrder: sortOrder,
+            checkCancellation: {}
+        )
+    }
+
+    /// The same build, calling `checkCancellation` before each metric and every
+    /// `rowsPerCancellationCheck` rows. An error it throws stops the build.
+    static func generateCombinedCSV(
+        weightSamples: inout [HKQuantitySample]?,
+        stepsSamples: inout [HKQuantitySample]?,
+        glucoseSamples: inout [GlucoseSampleMgDl]?,
+        labResults: inout [LabResultSample]?,
+        vitalSamples: inout [VitalMetricComponent: [HKQuantitySample]],
+        weightUnit: WeightUnit,
+        temperatureUnit: TemperatureUnit = .fahrenheit,
+        dateFormat: DateFormatOption = .yyyyMMddHHmmss,
+        sortOrder: SortOrder = .ascending,
+        checkCancellation: () throws -> Void
+    ) rethrows -> String {
         var csv = csvPreamble
 
         if var samples = weightSamples {
             weightSamples = nil
-            appendWeightRows(to: &csv, samples: &samples, unit: weightUnit, dateFormat: dateFormat, sortOrder: sortOrder)
+            try checkCancellation()
+            try appendWeightRows(to: &csv, samples: &samples, unit: weightUnit, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: checkCancellation)
         }
 
         if var samples = stepsSamples {
             stepsSamples = nil
-            appendStepsRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+            try checkCancellation()
+            try appendStepsRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: checkCancellation)
         }
 
         if var samples = glucoseSamples {
             glucoseSamples = nil
-            appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+            try checkCancellation()
+            try appendGlucoseRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: checkCancellation)
         }
 
         if var samples = labResults {
             labResults = nil
-            appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder)
+            try checkCancellation()
+            try appendLabResultRows(to: &csv, samples: &samples, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: checkCancellation)
         }
 
         if !vitalSamples.isEmpty {
-            appendVitalRows(to: &csv, samplesByComponent: &vitalSamples, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder)
+            try appendVitalRows(to: &csv, samplesByComponent: &vitalSamples, temperatureUnit: temperatureUnit, dateFormat: dateFormat, sortOrder: sortOrder, checkCancellation: checkCancellation)
         }
 
         return csv
+    }
+
+    /// Builds the export file once, off the main actor (#111). It takes the
+    /// fetch result as `consuming`, so each sample array is released as soon
+    /// as its rows are written. It throws `CancellationError` between metrics,
+    /// and every `rowsPerCancellationCheck` rows, when the task is cancelled.
+    /// The bytes are the same as `generateCombinedCSV` writes.
+    @concurrent
+    static func makeFile(
+        from fetched: consuming ExportFetchResult,
+        weightUnit: WeightUnit,
+        temperatureUnit: TemperatureUnit,
+        dateFormat: DateFormatOption,
+        sortOrder: SortOrder
+    ) async throws -> CSVFile {
+        try Task.checkCancellation()
+        // A local var, so the build can take each array `inout`.
+        var samples = consume fetched
+        let rowCount = samples.rowCount
+        let content = try generateCombinedCSV(
+            weightSamples: &samples.weightSamples,
+            stepsSamples: &samples.stepsSamples,
+            glucoseSamples: &samples.glucoseSamples,
+            labResults: &samples.labResults,
+            vitalSamples: &samples.vitalSamples,
+            weightUnit: weightUnit,
+            temperatureUnit: temperatureUnit,
+            dateFormat: dateFormat,
+            sortOrder: sortOrder,
+            checkCancellation: { try Task.checkCancellation() }
+        )
+        return CSVFile(content: content, rowCount: rowCount)
     }
 
     private static func convertWeight(_ weightKg: Double, to unit: WeightUnit) -> (Double, String) {

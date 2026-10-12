@@ -79,4 +79,4 @@ HealthExporterCSV exports data as recorded in Apple HealthKit. The developer mak
 
 ## Contact
 
-For questions about this privacy policy, please open an issue at [github.com/evandhoffman/HealthExporter/issues](https://github.com/evandhoffman/HealthExporter/issues).
+For questions about this privacy policy, please open an issue at [github.com/evanwtf/HealthExporter/issues](https://github.com/evanwtf/HealthExporter/issues).

@@ -62,7 +62,7 @@ struct LaunchView: View {
                     }
                     .accessibilityIdentifier("settingsButton")
 
-                    Link(destination: URL(string: "https://github.com/evandhoffman/HealthExporter/issues/new?template=bug_report.md")!) {
+                    Link(destination: URL(string: "https://github.com/evanwtf/HealthExporter/issues/new?template=bug_report.md")!) {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.bubble")
                             Text("Report a Problem")

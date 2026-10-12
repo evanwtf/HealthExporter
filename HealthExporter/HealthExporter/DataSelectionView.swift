@@ -11,6 +11,7 @@ private struct PendingExportPayload {
     var glucoseSamples: [GlucoseSampleMgDl]?
     var labResults: [LabResultSample]?
     var vitalSamples: [VitalMetricComponent: [HKQuantitySample]]
+    var failureNotice: String?
 }
 
 struct DataSelectionView: View {
@@ -31,7 +32,7 @@ struct DataSelectionView: View {
     @State private var pendingExportEstimate: ExportPreviewEstimate?
 
     @ObservedObject var settings: SettingsManager
-    let healthManager = HealthKitManager()
+    var healthStore: any HealthDataStore = HealthKitManager.shared
 
     @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
 
@@ -501,7 +502,7 @@ struct DataSelectionView: View {
         } message: {
             Text("File \(fileName) has been saved!")
         }
-        .alert("Export Estimate", isPresented: $showingEstimateConfirmation, presenting: pendingExportEstimate) { _ in
+        .alert(pendingExportPayload?.failureNotice == nil ? "Export Estimate" : "Some Data Could Not Be Read", isPresented: $showingEstimateConfirmation, presenting: pendingExportEstimate) { _ in
             Button("Cancel", role: .cancel) {
                 clearPendingExport()
             }
@@ -509,7 +510,7 @@ struct DataSelectionView: View {
                 continuePendingExport()
             }
         } message: { estimate in
-            Text(estimate.summaryText)
+            Text([pendingExportPayload?.failureNotice, estimate.summaryText].compactMap { $0 }.joined(separator: "\n\n"))
         }
         .alert("Export Error", isPresented: $showErrorAlert) {
             Button("OK") { }
@@ -522,172 +523,68 @@ struct DataSelectionView: View {
         dismissSaveSuccessConfirmation()
         isPreparingExport = true
 
-        let metricsForFetch = labMetricsToFetch
-        let vitalMetricsForFetch = settings.selectedVitalMetrics
-        let vitalComponentsForFetch = vitalComponentsToFetch
-        healthManager.requestAuthorization(includeLabs: !metricsForFetch.isEmpty, vitalMetrics: vitalMetricsForFetch) { success, error in
-            guard success else {
-                DispatchQueue.main.async {
-                    isPreparingExport = false
-                    logger.error("Authorization failed: \(error?.localizedDescription ?? "Unknown error")")
-                    errorMessage = ExportError.healthKitAuthorizationFailed(underlying: error).localizedDescription
-                    showErrorAlert = true
-                }
+        let request = ExportRequest(
+            includeWeight: settings.exportWeight,
+            includeSteps: settings.exportSteps,
+            includeGlucose: settings.exportGlucose,
+            labMetrics: labMetricsToFetch,
+            vitalMetrics: settings.selectedVitalMetrics,
+            dateRange: ExportLogic.dateRange(
+                for: selectedDateRangeOption,
+                lastXDays: settings.lastXDaysValue,
+                specificStart: startDate,
+                specificEnd: endDate
+            ),
+            recordLimit: ExportLogic.recordLimit(for: selectedDateRangeOption, lastXRecords: settings.lastXRecordsValue)
+        )
+        let loader = ExportDataLoader(store: healthStore)
+        Task {
+            do {
+                try await loader.requestAuthorization(for: request)
+            } catch {
+                isPreparingExport = false
+                logger.error("Authorization failed: \(error.localizedDescription)")
+                errorMessage = ExportError.healthKitAuthorizationFailed(underlying: error).localizedDescription
+                showErrorAlert = true
                 return
             }
 
-            var weightSamples: [HKQuantitySample]? = nil
-            var stepsSamples: [HKQuantitySample]? = nil
-            var glucoseSamples: [GlucoseSampleMgDl]? = nil
-            var labResults: [LabResultSample]? = nil
-            var vitalSamples: [VitalMetricComponent: [HKQuantitySample]] = [:]
-            var weightFetchError: Error?
-            var stepsFetchError: Error?
-            var glucoseFetchError: Error?
-            var labFetchError: Error?
-            var vitalFetchError: Error?
-            let dispatchGroup = DispatchGroup()
+            let result = await loader.load(request)
+            if let message = result.blockingErrorMessage {
+                isPreparingExport = false
+                errorMessage = message
+                showErrorAlert = true
+                return
+            }
 
-            let dateRange = ExportLogic.dateRange(
-                for: self.selectedDateRangeOption,
-                lastXDays: self.settings.lastXDaysValue,
-                specificStart: self.startDate,
-                specificEnd: self.endDate
+            let payload = PendingExportPayload(
+                weightSamples: result.weightSamples,
+                stepsSamples: result.stepsSamples,
+                glucoseSamples: result.glucoseSamples,
+                labResults: result.labResults,
+                vitalSamples: result.vitalSamples,
+                failureNotice: result.partialFailureNotice
             )
-            let recordLimit = ExportLogic.recordLimit(
-                for: self.selectedDateRangeOption,
-                lastXRecords: self.settings.lastXRecordsValue
+            let estimate = CSVGenerator.makePreviewEstimate(
+                weightSamples: payload.weightSamples,
+                stepsSamples: payload.stepsSamples,
+                glucoseSamples: payload.glucoseSamples,
+                labResults: payload.labResults,
+                vitalSamples: payload.vitalSamples,
+                weightUnit: settings.weightUnit,
+                temperatureUnit: settings.temperatureUnit,
+                dateFormat: settings.dateFormat
             )
 
-            if settings.exportWeight {
-                dispatchGroup.enter()
-                healthManager.fetchWeightData(dateRange: dateRange, limit: recordLimit) { samples, error in
-                    DispatchQueue.main.async {
-                        weightSamples = samples
-                        weightFetchError = error
-                        dispatchGroup.leave()
-                    }
-                }
-            }
+            clearPendingExport()
+            pendingExportPayload = payload
+            pendingExportEstimate = estimate
 
-            if settings.exportSteps {
-                dispatchGroup.enter()
-                healthManager.fetchStepsData(dateRange: dateRange, limit: recordLimit) { samples, error in
-                    DispatchQueue.main.async {
-                        stepsSamples = samples
-                        stepsFetchError = error
-                        dispatchGroup.leave()
-                    }
-                }
-            }
-
-            if settings.exportGlucose {
-                dispatchGroup.enter()
-                healthManager.fetchBloodGlucoseDataTyped(dateRange: dateRange, limit: recordLimit) { samples, error in
-                    DispatchQueue.main.async {
-                        glucoseSamples = samples
-                        glucoseFetchError = error
-                        dispatchGroup.leave()
-                    }
-                }
-            }
-
-            if !metricsForFetch.isEmpty {
-                dispatchGroup.enter()
-                healthManager.fetchLabResults(metrics: metricsForFetch, dateRange: dateRange, limit: recordLimit) { samples, error in
-                    DispatchQueue.main.async {
-                        labResults = samples
-                        labFetchError = error
-                        dispatchGroup.leave()
-                    }
-                }
-            }
-
-            for component in vitalComponentsForFetch {
-                dispatchGroup.enter()
-                healthManager.fetchVitalData(component: component, dateRange: dateRange, limit: recordLimit) { samples, error in
-                    DispatchQueue.main.async {
-                        vitalSamples[component] = samples ?? []
-                        // Surface the first vital component error; downstream code reports a single error
-                        // for the whole vitals group rather than overwhelming the user with per-component failures.
-                        if vitalFetchError == nil {
-                            vitalFetchError = error
-                        }
-                        dispatchGroup.leave()
-                    }
-                }
-            }
-
-            dispatchGroup.notify(queue: .main) {
-                if let fetchError = ExportLogic.firstFetchError(
-                    weightError: weightFetchError,
-                    stepsError: stepsFetchError,
-                    glucoseError: glucoseFetchError,
-                    labError: labFetchError,
-                    vitalError: vitalFetchError
-                ) {
-                    weightSamples = nil
-                    stepsSamples = nil
-                    glucoseSamples = nil
-                    labResults = nil
-                    vitalSamples.removeAll()
-                    isPreparingExport = false
-                    errorMessage = fetchError.localizedDescription
-                    showErrorAlert = true
-                    return
-                }
-
-                let hasData = ExportLogic.hasAnyData(
-                    weightSamples: weightSamples,
-                    stepsSamples: stepsSamples,
-                    glucoseSamples: glucoseSamples,
-                    labResults: labResults,
-                    vitalSamples: vitalSamples
-                )
-
-                guard hasData else {
-                    weightSamples = nil
-                    stepsSamples = nil
-                    glucoseSamples = nil
-                    labResults = nil
-                    vitalSamples.removeAll()
-                    isPreparingExport = false
-                    errorMessage = ExportError.noDataFound.localizedDescription
-                    showErrorAlert = true
-                    return
-                }
-
-                let dateFormat = self.settings.dateFormat
-                let weightUnit = self.settings.weightUnit
-                let temperatureUnit = self.settings.temperatureUnit
-                let payload = PendingExportPayload(
-                    weightSamples: weightSamples,
-                    stepsSamples: stepsSamples,
-                    glucoseSamples: glucoseSamples,
-                    labResults: labResults,
-                    vitalSamples: vitalSamples
-                )
-                let estimate = CSVGenerator.makePreviewEstimate(
-                    weightSamples: payload.weightSamples,
-                    stepsSamples: payload.stepsSamples,
-                    glucoseSamples: payload.glucoseSamples,
-                    labResults: payload.labResults,
-                    vitalSamples: payload.vitalSamples,
-                    weightUnit: weightUnit,
-                    temperatureUnit: temperatureUnit,
-                    dateFormat: dateFormat
-                )
-
-                clearPendingExport()
-                pendingExportPayload = payload
-                pendingExportEstimate = estimate
-
-                if estimate.shouldShowConfirmation {
-                    isPreparingExport = false
-                    showingEstimateConfirmation = true
-                } else {
-                    continuePendingExport()
-                }
+            if estimate.shouldShowConfirmation || payload.failureNotice != nil {
+                isPreparingExport = false
+                showingEstimateConfirmation = true
+            } else {
+                continuePendingExport()
             }
         }
     }

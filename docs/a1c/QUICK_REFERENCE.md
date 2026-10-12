@@ -12,7 +12,8 @@
 
 - `LabMetricRegistry.swift` for `LabPanel`, `LabMetric`, and `LabMetricRegistry.all`
 - `HealthSampleTypes.swift` for `LabResultSample`, FHIR parsing, and `LOINCCode` constants
-- `HealthKitManager.swift` for `requestAuthorization(includeLabs:vitalMetrics:completion:)` and `fetchLabResults(metrics:dateRange:limit:completion:)`
+- `HealthKitManager.swift` for the async clinical-records query (`labResultRecords(dateRange:)`)
+- `ExportDataLoader.swift` for read authorization, LOINC matching and the per-lab record limit
 - `SettingsManager.swift` for `selectedLabPanels` and `favoriteLabCodes` (with one-time `exportA1C` migration)
 - `ExportLogic.swift` for `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`
 - `DataSelectionView.swift` for lab section toggles and the export flow
@@ -40,7 +41,7 @@ Also make sure the target has HealthKit and Clinical Health Records capabilities
 1. User toggles lab sections or individual labs in the export screen
 2. `ExportLogic.resolveLabMetrics` builds the deduplicated `[LabMetric]` fetch list
 3. App requests HealthKit read access (clinical records included when labs are selected)
-4. `fetchLabResults` runs a single clinical-records query and parses every matching LOINC into a `LabResultSample`
+4. `ExportDataLoader` runs a single clinical-records query and parses every matching LOINC into a `LabResultSample`
 5. The combined CSV is generated in memory via `appendLabResultRows`
 6. The file picker saves the export
 

@@ -10,7 +10,8 @@ Key components:
 
 | File | Role |
 |------|------|
-| `HealthKitManager.swift` | HealthKit authorization and data fetching; uses `DispatchGroup` for parallel concurrent queries. `requestAuthorization(includeLabs:)` opts into clinical-records read; `fetchLabResults(metrics:)` is one query that parses each record once, matches its LOINC codes (primary and alternate) and keeps the newest `limit` rows per lab |
+| `HealthKitManager.swift` | The app's one `HKHealthStore` (`HealthKitManager.shared`), behind the `HealthDataStore` protocol. Async `HKSampleQueryDescriptor` queries for quantity samples and lab-result clinical records. `HealthKitQueryHelpers.readTypes` builds the read set from the selected metrics only |
+| `ExportDataLoader.swift` | Fetches the selected metrics in a task group, one result per metric, so a failed metric does not discard the others (#112). Filters glucose below 20 mg/dL before the record limit (#113). Builds the partial-failure notice and the blocking error text. Tests inject a fake `HealthDataStore` |
 | `HealthMetricConfig.swift` | Built-in metric registry (`HealthMetrics`) for the always-available metrics (weight, steps, glucose) |
 | `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == primary LOINC; `alternateLoincCodes` also match records), and `LabMetricRegistry.all`. Adding a lab is a single append here |
 | `HealthSampleTypes.swift` | `GlucoseSampleMgDl`, generic `LabResultSample`, `LOINCCode` constants, and `FHIRLabResultParser` |
@@ -43,13 +44,13 @@ xcodebuild build -project HealthExporter.xcodeproj -scheme HealthExporter -desti
 Use Xcode on a physical device for HealthKit and Clinical Records verification; simulator coverage is limited.
 
 ## Export Flow
-The app is read-only with respect to HealthKit in production. `HealthKitManager.requestAuthorization(includeLabs:)` calls `requestAuthorization(toShare: Set(), read: ...)` and only includes the clinical-records read type when `includeLabs` is true.
+The app is read-only with respect to HealthKit in production. `ExportDataLoader.requestAuthorization(for:)` calls `requestAuthorization(toShare: [], read: ...)` with the types of the selected metrics only. It includes the clinical-records read type only when labs are selected.
 
 Export sequence:
 1. User selects built-in metric toggles, panel/favorite labs, and a date range in `DataSelectionView`.
 2. `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:)` produces the deduplicated list of `LabMetric`s to fetch.
-3. HealthKit read authorization is requested if needed; `includeLabs` is set when the resolved lab list is non-empty.
-4. `HealthKitManager` fetches the selected metrics in parallel; lab results come from a single `fetchLabResults(metrics:)` call.
+3. `DataSelectionView` builds an `ExportRequest` and requests HealthKit read access for the selected metrics.
+4. `ExportDataLoader.load` fetches the selected metrics in parallel; lab results come from a single clinical-records query. If some metrics fail, the export continues with the others and an alert names each failed metric before the file picker opens. If every metric fails, or no data loaded, the export stops with an error.
 5. `CSVGenerator.generateCombinedCSV(weightSamples:stepsSamples:glucoseSamples:labResults:vitalSamples:...)` builds the output in memory. It takes the sample arrays `inout` and releases each one as its rows are written.
 6. SwiftUI `.fileExporter()` presents the Files picker.
 7. Sample arrays and `csvContent` are cleared after export.
@@ -62,7 +63,7 @@ Follow existing Swift conventions: 4-space indentation, one top-level type per f
 ## Implementation Patterns
 When adding a built-in HealthKit metric (e.g. a new quantity type):
 1. Update `HealthMetricConfig.swift`.
-2. Request the right HealthKit type in `HealthKitManager`.
+2. Add the HealthKit type to `HealthKitQueryHelpers.readTypes`, and a case to `ExportMetric` and `ExportRequest` in `ExportDataLoader.swift`.
 3. Add the toggle and selection handling in `DataSelectionView`.
 4. Persist the setting in `SettingsManager`.
 5. Extend `CSVGenerator`.
@@ -71,7 +72,7 @@ When adding a built-in HealthKit metric (e.g. a new quantity type):
 When adding a new lab (Clinical Health Records / LOINC-coded observation):
 1. Add the LOINC constant in `LOINCCode` if needed.
 2. Append a `LabMetric` to `LabMetricRegistry.all` with the correct `LabPanel` group and `valuePrecision`. Put other LOINC codes for the same measurement in `alternateLoincCodes`; never change an existing `loincCode`, because favorites are keyed on it. A code must belong to one metric only.
-3. No UI, fetch, or CSV code changes are required — the favorites/panel toggles, single `fetchLabResults` query, and registry-driven CSV rendering pick it up automatically.
+3. No UI, fetch, or CSV code changes are required — the favorites/panel toggles, single clinical-records query, and registry-driven CSV rendering pick it up automatically.
 4. Add tests (and a CSV byte-pinning test if exact output matters) and docs in the same change.
 
 Memory management matters because HealthKit datasets can be large:

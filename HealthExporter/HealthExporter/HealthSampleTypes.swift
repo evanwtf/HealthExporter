@@ -170,11 +170,32 @@ nonisolated struct FHIRLabResultParser {
         return calendar
     }()
 
+    /// `Date.ISO8601FormatStyle` rolls an out-of-range time over (`T25:00:00Z`
+    /// becomes 01:00 the next day). `ISO8601DateFormatter` rejected it, so
+    /// reject an hour above 23, or a minute or second above 59.
+    /// Other malformed input is left to the format style.
+    private static func hasValidTimeFields(_ string: String) -> Bool {
+        guard let tIndex = string.firstIndex(of: "T") else {
+            return false
+        }
+        let fields = string[string.index(after: tIndex)...].prefix(8).split(separator: ":")
+        let limits = [23, 59, 59]
+        for (field, limit) in zip(fields, limits) {
+            if let value = Int(field.prefix(while: { $0.isASCII && $0.isNumber })), value > limit {
+                return false
+            }
+        }
+        return true
+    }
+
     /// Parses a FHIR `dateTime` or `instant`: a full date-time with or without
     /// fractional seconds, or a partial date (`YYYY-MM-DD`, `YYYY-MM`, `YYYY`).
     /// A partial date resolves to the start of that period in UTC.
     static func parseDate(_ string: String) -> Date? {
         if string.contains("T") {
+            guard hasValidTimeFields(string) else {
+                return nil
+            }
             return (try? fractionalDateTimeStyle.parse(string)) ?? (try? dateTimeStyle.parse(string))
         }
 

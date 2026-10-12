@@ -482,6 +482,9 @@ struct DataSelectionView: View {
                 errorMessage = ExportError.fileWriteFailed(underlying: error).localizedDescription
                 showErrorAlert = true
             }
+        } onCancellation: {
+            csvContent = ""
+            isPreparingExport = false
         }
         .onDisappear {
             csvContent = ""

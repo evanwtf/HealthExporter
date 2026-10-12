@@ -12,4 +12,4 @@ Apply one label before you merge:
 - [ ] `skip-release`: docs, CI or tooling only. The merge cuts no release and no TestFlight upload.
 
 Never use `skip-release` with a `semver:*` label: the release job fails.
-If testers will see a change, update `ci/testflight-notes.txt`.
+A release pull request adds its lines under `## Unreleased` in `docs/changelog.md`: plain sentences for testers, with no links, backticks or bold. They become the GitHub release notes and the TestFlight notes.

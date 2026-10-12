@@ -1,7 +1,9 @@
 # Local mirror of the CI checks. Set it up once per clone:
-#   uvx pre-commit install
+#   uv tool install pre-commit && pre-commit install
+# pre-commit install refuses while core.hooksPath is set. Unset it with
+#   git config --local --unset-all core.hooksPath
 # Run every hook on the whole tree:
-#   uvx pre-commit run --all-files
+#   pre-commit run --all-files
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

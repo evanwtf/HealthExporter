@@ -49,13 +49,6 @@ struct SettingsView: View {
                             }
                         }
                         .accessibilityIdentifier("weightUnitPicker")
-
-                        Picker("Distance/Speed", selection: $settings.distanceSpeedUnit) {
-                            ForEach(DistanceSpeedUnit.allCases, id: \.self) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .accessibilityIdentifier("distanceSpeedPicker")
                     }
 
                     #if targetEnvironment(simulator)

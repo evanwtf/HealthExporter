@@ -7,7 +7,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 - **Privacy-first design**: All processing on-device, no analytics, no tracking, no accounts
 - **Multiple health metrics**: Export Weight, Steps, Blood Glucose (mg/dL), selected clinical lab panels, and selected vitals
 - **Flexible date ranges**: Last X days, last X records, custom date range, or all data
-- **Unit preferences**: Configure weight units (kg/lbs), temperature (°C/°F), and distance/speed (metric/imperial); defaults to US units (Fahrenheit, lbs, imperial)
+- **Unit preferences**: Configure weight units (kg/lbs) and temperature (°C/°F); defaults to US units (Fahrenheit, lbs)
 - **Selectable date format**: Choose from 5 date formats including ISO8601 (UTC), `yyyy-MM-dd HH:mm:ss`, `MM/dd/yyyy HH:mm:ss`, and more
 - **Sort order**: Export rows in ascending (oldest first) or descending (newest first) order
 - **CSV export**: Save directly to Files app via `.fileExporter()`

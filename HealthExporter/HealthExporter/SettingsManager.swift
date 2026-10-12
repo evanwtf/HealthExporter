@@ -48,15 +48,9 @@ enum WeightUnit: String, CaseIterable {
     case pounds = "Pounds (lbs)"
 }
 
-enum DistanceSpeedUnit: String, CaseIterable {
-    case metric = "Metric (meters/kph)"
-    case imperial = "Imperial (feet/mph)"
-}
-
 class SettingsManager: ObservableObject {
     @Published var temperatureUnit: TemperatureUnit
     @Published var weightUnit: WeightUnit
-    @Published var distanceSpeedUnit: DistanceSpeedUnit
     @Published var autoDismissSaveConfirmation: Bool
     @Published var exportWeight: Bool
     @Published var exportSteps: Bool
@@ -91,9 +85,6 @@ class SettingsManager: ObservableObject {
 
         let weightUnitRaw = UserDefaults.standard.string(forKey: "weightUnit") ?? WeightUnit.pounds.rawValue
         self.weightUnit = WeightUnit(rawValue: weightUnitRaw) ?? .pounds
-
-        let distanceSpeedUnitRaw = UserDefaults.standard.string(forKey: "distanceSpeedUnit") ?? DistanceSpeedUnit.imperial.rawValue
-        self.distanceSpeedUnit = DistanceSpeedUnit(rawValue: distanceSpeedUnitRaw) ?? .imperial
 
         let dateFormatRaw = UserDefaults.standard.string(forKey: "dateFormat") ?? DateFormatOption.yyyyMMddHHmmss.rawValue
         self.dateFormat = DateFormatOption(rawValue: dateFormatRaw) ?? .yyyyMMddHHmmss
@@ -134,11 +125,6 @@ class SettingsManager: ObservableObject {
         $weightUnit
             .dropFirst()
             .sink { UserDefaults.standard.set($0.rawValue, forKey: "weightUnit") }
-            .store(in: &cancellables)
-
-        $distanceSpeedUnit
-            .dropFirst()
-            .sink { UserDefaults.standard.set($0.rawValue, forKey: "distanceSpeedUnit") }
             .store(in: &cancellables)
 
         $dateFormat

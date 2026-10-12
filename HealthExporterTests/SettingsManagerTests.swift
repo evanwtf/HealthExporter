@@ -30,12 +30,6 @@ final class SettingsManagerTests: XCTestCase {
         XCTAssertEqual(WeightUnit(rawValue: raw), .pounds)
     }
 
-    func testDefaultDistanceSpeedUnit_whenKeyMissing_isImperial() {
-        let defaults = makeDefaults()
-        let raw = defaults.string(forKey: "distanceSpeedUnit") ?? DistanceSpeedUnit.imperial.rawValue
-        XCTAssertEqual(DistanceSpeedUnit(rawValue: raw), .imperial)
-    }
-
     func testDefaultDateFormat_whenKeyMissing_isYYYYMMddHHmmss() {
         let defaults = makeDefaults()
         let raw = defaults.string(forKey: "dateFormat") ?? DateFormatOption.yyyyMMddHHmmss.rawValue
@@ -90,13 +84,11 @@ final class SettingsManagerTests: XCTestCase {
         let defaults = makeDefaults()
         defaults.set(TemperatureUnit.celsius.rawValue, forKey: "temperatureUnit")
         defaults.set(WeightUnit.kilograms.rawValue, forKey: "weightUnit")
-        defaults.set(DistanceSpeedUnit.metric.rawValue, forKey: "distanceSpeedUnit")
         defaults.set(DateFormatOption.iso8601.rawValue, forKey: "dateFormat")
         defaults.set(SortOrder.descending.rawValue, forKey: "sortOrder")
 
         XCTAssertEqual(TemperatureUnit(rawValue: defaults.string(forKey: "temperatureUnit")!), .celsius)
         XCTAssertEqual(WeightUnit(rawValue: defaults.string(forKey: "weightUnit")!), .kilograms)
-        XCTAssertEqual(DistanceSpeedUnit(rawValue: defaults.string(forKey: "distanceSpeedUnit")!), .metric)
         XCTAssertEqual(DateFormatOption(rawValue: defaults.string(forKey: "dateFormat")!), .iso8601)
         XCTAssertEqual(SortOrder(rawValue: defaults.string(forKey: "sortOrder")!), .descending)
     }
@@ -151,13 +143,6 @@ final class SettingsManagerTests: XCTestCase {
         defaults.set("invalid", forKey: "sortOrder")
         let raw = defaults.string(forKey: "sortOrder") ?? SortOrder.ascending.rawValue
         XCTAssertEqual(SortOrder(rawValue: raw) ?? .ascending, .ascending)
-    }
-
-    func testFallback_invalidDistanceSpeedUnit() {
-        let defaults = makeDefaults()
-        defaults.set("invalid", forKey: "distanceSpeedUnit")
-        let raw = defaults.string(forKey: "distanceSpeedUnit") ?? DistanceSpeedUnit.imperial.rawValue
-        XCTAssertEqual(DistanceSpeedUnit(rawValue: raw) ?? .imperial, .imperial)
     }
 
     // MARK: - Lab panels and favorites

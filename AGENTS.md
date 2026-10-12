@@ -90,7 +90,7 @@ CSV format details:
 - Weight precision is 2 decimals
 - Lab precision is per-metric, sourced from `LabMetric.valuePrecision` (A1C renders to 2 decimals)
 - Filename format is `HealthExporter_YYYY-MM-DD_HHMMSS.csv` (see `ExportLogic.exportFilename`)
-- Default units are Fahrenheit, pounds, and imperial
+- Default units are Fahrenheit and pounds
 
 ## Testing Guidelines
 This repo uses `XCTest`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift` and methods named `test...`. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.

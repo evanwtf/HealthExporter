@@ -8,6 +8,8 @@
 	<string>94S5PZTVPY</string>
 	<key>signingStyle</key>
 	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>com.evanhoffman.HealthExporter</key>

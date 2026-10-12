@@ -47,40 +47,38 @@ xcodebuild test \
   | xcpretty
 ```
 
+To run the same steps as CI, on a throwaway simulator:
+```bash
+ci/run_ios_tests.sh /tmp/TestResults.xcresult
+```
+
 ## GitHub Actions CI
 
 The workflow is defined in `.github/workflows/ios-tests.yml` and triggers on:
-- Pushes to `main` or `add_tests`
-- Pull requests targeting `main`
+- Pushes to `main`
+- Pull requests targeting `main`, from branches in this repository only
 
-### Required setup — none for public repos
+The job runs on the self-hosted Mac runner, selected by the labels `[self-hosted, macOS, ARM64]` (currently `MacMiniM6_01`). That runner also holds the signing keychain for TestFlight builds, so pull requests from forks do not run on it. A new push to the same ref cancels the run in progress.
 
-For a **public repository**, no secrets or environment variables are needed. The workflow uses `CODE_SIGNING_ALLOWED=NO` so no Apple Developer account is required to run simulator tests.
+The job calls [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh). The script:
+1. Prints the selected Xcode and its version.
+2. Restarts `CoreSimulatorService`, so an Xcode upgrade does not leave a stale daemon.
+3. Creates a throwaway simulator from the newest `iPhone N Pro` device type and the newest iOS runtime, and deletes it on exit.
+4. Runs `xcodebuild test -only-testing:HealthExporterTests` with `CODE_SIGNING_ALLOWED=NO`.
 
-### Optional setup for private repos or custom runners
-
-| Setting | Purpose |
-|---------|---------|
-| `DEVELOPMENT_TEAM` build override | Only needed if you add entitlements-gated features to the test target |
+The result bundle is uploaded as the `test-results` artifact, also when the tests fail. The TestFlight workflow runs the same script before it archives.
 
 ### Xcode version
 
-The workflow automatically picks the newest installed Xcode on the runner:
-```yaml
-XCODE=$(find /Applications -name "Xcode*.app" -maxdepth 1 -type d | sort -rV | head -1)
-sudo xcode-select -s "$XCODE"
-```
+The runner admin installs and selects Xcode on the runner. The workflow does not run `xcode-select` or `setup-xcode`: a newer Xcode without its iOS simulator runtime breaks the tests. The project requires **Xcode 26** or later (for the iOS 26.0 deployment target).
 
-The project requires **Xcode 26.x** (for the iOS 26.0 deployment target). GitHub's `macos-15` runner should have this installed. If the runner only has an older Xcode, the build will fail with a deployment-target error — in that case, update `runs-on` in the workflow to a newer runner image (e.g. `macos-15-xlarge` or a future `macos-26`).
+### Secrets
 
-### xcpretty
+The test job needs no secrets. `CODE_SIGNING_ALLOWED=NO` means no Apple Developer account is involved.
 
-The workflow pipes `xcodebuild` output through `xcpretty` for readable CI logs. If `xcpretty` is not pre-installed on the runner, add:
-```yaml
-- name: Install xcpretty
-  run: gem install xcpretty
-```
-before the "Run tests" step.
+### Logs
+
+The runner does not have `xcpretty`, so the job logs raw `xcodebuild` output. Open the `test-results` artifact in Xcode for a structured view.
 
 ## Adding New Tests
 

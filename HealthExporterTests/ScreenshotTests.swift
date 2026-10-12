@@ -128,6 +128,15 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    func testLargeTypePrivacyPolicyView() {
+        capture("08-privacy-large-type") {
+            NavigationStack {
+                PrivacyPolicyView()
+            }
+            .environment(\.dynamicTypeSize, .accessibility2)
+        }
+    }
+
     private func capture<Content: View>(_ name: String, @ViewBuilder content: () -> Content) {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let suffix = style == .dark ? "dark" : "light"

@@ -217,8 +217,16 @@ struct DataSelectionView: View {
         let selectedCount = panelSelectedCount(panel)
         return DisclosureGroup(isExpanded: panelExpansionBinding(for: panel)) {
             ForEach(metrics) { metric in
-                Toggle(metric.name, isOn: labSelectionBinding(for: metric.loincCode))
-                    .accessibilityIdentifier("lab_\(metric.loincCode)")
+                Toggle(isOn: labSelectionBinding(for: metric.loincCode)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(metric.name)
+                        Text("LOINC \(metric.loincCode)")
+                            .font(.footnote)
+                            .monospacedDigit()
+                            .foregroundStyle(Color("InkSecondary"))
+                    }
+                }
+                .accessibilityIdentifier("lab_\(metric.loincCode)")
             }
         } label: {
             Toggle(isOn: labPanelSelectionBinding(for: panel)) {
@@ -281,14 +289,30 @@ struct DataSelectionView: View {
         .accessibilityIdentifier("dateRangePicker")
     }
 
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        Label {
+            Text(title)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .fontDesign(.serif)
+                .foregroundStyle(Color("Ink"))
+        } icon: {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(.tint)
+        }
+        .textCase(nil)
+        .accessibilityAddTraits(.isHeader)
+    }
+
     private func metricLabel(_ title: String, systemImage: String, caption: String? = nil) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                 if let caption {
                     Text(caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(Color("InkSecondary"))
                 }
             }
         } icon: {
@@ -386,9 +410,13 @@ struct DataSelectionView: View {
             }) {
                 Label("Export CSV", systemImage: "square.and.arrow.up")
                     .fontWeight(.semibold)
+                    .foregroundStyle(exportEnabled && !isPreparingExport
+                                     ? AnyShapeStyle(Color("OnAccent"))
+                                     : AnyShapeStyle(.secondary))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: 12))
             .controlSize(.large)
             .disabled(!exportEnabled || isPreparingExport)
             .accessibilityIdentifier("exportButton")
@@ -396,7 +424,13 @@ struct DataSelectionView: View {
         .padding(.horizontal)
         .padding(.top, 12)
         .padding(.bottom, 8)
-        .background(.bar)
+        .background(Color("Paper"))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color("Rule"))
+                .frame(height: 1)
+                .accessibilityHidden(true)
+        }
     }
 
     var body: some View {
@@ -417,7 +451,7 @@ struct DataSelectionView: View {
                         }
                         .accessibilityIdentifier("glucoseToggle")
                     } header: {
-                        Label("Activity & Glucose", systemImage: "figure.walk")
+                        sectionHeader("Activity & Glucose", systemImage: "chart.xyaxis.line")
                     }
 
                     Section {
@@ -425,7 +459,7 @@ struct DataSelectionView: View {
                             labPanelDisclosure(panel)
                         }
                     } header: {
-                        Label("Labs", systemImage: "cross.case")
+                        sectionHeader("Labs", systemImage: "cross.case")
                     } footer: {
                         Text("Lab sections require access to Clinical Health Records.")
                     }
@@ -433,9 +467,12 @@ struct DataSelectionView: View {
                     Section {
                         vitalsDisclosure()
                     } header: {
-                        Label("Vitals", systemImage: "heart.text.square")
+                        sectionHeader("Vitals", systemImage: "heart.text.square")
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(Color("Paper"))
+                .tint(.accentColor)
 
                 dateRangeFooter()
             }
@@ -451,8 +488,16 @@ struct DataSelectionView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
-        .navigationTitle("Select Data to Export")
+        .navigationTitle("Choose Data")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Choose Data")
+                    .font(.headline)
+                    .fontDesign(.serif)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
         .onAppear { updateExportEnabled() }
         .onChange(of: settings.exportWeight) { updateExportEnabled() }
         .onChange(of: settings.exportSteps) { updateExportEnabled() }

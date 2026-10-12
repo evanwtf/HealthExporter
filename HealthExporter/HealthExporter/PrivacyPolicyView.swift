@@ -1,17 +1,17 @@
 import SwiftUI
 
 struct PrivacyPolicyView: View {
+    @ScaledMetric(relativeTo: .body) private var readingWidth: CGFloat = 540
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Group {
-                    Text("Privacy Policy")
-                        .font(.title)
-                        .fontWeight(.bold)
+                    pageTitle("Privacy Policy")
 
                     Text("Last updated: May 2026")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(Color("InkSecondary"))
 
                     sectionView(title: "Overview",
                         body: "HealthExporterCSV is designed with your privacy as a core principle. All data processing happens entirely on your device. No health data is ever sent to external servers, collected by the developer, or shared with third parties.")
@@ -58,13 +58,14 @@ struct PrivacyPolicyView: View {
                         body: "If this privacy policy is updated, the revised version will be included in an app update. The \"Last updated\" date at the top will reflect the most recent revision.")
                 }
 
-                Divider()
+                Rectangle()
+                    .fill(Color("Rule"))
+                    .frame(height: 1)
                     .padding(.vertical, 8)
+                    .accessibilityHidden(true)
 
                 Group {
-                    Text("Disclaimer")
-                        .font(.title)
-                        .fontWeight(.bold)
+                    pageTitle("Disclaimer")
 
                     sectionView(title: "No Warranty",
                         body: "HealthExporterCSV is provided \"as is\" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.")
@@ -79,16 +80,42 @@ struct PrivacyPolicyView: View {
                         body: "HealthExporterCSV exports data as recorded in Apple HealthKit. The developer makes no guarantees about the accuracy, completeness, or reliability of the underlying health data or the exported CSV files.")
                 }
             }
-            .padding()
+            .foregroundStyle(Color("Ink"))
+            .lineSpacing(3)
+            .frame(maxWidth: readingWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical)
         }
+        .background(Color("Paper").ignoresSafeArea())
         .navigationTitle("Privacy & Disclaimer")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Privacy & Disclaimer")
+                    .font(.headline)
+                    .fontDesign(.serif)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
+    }
+
+    private func pageTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.title)
+            .fontWeight(.semibold)
+            .fontDesign(.serif)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionView(title: String, body: String, bullets: [String] = [], closing: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.headline)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .fontDesign(.serif)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, 4)
             Text(body)
                 .font(.body)
             if !bullets.isEmpty {

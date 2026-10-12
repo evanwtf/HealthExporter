@@ -15,12 +15,12 @@ struct SettingsView: View {
                     Toggle("Auto-dismiss save confirmation", isOn: $settings.autoDismissSaveConfirmation)
                         .accessibilityIdentifier("autoDismissSaveConfirmationToggle")
                 } header: {
-                    Text("Export Behavior")
+                    sectionHeader("Export Behavior")
                 } footer: {
                     Text("Closes the save confirmation after 5 seconds.")
                 }
 
-                Section(header: Text("Export Format")) {
+                Section(header: sectionHeader("Export Format")) {
                     Picker("Date Format", selection: $settings.dateFormat) {
                         ForEach(DateFormatOption.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
@@ -35,7 +35,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("sortOrderPicker")
                 }
 
-                Section(header: Text("Units")) {
+                Section(header: sectionHeader("Units")) {
                     Picker("Temperature", selection: $settings.temperatureUnit) {
                         ForEach(TemperatureUnit.allCases, id: \.self) { unit in
                             Text(unit.rawValue).tag(unit)
@@ -52,7 +52,7 @@ struct SettingsView: View {
                 }
 
                 #if targetEnvironment(simulator)
-                Section(header: Text("Testing")) {
+                Section(header: sectionHeader("Testing")) {
                     Button("Generate Weight Data", action: generateTestData)
 
                     if !testDataMessage.isEmpty {
@@ -63,7 +63,7 @@ struct SettingsView: View {
                 }
                 #endif
 
-                Section(header: Text("About")) {
+                Section(header: sectionHeader("About")) {
                     NavigationLink(destination: PrivacyPolicyView()) {
                         Text("Privacy Policy & Disclaimer")
                     }
@@ -71,13 +71,23 @@ struct SettingsView: View {
                         Text("Version")
                         Spacer()
                         Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
-                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .foregroundStyle(Color("InkSecondary"))
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color("Paper"))
+            .tint(.accentColor)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Settings")
+                        .font(.headline)
+                        .fontDesign(.serif)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
@@ -93,6 +103,16 @@ struct SettingsView: View {
             }
             #endif
         }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3)
+            .fontWeight(.semibold)
+            .fontDesign(.serif)
+            .foregroundStyle(Color("Ink"))
+            .textCase(nil)
+            .accessibilityAddTraits(.isHeader)
     }
 
     #if targetEnvironment(simulator)

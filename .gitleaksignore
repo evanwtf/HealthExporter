@@ -1,0 +1,6 @@
+# CocoaPods checksums in a commit from before the project dropped CocoaPods.
+# They are hashes of public pod specs, not secrets.
+e0fb57562b22dd38cfcf9b38658a77333c0cd3ed:Podfile.lock:generic-api-key:28
+e0fb57562b22dd38cfcf9b38658a77333c0cd3ed:Podfile.lock:generic-api-key:30
+e0fb57562b22dd38cfcf9b38658a77333c0cd3ed:Pods/Manifest.lock:generic-api-key:28
+e0fb57562b22dd38cfcf9b38658a77333c0cd3ed:Pods/Manifest.lock:generic-api-key:30

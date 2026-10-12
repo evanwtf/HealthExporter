@@ -1,0 +1,72 @@
+name: Scripts
+
+# The Python release scripts in scripts/: lint, type check and test.
+# project.pbxproj is in the filter because check_version.py checks it: a pull
+# request that changes the version entries runs the check.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "HealthExporter.xcodeproj/project.pbxproj"
+      - ".github/workflows/scripts.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "HealthExporter.xcodeproj/project.pbxproj"
+      - ".github/workflows/scripts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scripts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Scripts
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Install
+        run: uv sync --frozen
+
+      # Collect both statuses, so one run reports every problem.
+      - name: Ruff
+        run: |
+          status=0
+          uv run --frozen ruff format --check . || status=$?
+          uv run --frozen ruff check . || status=$?
+          exit "$status"
+
+      - name: Mypy
+        run: uv run --frozen mypy
+
+      # A skipped test is not a passing test.
+      - name: Pytest
+        run: |
+          set -o pipefail
+          uv run --frozen pytest -rs | tee "$RUNNER_TEMP/pytest.log"
+          if grep -q "SKIPPED" "$RUNNER_TEMP/pytest.log"; then
+            echo "::error::A test skipped. Fix the test or its environment."
+            exit 1
+          fi
+
+      - name: Check the project version
+        run: uv run --frozen scripts/check_version.py

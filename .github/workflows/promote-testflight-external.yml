@@ -1,0 +1,61 @@
+name: Promote TestFlight build to external
+
+# Adds an uploaded build to the external beta group(s) and submits it for
+# Beta App Review. HealthExporter's external group is "External Hoffgroup".
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build number to promote, e.g. 57"
+        required: true
+      group:
+        description: "External group name (blank = every external group)"
+        required: false
+      submit_review:
+        description: "Submit the build for Beta App Review"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-testflight-${{ github.event.inputs.build }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Add build to external testers and submit for review
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Promote build to external TestFlight
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          INPUT_BUILD: ${{ github.event.inputs.build }}
+          INPUT_GROUP: ${{ github.event.inputs.group }}
+          INPUT_SUBMIT_REVIEW: ${{ github.event.inputs.submit_review }}
+        # The inputs reach the shell through env, as data. Never interpolate
+        # them into the script text.
+        run: |
+          set -euo pipefail
+          args=(--build "${INPUT_BUILD}")
+          if [ -n "${INPUT_GROUP}" ]; then
+            args+=(--group "${INPUT_GROUP}")
+          fi
+          if [ "${INPUT_SUBMIT_REVIEW}" != "true" ]; then
+            args+=(--no-submit)
+          fi
+          uv run --frozen scripts/promote_testflight_external.py "${args[@]}"

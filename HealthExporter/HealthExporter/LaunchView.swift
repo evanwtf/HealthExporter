@@ -3,7 +3,6 @@ import SwiftUI
 struct LaunchView: View {
     @ObservedObject var settings: SettingsManager
     @State private var showingSettings = false
-    @ScaledMetric(relativeTo: .title2) private var featureIconWidth: CGFloat = 36
 
     private var versionText: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -13,34 +12,21 @@ struct LaunchView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 32) {
+            VStack(spacing: 28) {
                 header
-                VStack(alignment: .leading, spacing: 20) {
-                    featureRow(
-                        systemImage: "lock.shield",
-                        title: "Private by design",
-                        detail: "Everything happens on your iPhone. No accounts, no servers, no tracking."
-                    )
-                    featureRow(
-                        systemImage: "heart.text.square",
-                        title: "Your health data",
-                        detail: "Weight, steps, blood glucose, vitals and clinical lab results."
-                    )
-                    featureRow(
-                        systemImage: "tablecells",
-                        title: "One CSV file",
-                        detail: "Open it in Numbers, Excel or Google Sheets."
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                categoryRow
+                privacyLine
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom) {
             bottomBar
         }
+        .fontDesign(.rounded)
+        .tint(Color("AccentColor"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -63,7 +49,6 @@ struct LaunchView: View {
                 .scaledToFit()
                 .frame(width: 96, height: 96)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                 .accessibilityHidden(true)
 
             Text("HealthExporterCSV")
@@ -72,31 +57,39 @@ struct LaunchView: View {
                 .minimumScaleFactor(0.5)
                 .accessibilityIdentifier("appTitle")
 
-            Text("Export your health data to CSV")
+            Text("Export your Apple Health data to one CSV file.")
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color("SecondaryText"))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func featureRow(systemImage: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .frame(width: featureIconWidth)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var categoryRow: some View {
+        HStack(spacing: 0) {
+            ForEach(HealthCategory.allCases, id: \.self) { category in
+                Image(systemName: category.systemImage)
+                    .font(.title)
+                    .foregroundStyle(category.color)
+                    .frame(maxWidth: .infinity)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Weight, steps, blood glucose, vitals and lab results")
+    }
+
+    private var privacyLine: some View {
+        Label {
+            Text("**Private by design.** Everything happens on your iPhone. No accounts, no servers, no tracking.")
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "lock.fill")
+                .foregroundStyle(.tint)
+        }
+        .font(.subheadline)
+        .foregroundStyle(Color("SecondaryText"))
+        .multilineTextAlignment(.leading)
     }
 
     private var bottomBar: some View {
@@ -107,6 +100,7 @@ struct LaunchView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
+            .tint(Color("AccentColor"))
             .controlSize(.large)
             .accessibilityIdentifier("nextButton")
 
@@ -116,7 +110,7 @@ struct LaunchView: View {
                     .accessibilityIdentifier("reportProblemLink")
                 Text("\(versionText) \u{00B7} \u{00A9} \(String(Calendar.current.component(.year, from: Date()))) Evan Hoffman")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color("SecondaryText"))
                     .multilineTextAlignment(.center)
             }
         }

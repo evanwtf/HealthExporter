@@ -18,7 +18,8 @@ Key components:
 | `ExportLogic.swift` | Pure logic: `isExportEnabled(...,hasSelectedLabs:)`, `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`, date-range/limit helpers, fetch-error ordering, filename generation |
 | `SettingsManager.swift` | Persists unit and format preferences plus `selectedLabPanels` and `favoriteLabCodes` in `UserDefaults`; runs the one-time legacy `exportA1C` → `favoriteLabCodes` migration |
 | `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order. `appendLabResultRows` uses per-metric `LabMetric.valuePrecision` |
-| `DataSelectionView.swift` | "Activity & Glucose" toggles (Weight/Steps/Glucose), a "Labs" section with one expandable panel per `LabPanel` (individual lab toggles are saved as favorites), a "Vitals" section, date range picker, export trigger, and exporter state |
+| `DataSelectionView.swift` | "Choose Data": a two-column grid of category tiles (Weight, Steps, Blood Glucose, Vitals, then one tile per `LabPanel`), each a `Toggle` styled by `CategoryTileToggleStyle`. The Vitals and lab-panel tiles open `SelectionDetailView` for per-vital and per-lab toggles (individual labs are saved as favorites). The date range and Export CSV sit in a `.safeAreaBar` footer. Also the export trigger and exporter state |
+| `HealthCategory.swift` | The tile categories with their SF Symbol and category color (asset catalog `Category*` colors) |
 
 Lab support (including A1C) uses Clinical Health Records via `HKClinicalTypeIdentifier.labResultRecord` and the LOINC code on each `LabMetric`; see `docs/a1c/` for the registry-driven implementation details.
 

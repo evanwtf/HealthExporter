@@ -11,7 +11,7 @@ struct PrivacyPolicyView: View {
 
                     Text("Last updated: May 2026")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color("SecondaryText"))
 
                     sectionView(title: "Overview",
                         body: "HealthExporterCSV is designed with your privacy as a core principle. All data processing happens entirely on your device. No health data is ever sent to external servers, collected by the developer, or shared with third parties.")
@@ -81,6 +81,8 @@ struct PrivacyPolicyView: View {
             }
             .padding()
         }
+        .fontDesign(.rounded)
+        .tint(Color("AccentColor"))
         .navigationTitle("Privacy & Disclaimer")
         .navigationBarTitleDisplayMode(.inline)
     }

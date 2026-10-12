@@ -147,7 +147,7 @@ The TestFlight workflow needs these secrets. Its "Check required secrets" step f
 - Repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`: an App Store Connect API key with the App Manager role. One team key serves all the team's apps.
 - Organization secret `MACOS_KEYCHAIN_PASSWORD`: the password for the runner's login keychain. Its selected repositories must include `HealthExporter`.
 
-The archive and the export both sign automatically. `xcodebuild` uses the API key with `-allowProvisioningUpdates` to get the Xcode-managed App Store profile, and signs with the runner's `Apple Distribution` identity for team `94S5PZTVPY`. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
+Signing is automatic, with the API key and `-allowProvisioningUpdates`. The archive signs with a development identity. The export re-signs the IPA with the runner's local `Apple Distribution` identity for team `94S5PZTVPY` (`signingCertificate` in [`ci/ExportOptions.plist`](ci/ExportOptions.plist)) and the Xcode-managed App Store profile, which `xcodebuild` fetches through the API key. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
 
 ## Project Structure
 

@@ -75,6 +75,32 @@ struct ExportLogicTests {
         ))
     }
 
+    /// The Range dates stay in state when another option is picked. An end
+    /// before the start must not disable the other options (#120).
+    @Test(arguments: [DateRangeOption.lastXDays, .lastXRecords, .allRecords])
+    func exportEnabled_invalidRangeDates_ignoredByOtherOptions(_ option: DateRangeOption) {
+        let start = calendar.date(byAdding: .day, value: 7, to: now)!
+        #expect(ExportLogic.isExportEnabled(
+            exportWeight: true, exportSteps: false, exportGlucose: false, hasSelectedLabs: false,
+            dateRangeOption: option, startDate: start, endDate: now
+        ))
+    }
+
+    /// The view derives `hasSelectedLabs` from the panels and the single labs.
+    /// A panel alone, or one lab alone, must enable export (#120).
+    @Test func exportEnabled_labsFromAPanelOrASingleLab() {
+        let panelOnly = ExportLogic.resolveLabMetrics(selectedPanels: [.thyroid], favoriteCodes: [])
+        let singleLab = ExportLogic.resolveLabMetrics(selectedPanels: [], favoriteCodes: [LOINCCode.hemoglobinA1C])
+        let none = ExportLogic.resolveLabMetrics(selectedPanels: [], favoriteCodes: [])
+
+        for (labs, expected) in [(panelOnly, true), (singleLab, true), (none, false)] {
+            #expect(ExportLogic.isExportEnabled(
+                exportWeight: false, exportSteps: false, exportGlucose: false, hasSelectedLabs: !labs.isEmpty,
+                dateRangeOption: .lastXDays, startDate: now, endDate: now
+            ) == expected)
+        }
+    }
+
     // MARK: - dateRange
 
     @Test func dateRange_lastXDays_returns7DayRange() {

@@ -25,7 +25,6 @@ struct DataSelectionView: View {
     @State private var saveSuccessDismissTask: Task<Void, Never>?
     @State private var showingEstimateConfirmation = false
     @State private var isPreparingExport = false
-    @State private var exportEnabled = false
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
     @State private var pendingExportPayload: PendingExportPayload?
@@ -73,8 +72,9 @@ struct DataSelectionView: View {
         !settings.selectedVitalMetrics.isEmpty
     }
 
-    private func updateExportEnabled() {
-        exportEnabled = ExportLogic.isExportEnabled(
+    /// Computed from the inputs, so every input gates the Export button (#120).
+    private var exportEnabled: Bool {
+        ExportLogic.isExportEnabled(
             exportWeight: settings.exportWeight,
             exportSteps: settings.exportSteps,
             exportGlucose: settings.exportGlucose,
@@ -492,16 +492,6 @@ struct DataSelectionView: View {
         .tint(Color("AccentColor"))
         .navigationTitle("Choose Data")
         .navigationBarTitleDisplayMode(.large)
-        .onAppear { updateExportEnabled() }
-        .onChange(of: settings.exportWeight) { updateExportEnabled() }
-        .onChange(of: settings.exportSteps) { updateExportEnabled() }
-        .onChange(of: settings.exportGlucose) { updateExportEnabled() }
-        .onChange(of: settings.favoriteLabCodes) { updateExportEnabled() }
-        .onChange(of: settings.selectedLabPanels) { updateExportEnabled() }
-        .onChange(of: settings.selectedVitalMetrics) { updateExportEnabled() }
-        .onChange(of: selectedDateRangeOption) { updateExportEnabled() }
-        .onChange(of: startDate) { updateExportEnabled() }
-        .onChange(of: endDate) { updateExportEnabled() }
         .fileExporter(
             isPresented: $showingExporter,
             document: CSVDocument(content: csvContent),

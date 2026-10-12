@@ -104,12 +104,40 @@ CSV format details:
 Unit tests use Swift Testing (`import Testing`): a suite is a `struct` (or a `final class` when it needs `deinit` as teardown), each test is a `@Test` function, and checks use `#expect` and `#require`. Use `@Test(arguments:)` when one check runs over a table of inputs. Only `ScreenshotTests.swift` uses `XCTest`, because it attaches PNGs with `XCTAttachment`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift`. `ci/run_ios_tests.sh` prints one total for both frameworks (`Test summary: N tests, ...`) from the result bundle. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.
 
 ## CI and releases
-- `iOS Tests` (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. Fork pull requests do not run on the runner.
-- Every pull request merged to `main` cuts a release. `bump-build-number.yml` (Linux runner) bumps the build number and the version, pushes a `vX.Y.Z` tag, creates the GitHub release and dispatches `release-testflight.yml` on the tag. That workflow then tests, archives, exports and uploads to TestFlight on the Mac runner. Nothing runs from a laptop.
-- The version bump comes from the merged pull request's label: `semver:minor` for a layout change (2.4.9 → 2.5.0), `semver:major` for a major one (→ 3.0.0), and no label for a patch (→ 2.4.10). Add the label before you merge. Land changes through one pull request per work session. Do not push directly to `main`.
-- `publish-release.yml` is only a fallback for tags pushed by hand.
-- TestFlight dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
-- The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. The archive signs automatically for development. The export signs manually with the runner's `Apple Distribution` identity and the `HealthExporter App Store` profile, which `ci/install_profile.swift` downloads by name on every run; an Admin creates or renews that profile in the developer portal (see `docs/macos-runner-recovery.md`).
+Runners are named by their labels only: Linux jobs run on `[self-hosted, Linux, X64]`, and macOS jobs on `[self-hosted, macOS, ARM64]`. The macOS runner is shared with other repos. Nothing runs from a laptop.
+
+Workflows:
+- `iOS Tests` (`ios-tests.yml`). The `Detect iOS changes` job lists the pull request's files with `gh api`. When every changed path is in `docs/`, `assets/`, `*.md`, `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` or `.github/dependabot.yml`, the workflow skips the tests. If that job fails, the tests run. The test job is named `iOS tests`, and the ruleset on `main` names it as a required check, with `iOS tests (fork guard)`. Do not rename either job. It runs `ci/lint_swift.sh`, then `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. A push to `main` ignores the same paths. A new push to a pull request cancels the old run; on `main` a run is never cancelled.
+- A fork pull request never runs on the macOS runner, because the runner holds a signing keychain. When it changes iOS paths, the `iOS tests (fork guard)` job fails with "A maintainer must push this branch to the repo to run the tests."
+- `ci/run_ios_tests.sh` probes `xcrun simctl` with a 30-second watchdog. When CoreSimulator does not respond, the job fails in about 5 minutes; see `docs/macos-runner-recovery.md`, section 8. Every job has `timeout-minutes`: 45 for the tests, 90 for TestFlight, 10 for Linux jobs.
+- `Scripts` (`scripts.yml`, Linux) runs on changes to `scripts/`, `pyproject.toml`, `uv.lock` or `project.pbxproj`, and by dispatch. It runs `uv sync --frozen`, `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest -rs`, and fails on a skipped test. It also runs `scripts/check_version.py`. Run the same checks locally: `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest -rs`.
+- `Gitleaks` (`gitleaks.yml`, Linux) scans the new commits of every pull request and push for secrets, with a pinned gitleaks release. Known false positives go in `.gitleaksignore`.
+- Dependabot (`.github/dependabot.yml`) updates the GitHub Actions monthly, with the `skip-release` label.
+
+Releases:
+- Every pull request merged to `main` cuts a release unless it has the `skip-release` label. `bump-build-number.yml` runs on `pull_request_target` from `main`, on the Linux runner. It never runs code from the pull request.
+- The label on the merged pull request picks the version part. Apply exactly one before you merge (the pull request template lists them):
+  - `semver:patch`: a fix or small change (2.5.4 → 2.5.5). No label also means a patch.
+  - `semver:minor`: a layout change (2.5.4 → 2.6.0).
+  - `semver:major`: a major change (→ 3.0.0).
+  - `skip-release`: docs, CI or tooling only. No bump, no commit, no tag, no release and no TestFlight upload.
+  - `skip-release` with any `semver:*` label fails the job.
+- The release job:
+  1. `scripts/bump_version.py` replaces every `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` entry in `project.pbxproj`.
+  2. `scripts/check_version.py --tag vX.Y.Z` fails when the entries disagree or the tag is not `v` + `MARKETING_VERSION`.
+  3. It commits `Release vX.Y.Z (build N)`, with `Source merge: #N (title)` and `[skip ci]`.
+  4. It pushes the commit and the tag with one `git push --atomic`.
+  5. It creates the GitHub release and dispatches `release-testflight.yml` on the tag.
+- If `main` holds a release commit whose version has no tag, the "Detect stranded release" step tags that commit instead of bumping again. The release step skips a release that already exists.
+- Never edit `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` by hand, and never push a `v*` tag by hand. `publish-release.yml` is only a fallback for a tag pushed by hand.
+- `RELEASE_DEPLOY_KEY` is optional. When the secret is set, the release job checks out and pushes with that deploy key, which can bypass the ruleset on `main`. When it is not set, the job pushes with `GITHUB_TOKEN`. Add the key before the ruleset requires status checks; `GITHUB_TOKEN` cannot bypass them.
+- Land changes through one pull request per work session. Do not push directly to `main`.
+
+TestFlight:
+- `release-testflight.yml` tests, archives, exports and uploads to TestFlight on the macOS runner. Dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
+- After the upload, `scripts/update_testflight_notes.py` sets the "What to Test" notes from `ci/testflight-notes.txt`. It targets the exact build number and version, and retries 10 times at 30-second intervals while App Store Connect lists the build. A pull request that changes what a user sees updates `ci/testflight-notes.txt`.
+- External testers: `gh workflow run promote-testflight-external.yml --repo evanwtf/HealthExporter -f build=<N>` adds a processed build to the external group (`External Hoffgroup`) and submits it for Beta App Review. Use `-f group=<name>` for one group, and `-f submit_review=false` to skip the review. The script is `scripts/promote_testflight_external.py`; `--inspect` changes nothing.
+- The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. The archive signs automatically for development. The export signs manually with the runner's `Apple Distribution` identity and the `HealthExporter App Store` profile, which `ci/install_profile.swift` downloads by name on every run; an Admin creates or renews that profile in the developer portal (see `docs/macos-runner-recovery.md`). The cleanup step deletes the API key, restores the keychain's lock settings and locks it, even when the job fails.
 
 ## Commit & Pull Request Guidelines
 Recent history favors short, imperative commit subjects such as `Fix: clear csvContent on export failure to free memory`, `Update docs to match current codebase`, and version bumps like `Bump build number to 18 [skip ci]`. Keep commits focused. PRs should describe the user-visible change, list testing performed, link related issues, and include screenshots for SwiftUI/UI updates. Note any device-only validation when HealthKit behavior cannot be reproduced in CI.

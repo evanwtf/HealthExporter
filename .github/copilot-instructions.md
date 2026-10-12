@@ -80,7 +80,7 @@ HealthExporter/
 
 ## CSV Output Format
 
-Columns: `Date, Metric, Value, Unit, Source`
+Columns: `Date, Metric, LOINC, Value, Unit, Source, Meal Time`
 
 Date format is user-selectable in Settings via `DateFormatOption`:
 - `yyyy-MM-dd HH:mm:ss` (default, local time)
@@ -93,11 +93,11 @@ Sort order is configurable: ascending (oldest first, default) or descending (new
 
 Example:
 ```
-Date,Metric,Value,Unit,Source
-2026-01-09 10:30:00,Weight,185.50,lbs,Withings
-2026-01-09 11:00:00,Steps,5432,steps,Apple Watch
-2026-01-09 14:30:00,Blood Glucose,145,mg/dL,MyFitnessPal
-2026-01-15 14:30:00,Hemoglobin A1C,7.50,%,Apple Health
+Date,Metric,LOINC,Value,Unit,Source,Meal Time
+2026-01-09 10:30:00,Weight,,185.50,lbs,Withings,
+2026-01-09 11:00:00,Steps,,5432,steps,Apple Watch,
+2026-01-09 14:30:00,Blood Glucose,,145,mg/dL,MyFitnessPal,After Meal
+2026-01-15 14:30:00,Hemoglobin A1C,4548-4,7.50,%,Apple Health,
 ```
 
 Filename format: `HealthExporter_YYYY-MM-DD_HHMMSS.csv`

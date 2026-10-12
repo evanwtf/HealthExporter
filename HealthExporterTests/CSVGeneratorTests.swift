@@ -44,7 +44,8 @@ final class CSVGeneratorTests: XCTestCase {
 
     func testGenerateWeightCSV_hasCorrectHeader() {
         let csv = CSVGenerator.generateWeightCSV(from: [], unit: .kilograms)
-        XCTAssertTrue(csv.contains("Date,Metric,LOINC,Value,Unit,Source"))
+        XCTAssertEqual(CSVGenerator.csvHeader, "Date,Metric,LOINC,Value,Unit,Source,Meal Time")
+        XCTAssertEqual(csv.components(separatedBy: "\n")[3], CSVGenerator.csvHeader)
     }
 
     func testGenerateWeightCSV_emitsDisclaimerBeforeHeader() {
@@ -599,7 +600,7 @@ final class CSVGeneratorTests: XCTestCase {
             labResults: nil,
             weightUnit: .kilograms
         )
-        XCTAssertTrue(csv.contains("Date,Metric,LOINC,Value,Unit,Source"), "Should have single Date column, not Date,ISO8601")
+        XCTAssertEqual(CSVGenerator.csvHeader, "Date,Metric,LOINC,Value,Unit,Source,Meal Time", "Should have single Date column, not Date,ISO8601")
         XCTAssertFalse(csv.contains("ISO8601"), "Should not have separate ISO8601 column")
     }
 
@@ -708,6 +709,76 @@ final class CSVGeneratorTests: XCTestCase {
             weightUnit: .kilograms
         )
         XCTAssertTrue(csv.contains(",Mystery Lab,\"0000,0\",1.00,\"x,y\",\"Lab\nTwo\""))
+    }
+
+    // MARK: - Meal Time column
+
+    func testGlucoseRows_exactByteFormat_withMealTime() {
+        let iso = ISO8601DateFormatter()
+        let samples = [
+            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T07:00:00Z")!, value: 98, source: "Meter", mealTime: .preprandial),
+            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T09:00:00Z")!, value: 142.4, source: "Meter", mealTime: .postprandial),
+            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T13:00:00Z")!, value: 110, source: "Meter", mealTime: nil),
+        ]
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: samples,
+            labResults: nil,
+            weightUnit: .kilograms,
+            dateFormat: .iso8601
+        )
+        let expected = CSVGenerator.csvPreamble + """
+        2024-06-15T07:00:00Z,Blood Glucose,,98,mg/dL,Meter,Before Meal
+        2024-06-15T09:00:00Z,Blood Glucose,,142,mg/dL,Meter,After Meal
+        2024-06-15T13:00:00Z,Blood Glucose,,110,mg/dL,Meter,
+
+        """
+        XCTAssertEqual(csv, expected)
+    }
+
+    func testNonGlucoseRows_endWithEmptyMealTimeField() {
+        let weightSample = HKQuantitySample(
+            type: weightType,
+            quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 75.0),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let stepsSample = HKQuantitySample(
+            type: stepsType,
+            quantity: HKQuantity(unit: .count(), doubleValue: 8000),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let oxygenSample = HKQuantitySample(
+            type: oxygenType,
+            quantity: HKQuantity(unit: .percent(), doubleValue: 0.97),
+            start: referenceDate,
+            end: referenceDate
+        )
+        let lab = LabResultSample(
+            metricName: "Hemoglobin A1C",
+            loincCode: LOINCCode.hemoglobinA1C,
+            effectiveDateTime: referenceDate,
+            value: 5.6,
+            unit: "%",
+            source: "Lab"
+        )
+        let csv = CSVGenerator.generateCombinedCSV(
+            weightSamples: [weightSample],
+            stepsSamples: [stepsSample],
+            glucoseSamples: nil,
+            labResults: [lab],
+            vitalSamples: [.oxygenSaturation: [oxygenSample]],
+            weightUnit: .kilograms
+        )
+        let rows = csv.dropFirst(CSVGenerator.csvPreamble.count).split(separator: "\n", omittingEmptySubsequences: true)
+        XCTAssertEqual(rows.count, 4)
+        for row in rows {
+            XCTAssertTrue(row.hasSuffix(","), "Row should end with an empty Meal Time field: \(row)")
+            XCTAssertEqual(row.filter { $0 == "," }.count, 6, "Row should have seven fields: \(row)")
+        }
+        XCTAssertTrue(csv.hasSuffix(",\n"))
     }
 
     // MARK: - Production entry point releases inputs

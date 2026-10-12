@@ -82,8 +82,9 @@ Memory management matters because HealthKit datasets can be large:
 
 CSV format details:
 - Every export begins with `CSVGenerator.csvDisclaimer` (three `### `-prefixed lines) followed by the column header on the next line. Use `CSVGenerator.csvPreamble` (disclaimer + header + newline) as the starting buffer.
-- Columns are `Date,Metric,LOINC,Value,Unit,Source`
-- The `LOINC` column carries the LOINC code for clinical-record lab rows and is empty for HealthKit-native metrics (weight, steps, glucose, vitals)
+- Columns are `Date,Metric,LOINC,Value,Unit,Source,Meal Time`; every row has all seven fields
+- The `LOINC` column carries the LOINC code found in the clinical record for lab rows and is empty for HealthKit-native metrics (weight, steps, glucose, vitals)
+- The `Meal Time` column is `Before Meal` or `After Meal` for glucose rows tagged with `HKMetadataKeyBloodGlucoseMealTime`, and empty for untagged glucose rows and all other metrics
 - Date formats come from `DateFormatOption`
 - Sort order comes from `SortOrder`
 - Weight precision is 2 decimals

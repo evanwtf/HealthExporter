@@ -39,7 +39,7 @@ final class A1CCSVBytePinningTests: XCTestCase {
     func testA1CRow_exactByteFormat_percentUnit() {
         let sample = a1cSample(date: fixedDate, value: 7.2, unit: "%", source: "TestClinic")
         let expected = CSVGenerator.csvPreamble + """
-        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,7.20,%,TestClinic
+        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,7.20,%,TestClinic,
 
         """
         XCTAssertEqual(generateCSV(for: [sample]), expected)
@@ -48,7 +48,7 @@ final class A1CCSVBytePinningTests: XCTestCase {
     func testA1CRow_exactByteFormat_mmolPerMolUnit() {
         let sample = a1cSample(date: fixedDate, value: 55.0, unit: "mmol/mol", source: "LabCorp")
         let expected = CSVGenerator.csvPreamble + """
-        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,55.00,mmol/mol,LabCorp
+        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,55.00,mmol/mol,LabCorp,
 
         """
         XCTAssertEqual(generateCSV(for: [sample]), expected)
@@ -57,7 +57,7 @@ final class A1CCSVBytePinningTests: XCTestCase {
     func testA1CRow_exactByteFormat_sourceWithCommaIsCSVEscaped() {
         let sample = a1cSample(date: fixedDate, value: 6.1, unit: "%", source: "Foo, Inc.")
         let expected = CSVGenerator.csvPreamble + """
-        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,"Foo, Inc."
+        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,"Foo, Inc.",
 
         """
         XCTAssertEqual(generateCSV(for: [sample]), expected)
@@ -66,7 +66,7 @@ final class A1CCSVBytePinningTests: XCTestCase {
     func testA1CRow_exactByteFormat_sourceWithQuoteIsCSVEscaped() {
         let sample = a1cSample(date: fixedDate, value: 6.1, unit: "%", source: "Mom's Lab")
         let expected = CSVGenerator.csvPreamble + """
-        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,Mom's Lab
+        2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,Mom's Lab,
 
         """
         XCTAssertEqual(generateCSV(for: [sample]), expected)
@@ -88,8 +88,8 @@ final class A1CCSVBytePinningTests: XCTestCase {
             a1cSample(date: older, value: 6.5, unit: "%", source: "C"),
         ]
         let expected = CSVGenerator.csvPreamble + """
-        2024-01-01T00:00:00Z,Hemoglobin A1C,4548-4,6.50,%,C
-        2024-12-31T23:59:59Z,Hemoglobin A1C,4548-4,7.50,%,C
+        2024-01-01T00:00:00Z,Hemoglobin A1C,4548-4,6.50,%,C,
+        2024-12-31T23:59:59Z,Hemoglobin A1C,4548-4,7.50,%,C,
 
         """
         XCTAssertEqual(generateCSV(for: samples), expected)

@@ -8,6 +8,14 @@ struct GlucoseSampleMgDl {
     let startDate: Date
     let value: Double // mg/dL value (e.g., 145.0 for 145 mg/dL)
     let source: String
+    let mealTime: HKBloodGlucoseMealTime?
+
+    init(startDate: Date, value: Double, source: String, mealTime: HKBloodGlucoseMealTime? = nil) {
+        self.startDate = startDate
+        self.value = value
+        self.source = source
+        self.mealTime = mealTime
+    }
 
     init?(from sample: HKQuantitySample) {
         let glucoseUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
@@ -20,6 +28,19 @@ struct GlucoseSampleMgDl {
         self.startDate = sample.startDate
         self.value = mgDlValue
         self.source = sample.sourceRevision.source.name
+        self.mealTime = Self.mealTime(fromMetadata: sample.metadata)
+    }
+
+    /// Imported C enums accept any raw value, so map the known cases explicitly.
+    static func mealTime(fromMetadata metadata: [String: Any]?) -> HKBloodGlucoseMealTime? {
+        guard let raw = metadata?[HKMetadataKeyBloodGlucoseMealTime] as? NSNumber else {
+            return nil
+        }
+        switch raw.intValue {
+        case HKBloodGlucoseMealTime.preprandial.rawValue: return .preprandial
+        case HKBloodGlucoseMealTime.postprandial.rawValue: return .postprandial
+        default: return nil
+        }
     }
 }
 

@@ -48,7 +48,7 @@ class CSVGenerator {
         ### Not a medical record. Verify with your healthcare provider before any clinical use.
         """
 
-    static let csvHeader = "Date,Metric,LOINC,Value,Unit,Source"
+    static let csvHeader = "Date,Metric,LOINC,Value,Unit,Source,Meal Time"
 
     /// Disclaimer block followed by a newline, then the column header and a newline.
     /// Use this as the starting buffer for every CSV export.
@@ -75,25 +75,34 @@ class CSVGenerator {
         return field
     }
 
+    static func mealTimeLabel(_ mealTime: HKBloodGlucoseMealTime?) -> String {
+        switch mealTime {
+        case .preprandial: return "Before Meal"
+        case .postprandial: return "After Meal"
+        default: return ""
+        }
+    }
+
     private static func weightRow(for sample: HKQuantitySample, unit: WeightUnit, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.startDate)
         let weightKg = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo))
         let (value, unitString) = convertWeight(weightKg, to: unit)
         let source = csvEscape(sample.sourceRevision.source.name)
-        return "\(date),Weight,,\(String(format: "%.2f", value)),\(unitString),\(source)\n"
+        return "\(date),Weight,,\(String(format: "%.2f", value)),\(unitString),\(source),\n"
     }
 
     private static func stepsRow(for sample: HKQuantitySample, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.startDate)
         let steps = sample.quantity.doubleValue(for: HKUnit.count())
         let source = csvEscape(sample.sourceRevision.source.name)
-        return "\(date),Steps,,\(Int(steps.rounded())),steps,\(source)\n"
+        return "\(date),Steps,,\(Int(steps.rounded())),steps,\(source),\n"
     }
 
     private static func glucoseRow(for sample: GlucoseSampleMgDl, dateFormatter: DateFormatter) -> String {
         let date = dateFormatter.string(from: sample.startDate)
         let source = csvEscape(sample.source)
-        return "\(date),Blood Glucose,,\(String(format: "%.0f", sample.value)),mg/dL,\(source)\n"
+        let mealTime = mealTimeLabel(sample.mealTime)
+        return "\(date),Blood Glucose,,\(String(format: "%.0f", sample.value)),mg/dL,\(source),\(mealTime)\n"
     }
 
     private static func labResultRow(for sample: LabResultSample, dateFormatter: DateFormatter) -> String {
@@ -104,7 +113,7 @@ class CSVGenerator {
         let source = csvEscape(sample.source)
         let precision = LabMetricRegistry.metric(forLoincCode: sample.loincCode)?.valuePrecision ?? 2
         let value = String(format: "%.\(precision)f", sample.value)
-        return "\(date),\(metric),\(loinc),\(value),\(unit),\(source)\n"
+        return "\(date),\(metric),\(loinc),\(value),\(unit),\(source),\n"
     }
 
     private static func vitalRow(for sample: HKQuantitySample, component: VitalMetricComponent, temperatureUnit: TemperatureUnit, dateFormatter: DateFormatter) -> String {
@@ -114,7 +123,7 @@ class CSVGenerator {
         let value = String(format: "%.\(component.valuePrecision)f", result.value)
         let metric = csvEscape(component.displayName)
         let unit = csvEscape(result.unit)
-        return "\(date),\(metric),,\(value),\(unit),\(source)\n"
+        return "\(date),\(metric),,\(value),\(unit),\(source),\n"
     }
 
     // MARK: - Append methods (memory-efficient, sort in-place, write directly to string)

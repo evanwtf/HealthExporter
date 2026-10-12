@@ -95,21 +95,4 @@ final class SettingsEnumTests: XCTestCase {
         XCTAssertEqual(WeightUnit(rawValue: "Pounds (lbs)"), .pounds)
         XCTAssertNil(WeightUnit(rawValue: "invalid"))
     }
-
-    // MARK: - DistanceSpeedUnit
-
-    func testDistanceSpeedUnit_allCasesCount() {
-        XCTAssertEqual(DistanceSpeedUnit.allCases.count, 2)
-    }
-
-    func testDistanceSpeedUnit_rawValues() {
-        XCTAssertEqual(DistanceSpeedUnit.metric.rawValue, "Metric (meters/kph)")
-        XCTAssertEqual(DistanceSpeedUnit.imperial.rawValue, "Imperial (feet/mph)")
-    }
-
-    func testDistanceSpeedUnit_initFromRawValue() {
-        XCTAssertEqual(DistanceSpeedUnit(rawValue: "Metric (meters/kph)"), .metric)
-        XCTAssertEqual(DistanceSpeedUnit(rawValue: "Imperial (feet/mph)"), .imperial)
-        XCTAssertNil(DistanceSpeedUnit(rawValue: "invalid"))
-    }
 }

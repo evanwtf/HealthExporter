@@ -291,4 +291,48 @@ final class HealthKitQueryHelpersTests: XCTestCase {
 
         XCTAssertEqual(message, "Failed to generate weight data.")
     }
+
+    // MARK: - limitLabResultsPerMetric
+
+    private func lab(_ code: String, _ name: String, day: Int) -> LabResultSample {
+        LabResultSample(metricName: name, loincCode: code, effectiveDateTime: date(2024, 6, day), value: Double(day), unit: "u")
+    }
+
+    func testLimitPerMetric_keepsNewestPerMetric() {
+        let samples = [
+            lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 1),
+            lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 3),
+            lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 2),
+            lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 1),
+            lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 5),
+            lab(LOINCCode.totalCholesterol, "Total Cholesterol", day: 4)
+        ]
+        let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 2)
+        XCTAssertEqual(limited.count, 4)
+        XCTAssertEqual(Set(limited.filter { $0.loincCode == LOINCCode.hemoglobinA1C }.map(\.value)), [2, 3])
+        XCTAssertEqual(Set(limited.filter { $0.loincCode == LOINCCode.totalCholesterol }.map(\.value)), [4, 5])
+    }
+
+    func testLimitPerMetric_oneMetricDoesNotStarveAnother() {
+        var samples = (1...20).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+        samples.append(lab(LOINCCode.triglycerides, "Triglycerides", day: 1))
+        let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 5)
+        XCTAssertEqual(limited.filter { $0.loincCode == LOINCCode.hemoglobinA1C }.count, 5)
+        XCTAssertEqual(limited.filter { $0.loincCode == LOINCCode.triglycerides }.count, 1)
+    }
+
+    func testLimitPerMetric_alternateCodesCountAsSameMetric() {
+        let samples = [
+            lab(LOINCCode.ldlCholesterolDirect, "LDL Cholesterol", day: 1),
+            lab("13457-7", "LDL Cholesterol", day: 2),
+            lab("18262-6", "LDL Cholesterol", day: 3)
+        ]
+        let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 2)
+        XCTAssertEqual(limited.map(\.loincCode), ["13457-7", "18262-6"])
+    }
+
+    func testLimitPerMetric_noLimitReturnsAll() {
+        let samples = (1...5).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+        XCTAssertEqual(HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: HKObjectQueryNoLimit).count, 5)
+    }
 }

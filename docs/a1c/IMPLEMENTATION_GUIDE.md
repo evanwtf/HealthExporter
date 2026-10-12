@@ -32,7 +32,8 @@ Lab result export — including Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thy
 ### Fetch Path
 
 - `HealthKitManager.fetchLabResults(metrics:dateRange:limit:completion:)` runs a single `HKSampleQuery` against `HKClinicalType.labResultRecord`
-- For each returned record, the fetch tries every requested LOINC code; all matches become `LabResultSample` rows
+- Each returned record is parsed once. The first LOINC coding (in record order) that matches a requested metric's primary or alternate code makes one `LabResultSample` row; the LOINC column shows that code
+- With "Last X Records", the query has no limit and the newest X rows are kept for each lab
 - Date filtering happens after parsing via `HealthKitQueryHelpers.filterLabResultsByDateRange`
 
 ### UI and Settings

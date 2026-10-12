@@ -7,11 +7,11 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 - **Privacy-first design**: All processing on-device, no analytics, no tracking, no accounts
 - **Multiple health metrics**: Export Weight, Steps, Blood Glucose (mg/dL), selected clinical lab panels, and selected vitals
 - **Flexible date ranges**: Last X days, last X records, custom date range, or all data
-- **Unit preferences**: Configure weight units (kg/lbs), temperature (°C/°F), and distance/speed (metric/imperial); defaults to US units (Fahrenheit, lbs, imperial)
+- **Unit preferences**: Configure weight units (kg/lbs) and temperature (°C/°F); defaults to US units (Fahrenheit, lbs)
 - **Selectable date format**: Choose from 5 date formats including ISO8601 (UTC), `yyyy-MM-dd HH:mm:ss`, `MM/dd/yyyy HH:mm:ss`, and more
 - **Sort order**: Export rows in ascending (oldest first) or descending (newest first) order
 - **CSV export**: Save directly to Files app via `.fileExporter()`
-- **Splash screen** with navigation to data selection and settings
+- **Welcome screen** with navigation to data selection and settings
 - **Settings persistence**: Unit preferences are automatically saved
 - **Clinical records support**: Lab-result export requires Clinical Health Records capability and permission
 - **Memory-optimized**: Health data is cleared from memory immediately after export
@@ -59,9 +59,11 @@ The exported CSV includes the following columns:
 |--------|-------------|
 | **Date** | Timestamp in user-selected format (see below) |
 | **Metric** | Type of measurement (Weight, Steps, Blood Glucose, lab result, or vital sign) |
+| **LOINC** | LOINC code found in the lab record (e.g., `4548-4`); empty for weight, steps, glucose, and vitals |
 | **Value** | Numeric value with metric-specific precision |
 | **Unit** | Unit of measurement (kg, lbs, steps, mg/dL, %, etc.) |
 | **Source** | The app or device that recorded the data (e.g., Withings, Apple Watch) |
+| **Meal Time** | Blood glucose only: `Before Meal`, `After Meal`, or empty when the reading has no meal time. Empty for all other metrics |
 
 ### Date Format Options
 
@@ -78,18 +80,19 @@ Example:
 ### HealthExporterCSV: data exported as-is from Apple Health.
 ### No warranty of accuracy, completeness, or fitness for any purpose.
 ### Not a medical record. Verify with your healthcare provider before any clinical use.
-Date,Metric,LOINC,Value,Unit,Source
-2026-01-09 10:30:00,Weight,,185.50,lbs,Withings
-2026-01-09 11:00:00,Steps,,5432,steps,Apple Watch
-2026-01-09 14:30:00,Blood Glucose,,145,mg/dL,MyFitnessPal
-2026-01-15 14:30:00,Hemoglobin A1C,4548-4,7.50,%,Apple Health
-2026-01-15 14:31:00,Total Cholesterol,2093-3,184,mg/dL,Apple Health
-2026-01-15 14:32:00,Blood Pressure Systolic,,120,mmHg,Apple Health
-2026-01-15 14:32:00,Blood Pressure Diastolic,,80,mmHg,Apple Health
-2026-01-15 14:33:00,Oxygen Saturation,,98.5,%,Apple Health
+Date,Metric,LOINC,Value,Unit,Source,Meal Time
+2026-01-09 10:30:00,Weight,,185.50,lbs,Withings,
+2026-01-09 11:00:00,Steps,,5432,steps,Apple Watch,
+2026-01-09 07:15:00,Blood Glucose,,98,mg/dL,MyFitnessPal,Before Meal
+2026-01-09 14:30:00,Blood Glucose,,145,mg/dL,MyFitnessPal,After Meal
+2026-01-15 14:30:00,Hemoglobin A1C,4548-4,7.50,%,Apple Health,
+2026-01-15 14:31:00,Total Cholesterol,2093-3,184,mg/dL,Apple Health,
+2026-01-15 14:32:00,Blood Pressure Systolic,,120,mmHg,Apple Health,
+2026-01-15 14:32:00,Blood Pressure Diastolic,,80,mmHg,Apple Health,
+2026-01-15 14:33:00,Oxygen Saturation,,98.5,%,Apple Health,
 ```
 
-Each export starts with three `### `-prefixed disclaimer lines so common CSV parsers can be configured to skip them as comments. The `LOINC` column carries the LOINC code for clinical-record lab results and is left empty for HealthKit-native metrics (weight, steps, glucose, vitals).
+Each export starts with three `### `-prefixed disclaimer lines so common CSV parsers can be configured to skip them as comments. The `LOINC` column carries the LOINC code for clinical-record lab results and is left empty for HealthKit-native metrics (weight, steps, glucose, vitals). The `Meal Time` column comes from the meal-time tag on a blood glucose reading; every other row leaves it empty, so each row has seven fields.
 
 Data can be sorted ascending (oldest first) or descending (newest first) within each metric type. Filename format: `HealthExporter_YYYY-MM-DD_HHMMSS.csv`.
 

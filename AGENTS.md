@@ -4,20 +4,20 @@
 `HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`), and CSV output (`CSVGenerator.swift`, `CSVDocument.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/` and `HealthExporter.xcworkspace/`. `CLAUDE.md` is a symlink to this file — edit `AGENTS.md`.
 
 ## Architecture Notes
-Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (splash/loading, then `Next` + Settings) → `DataSelectionView`; `SettingsView` is presented from the launch screen.
+Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (welcome screen; `Choose Data` button, Settings gear in the toolbar) → `DataSelectionView`; `SettingsView` is presented as a sheet from the welcome screen. `HealthExporterTests/ScreenshotTests.swift` renders each screen in light and dark mode and attaches PNGs to the CI result bundle (`test-results` artifact).
 
 Key components:
 
 | File | Role |
 |------|------|
-| `HealthKitManager.swift` | HealthKit authorization and data fetching; uses `DispatchGroup` for parallel concurrent queries. `requestAuthorization(includeLabs:)` opts into clinical-records read; `fetchLabResults(metrics:)` is one query that resolves every requested LOINC |
-| `HealthMetricConfig.swift` | Built-in metric registry (`HealthMetrics`) for the always-available metrics (weight, steps, glucose) plus `BuildConfig` |
-| `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == LOINC), and `LabMetricRegistry.all`. Adding a lab is a single append here |
+| `HealthKitManager.swift` | HealthKit authorization and data fetching; uses `DispatchGroup` for parallel concurrent queries. `requestAuthorization(includeLabs:)` opts into clinical-records read; `fetchLabResults(metrics:)` is one query that parses each record once, matches its LOINC codes (primary and alternate) and keeps the newest `limit` rows per lab |
+| `HealthMetricConfig.swift` | Built-in metric registry (`HealthMetrics`) for the always-available metrics (weight, steps, glucose) |
+| `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == primary LOINC; `alternateLoincCodes` also match records), and `LabMetricRegistry.all`. Adding a lab is a single append here |
 | `HealthSampleTypes.swift` | `GlucoseSampleMgDl`, generic `LabResultSample`, `LOINCCode` constants, and `FHIRLabResultParser` |
 | `ExportLogic.swift` | Pure logic: `isExportEnabled(...,hasSelectedLabs:)`, `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`, date-range/limit helpers, fetch-error ordering, filename generation |
 | `SettingsManager.swift` | Persists unit and format preferences plus `selectedLabPanels` and `favoriteLabCodes` in `UserDefaults`; runs the one-time legacy `exportA1C` → `favoriteLabCodes` migration |
 | `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order. `appendLabResultRows` uses per-metric `LabMetric.valuePrecision` |
-| `DataSelectionView.swift` | Metric toggles (Weight/Steps/Glucose), "Lab Favorites" and "Lab Panels" sections driven by the registry, date range picker, export trigger, and exporter state |
+| `DataSelectionView.swift` | "Activity & Glucose" toggles (Weight/Steps/Glucose), a "Labs" section with one expandable panel per `LabPanel` (individual lab toggles are saved as favorites), a "Vitals" section, date range picker, export trigger, and exporter state |
 
 Lab support (including A1C) uses Clinical Health Records via `HKClinicalTypeIdentifier.labResultRecord` and the LOINC code on each `LabMetric`; see `docs/a1c/` for the registry-driven implementation details.
 
@@ -50,14 +50,14 @@ Export sequence:
 2. `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:)` produces the deduplicated list of `LabMetric`s to fetch.
 3. HealthKit read authorization is requested if needed; `includeLabs` is set when the resolved lab list is non-empty.
 4. `HealthKitManager` fetches the selected metrics in parallel; lab results come from a single `fetchLabResults(metrics:)` call.
-5. `CSVGenerator.generateCombinedCSV()` builds the output in memory, appending generic lab rows via `appendLabResultRows`.
+5. `CSVGenerator.generateCombinedCSV(weightSamples:stepsSamples:glucoseSamples:labResults:vitalSamples:...)` builds the output in memory. It takes the sample arrays `inout` and releases each one as its rows are written.
 6. SwiftUI `.fileExporter()` presents the Files picker.
 7. Sample arrays and `csvContent` are cleared after export.
 
 Keep this flow and its surrounding privacy copy aligned whenever export behavior changes.
 
 ## Coding Style & Naming Conventions
-Follow existing Swift conventions: 4-space indentation, one top-level type per file, `UpperCamelCase` for types, `lowerCamelCase` for properties and methods. Prefer small SwiftUI views and move reusable logic into managers or helper types. Keep comments sparse and only where intent is not obvious. Match current file naming: view types end in `View`, managers end in `Manager`, tests end in `Tests`. When adding metrics, route availability through `HealthMetricConfig.swift`; do not gate UI directly on `BuildConfig`.
+Follow existing Swift conventions: 4-space indentation, one top-level type per file, `UpperCamelCase` for types, `lowerCamelCase` for properties and methods. Prefer small SwiftUI views and move reusable logic into managers or helper types. Keep comments sparse and only where intent is not obvious. Match current file naming: view types end in `View`, managers end in `Manager`, tests end in `Tests`. When adding metrics, route availability through `HealthMetricConfig.swift`.
 
 ## Implementation Patterns
 When adding a built-in HealthKit metric (e.g. a new quantity type):
@@ -70,7 +70,7 @@ When adding a built-in HealthKit metric (e.g. a new quantity type):
 
 When adding a new lab (Clinical Health Records / LOINC-coded observation):
 1. Add the LOINC constant in `LOINCCode` if needed.
-2. Append a `LabMetric` to `LabMetricRegistry.all` with the correct `LabPanel` group and `valuePrecision`.
+2. Append a `LabMetric` to `LabMetricRegistry.all` with the correct `LabPanel` group and `valuePrecision`. Put other LOINC codes for the same measurement in `alternateLoincCodes`; never change an existing `loincCode`, because favorites are keyed on it. A code must belong to one metric only.
 3. No UI, fetch, or CSV code changes are required — the favorites/panel toggles, single `fetchLabResults` query, and registry-driven CSV rendering pick it up automatically.
 4. Add tests (and a CSV byte-pinning test if exact output matters) and docs in the same change.
 
@@ -82,14 +82,15 @@ Memory management matters because HealthKit datasets can be large:
 
 CSV format details:
 - Every export begins with `CSVGenerator.csvDisclaimer` (three `### `-prefixed lines) followed by the column header on the next line. Use `CSVGenerator.csvPreamble` (disclaimer + header + newline) as the starting buffer.
-- Columns are `Date,Metric,LOINC,Value,Unit,Source`
-- The `LOINC` column carries the LOINC code for clinical-record lab rows and is empty for HealthKit-native metrics (weight, steps, glucose, vitals)
+- Columns are `Date,Metric,LOINC,Value,Unit,Source,Meal Time`; every row has all seven fields
+- The `LOINC` column carries the LOINC code found in the clinical record for lab rows and is empty for HealthKit-native metrics (weight, steps, glucose, vitals)
+- The `Meal Time` column is `Before Meal` or `After Meal` for glucose rows tagged with `HKMetadataKeyBloodGlucoseMealTime`, and empty for untagged glucose rows and all other metrics
 - Date formats come from `DateFormatOption`
 - Sort order comes from `SortOrder`
 - Weight precision is 2 decimals
 - Lab precision is per-metric, sourced from `LabMetric.valuePrecision` (A1C renders to 2 decimals)
 - Filename format is `HealthExporter_YYYY-MM-DD_HHMMSS.csv` (see `ExportLogic.exportFilename`)
-- Default units are Fahrenheit, pounds, and imperial
+- Default units are Fahrenheit and pounds
 
 ## Testing Guidelines
 This repo uses `XCTest`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift` and methods named `test...`. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.

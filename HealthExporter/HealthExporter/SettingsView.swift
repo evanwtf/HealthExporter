@@ -10,86 +10,75 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack {
-                Form {
-                    Section(header: Text("Export Behavior")) {
-                        Toggle("Auto-dismiss save confirmation", isOn: $settings.autoDismissSaveConfirmation)
-                            .accessibilityIdentifier("autoDismissSaveConfirmationToggle")
-                        Text("Closes the save confirmation after 5 seconds.")
+            Form {
+                Section {
+                    Toggle("Auto-dismiss save confirmation", isOn: $settings.autoDismissSaveConfirmation)
+                        .accessibilityIdentifier("autoDismissSaveConfirmationToggle")
+                } header: {
+                    Text("Export Behavior")
+                } footer: {
+                    Text("Closes the save confirmation after 5 seconds.")
+                }
+
+                Section(header: Text("Export Format")) {
+                    Picker("Date Format", selection: $settings.dateFormat) {
+                        ForEach(DateFormatOption.allCases, id: \.self) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .accessibilityIdentifier("dateFormatPicker")
+                    Picker("Sort Order", selection: $settings.sortOrder) {
+                        ForEach(SortOrder.allCases, id: \.self) { order in
+                            Text(order.rawValue).tag(order)
+                        }
+                    }
+                    .accessibilityIdentifier("sortOrderPicker")
+                }
+
+                Section(header: Text("Units")) {
+                    Picker("Temperature", selection: $settings.temperatureUnit) {
+                        ForEach(TemperatureUnit.allCases, id: \.self) { unit in
+                            Text(unit.rawValue).tag(unit)
+                        }
+                    }
+                    .accessibilityIdentifier("temperaturePicker")
+
+                    Picker("Weight", selection: $settings.weightUnit) {
+                        ForEach(WeightUnit.allCases, id: \.self) { unit in
+                            Text(unit.rawValue).tag(unit)
+                        }
+                    }
+                    .accessibilityIdentifier("weightUnitPicker")
+                }
+
+                #if targetEnvironment(simulator)
+                Section(header: Text("Testing")) {
+                    Button("Generate Weight Data", action: generateTestData)
+
+                    if !testDataMessage.isEmpty {
+                        Text(testDataMessage)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
+                }
+                #endif
 
-                    Section(header: Text("Export Format")) {
-                        Picker("Date Format", selection: $settings.dateFormat) {
-                            ForEach(DateFormatOption.allCases, id: \.self) { option in
-                                Text(option.displayName).tag(option)
-                            }
-                        }
-                        .accessibilityIdentifier("dateFormatPicker")
-                        Picker("Sort Order", selection: $settings.sortOrder) {
-                            ForEach(SortOrder.allCases, id: \.self) { order in
-                                Text(order.rawValue).tag(order)
-                            }
-                        }
-                        .accessibilityIdentifier("sortOrderPicker")
+                Section(header: Text("About")) {
+                    NavigationLink(destination: PrivacyPolicyView()) {
+                        Text("Privacy Policy & Disclaimer")
                     }
-
-                    Section(header: Text("Units")) {
-                        Picker("Temperature", selection: $settings.temperatureUnit) {
-                            ForEach(TemperatureUnit.allCases, id: \.self) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .accessibilityIdentifier("temperaturePicker")
-
-                        Picker("Weight", selection: $settings.weightUnit) {
-                            ForEach(WeightUnit.allCases, id: \.self) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .accessibilityIdentifier("weightUnitPicker")
-
-                        Picker("Distance/Speed", selection: $settings.distanceSpeedUnit) {
-                            ForEach(DistanceSpeedUnit.allCases, id: \.self) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .accessibilityIdentifier("distanceSpeedPicker")
-                    }
-
-                    #if targetEnvironment(simulator)
-                    Section(header: Text("Testing")) {
-                        Button(action: generateTestData) {
-                            Text("Generate Weight Data")
-                                .foregroundColor(.blue)
-                        }
-
-                        if !testDataMessage.isEmpty {
-                            Text(testDataMessage)
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-                    }
-                    #endif
-
-                    Section(header: Text("About")) {
-                        NavigationLink(destination: PrivacyPolicyView()) {
-                            Text("Privacy Policy & Disclaimer")
-                        }
-                        HStack {
-                            Text("Version")
-                            Spacer()
-                            Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
-                                .foregroundColor(.secondary)
-                        }
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
                     }

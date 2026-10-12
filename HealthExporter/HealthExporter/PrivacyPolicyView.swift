@@ -11,33 +11,30 @@ struct PrivacyPolicyView: View {
 
                     Text("Last updated: May 2026")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     sectionView(title: "Overview",
                         body: "HealthExporterCSV is designed with your privacy as a core principle. All data processing happens entirely on your device. No health data is ever sent to external servers, collected by the developer, or shared with third parties.")
 
                     sectionView(title: "Data We Access",
-                        body: """
-                        HealthExporterCSV requests read-only access to the following Apple HealthKit data types, only when you explicitly grant permission:
-
-                        • Weight
-                        • Step Count
-                        • Blood Glucose
-                        • Selected clinical lab results, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs
-                        • Selected vitals, such as blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature
-
-                        You control exactly which data types to share through the Apple Health permissions dialog.
-                        """)
+                        body: "HealthExporterCSV requests read-only access to the following Apple HealthKit data types, only when you explicitly grant permission:",
+                        bullets: [
+                            "Weight",
+                            "Step Count",
+                            "Blood Glucose",
+                            "Selected clinical lab results, such as Hemoglobin A1C, lipid panel, CBC, CMP / BMP, thyroid, and other tracked labs",
+                            "Selected vitals, such as blood pressure, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, and body temperature",
+                        ],
+                        closing: "You control exactly which data types to share through the Apple Health permissions dialog.")
 
                     sectionView(title: "How Your Data Is Used",
-                        body: """
-                        Your health data is used solely to generate CSV export files on your device. Specifically:
-
-                        • Data is read from HealthKit only when you initiate an export.
-                        • The CSV file is generated in memory and presented through the system file picker.
-                        • Health data is cleared from app memory immediately after export.
-                        • No health data is stored persistently by the app.
-                        """)
+                        body: "Your health data is used solely to generate CSV export files on your device. Specifically:",
+                        bullets: [
+                            "Data is read from HealthKit only when you initiate an export.",
+                            "The CSV file is generated in memory and presented through the system file picker.",
+                            "Health data is cleared from app memory immediately after export.",
+                            "No health data is stored persistently by the app.",
+                        ])
                 }
 
                 Group {
@@ -45,15 +42,14 @@ struct PrivacyPolicyView: View {
                         body: "The only data HealthExporterCSV stores persistently is your preferences (unit selections, date format, sort order, and metric toggle states) in the app's local UserDefaults. No health data, personal identifiers, or usage analytics are stored.")
 
                     sectionView(title: "No Data Collection or Transmission",
-                        body: """
-                        HealthExporterCSV does not:
-
-                        • Collect or transmit any data to external servers
-                        • Include analytics, crash reporting, or tracking SDKs
-                        • Require or support user accounts
-                        • Use advertising or marketing frameworks
-                        • Share data with any third parties
-                        """)
+                        body: "HealthExporterCSV does not:",
+                        bullets: [
+                            "Collect or transmit any data to external servers",
+                            "Include analytics, crash reporting, or tracking SDKs",
+                            "Require or support user accounts",
+                            "Use advertising or marketing frameworks",
+                            "Share data with any third parties",
+                        ])
 
                     sectionView(title: "Your Control",
                         body: "You can revoke HealthExporterCSV's access to HealthKit data at any time through Settings > Health > Data Access & Devices on your iPhone. Revoking access does not affect any CSV files you have previously exported.")
@@ -89,13 +85,34 @@ struct PrivacyPolicyView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func sectionView(title: String, body: String) -> some View {
+    private func sectionView(title: String, body: String, bullets: [String] = [], closing: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.headline)
             Text(body)
                 .font(.body)
-                .foregroundColor(.secondary)
+            if !bullets.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(bullets, id: \.self) { item in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\u{2022}")
+                                .fontWeight(.heavy)
+                                .foregroundStyle(.tint)
+                                .accessibilityHidden(true)
+                            Text(item)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .font(.body)
+                .padding(.leading, 4)
+                .padding(.top, 4)
+            }
+            if let closing {
+                Text(closing)
+                    .font(.body)
+                    .padding(.top, 4)
+            }
         }
     }
 }

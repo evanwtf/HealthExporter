@@ -100,4 +100,49 @@ final class GlucoseSampleTests: XCTestCase {
         }
         XCTAssertEqual(result.value, expectedValue, accuracy: 0.001)
     }
+
+    // MARK: - Meal time metadata
+
+    private func makeSample(value: Double, metadata: [String: Any]?) -> HKQuantitySample {
+        let date = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        return HKQuantitySample(
+            type: glucoseType,
+            quantity: HKQuantity(unit: mgDlUnit, doubleValue: value),
+            start: date,
+            end: date,
+            metadata: metadata
+        )
+    }
+
+    func testInit_preprandialMetadata_setsBeforeMeal() {
+        let sample = makeSample(value: 98, metadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: HKBloodGlucoseMealTime.preprandial.rawValue)])
+        XCTAssertEqual(GlucoseSampleMgDl(from: sample)?.mealTime, .preprandial)
+    }
+
+    func testInit_postprandialMetadata_setsAfterMeal() {
+        let sample = makeSample(value: 140, metadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: HKBloodGlucoseMealTime.postprandial.rawValue)])
+        XCTAssertEqual(GlucoseSampleMgDl(from: sample)?.mealTime, .postprandial)
+    }
+
+    func testInit_noMetadata_mealTimeIsNil() {
+        let result = GlucoseSampleMgDl(from: makeSample(value: 110, metadata: nil))
+        XCTAssertNotNil(result)
+        XCTAssertNil(result?.mealTime)
+    }
+
+    // HealthKit rejects an unknown meal-time value when the sample is created,
+    // so the mapping is tested directly on the metadata dictionary.
+    func testMealTimeFromMetadata_unknownRawValue_isNil() {
+        XCTAssertNil(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 99)]))
+        XCTAssertNil(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 0)]))
+    }
+
+    func testMealTimeFromMetadata_nonNumberValue_isNil() {
+        XCTAssertNil(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: "before"]))
+    }
+
+    func testMealTimeFromMetadata_knownRawValues() {
+        XCTAssertEqual(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 1)]), .preprandial)
+        XCTAssertEqual(GlucoseSampleMgDl.mealTime(fromMetadata: [HKMetadataKeyBloodGlucoseMealTime: NSNumber(value: 2)]), .postprandial)
+    }
 }

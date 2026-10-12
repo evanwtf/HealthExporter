@@ -1,44 +1,44 @@
-import XCTest
+import Foundation
+import Testing
 @testable import HealthExporter
 
-final class DateRangeOptionTests: XCTestCase {
+struct DateRangeOptionTests {
 
-    func testAllCasesCount() {
-        XCTAssertEqual(DateRangeOption.allCases.count, 4)
+    @Test func allCasesCount() {
+        #expect(DateRangeOption.allCases.count == 4)
     }
 
-    func testAllCasesExist() {
+    @Test func allCasesExist() {
         let cases = DateRangeOption.allCases
-        XCTAssertTrue(cases.contains(.lastXDays))
-        XCTAssertTrue(cases.contains(.lastXRecords))
-        XCTAssertTrue(cases.contains(.specificDateRange))
-        XCTAssertTrue(cases.contains(.allRecords))
+        #expect(cases.contains(.lastXDays))
+        #expect(cases.contains(.lastXRecords))
+        #expect(cases.contains(.specificDateRange))
+        #expect(cases.contains(.allRecords))
     }
 
-    func testRawValues() {
-        XCTAssertEqual(DateRangeOption.lastXDays.rawValue, "Last X Days")
-        XCTAssertEqual(DateRangeOption.lastXRecords.rawValue, "Last X Records")
-        XCTAssertEqual(DateRangeOption.specificDateRange.rawValue, "Specific Date Range")
-        XCTAssertEqual(DateRangeOption.allRecords.rawValue, "All Records")
+    @Test func rawValues() {
+        #expect(DateRangeOption.lastXDays.rawValue == "Last X Days")
+        #expect(DateRangeOption.lastXRecords.rawValue == "Last X Records")
+        #expect(DateRangeOption.specificDateRange.rawValue == "Specific Date Range")
+        #expect(DateRangeOption.allRecords.rawValue == "All Records")
     }
 
-    func testDisplayNameMatchesRawValue() {
+    @Test func displayNameMatchesRawValue() {
         for option in DateRangeOption.allCases {
-            XCTAssertEqual(option.displayName, option.rawValue,
-                "\(option) displayName should equal its rawValue")
+            #expect(option.displayName == option.rawValue, "\(option) displayName should equal its rawValue")
         }
     }
 
-    func testInitFromValidRawValue() {
-        XCTAssertEqual(DateRangeOption(rawValue: "Last X Days"), .lastXDays)
-        XCTAssertEqual(DateRangeOption(rawValue: "Last X Records"), .lastXRecords)
-        XCTAssertEqual(DateRangeOption(rawValue: "Specific Date Range"), .specificDateRange)
-        XCTAssertEqual(DateRangeOption(rawValue: "All Records"), .allRecords)
+    @Test func initFromValidRawValue() {
+        #expect(DateRangeOption(rawValue: "Last X Days") == .lastXDays)
+        #expect(DateRangeOption(rawValue: "Last X Records") == .lastXRecords)
+        #expect(DateRangeOption(rawValue: "Specific Date Range") == .specificDateRange)
+        #expect(DateRangeOption(rawValue: "All Records") == .allRecords)
     }
 
-    func testInitFromInvalidRawValue_returnsNil() {
-        XCTAssertNil(DateRangeOption(rawValue: "Invalid"))
-        XCTAssertNil(DateRangeOption(rawValue: ""))
-        XCTAssertNil(DateRangeOption(rawValue: "last x days")) // case-sensitive
+    @Test func initFromInvalidRawValue_returnsNil() {
+        #expect(DateRangeOption(rawValue: "Invalid") == nil)
+        #expect(DateRangeOption(rawValue: "") == nil)
+        #expect(DateRangeOption(rawValue: "last x days") == nil) // case-sensitive
     }
 }

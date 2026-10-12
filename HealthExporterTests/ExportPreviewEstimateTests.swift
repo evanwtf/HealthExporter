@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 import HealthKit
 @testable import HealthExporter
 
-final class ExportPreviewEstimateTests: XCTestCase {
+struct ExportPreviewEstimateTests {
 
     private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -22,39 +23,39 @@ final class ExportPreviewEstimateTests: XCTestCase {
         return Calendar(identifier: .gregorian).date(from: components)!
     }
 
-    func testRoundedRowCount_underThousandRoundsToNearestHundred() {
+    @Test func roundedRowCount_underThousandRoundsToNearestHundred() {
         let estimate = ExportPreviewEstimate(rowCount: 720, estimatedByteCount: 7_240)
 
-        XCTAssertEqual(estimate.roundedRowCount, 700)
-        XCTAssertTrue(estimate.summaryText.contains("around 700 rows"))
+        #expect(estimate.roundedRowCount == 700)
+        #expect(estimate.summaryText.contains("around 700 rows"))
     }
 
-    func testRoundedRowCount_overThousandRoundsToNearestThousand() {
+    @Test func roundedRowCount_overThousandRoundsToNearestThousand() {
         let estimate = ExportPreviewEstimate(rowCount: 19_432, estimatedByteCount: 1_980_000)
 
-        XCTAssertEqual(estimate.roundedRowCount, 19_000)
-        XCTAssertTrue(estimate.summaryText.contains("around 19,000 rows"))
+        #expect(estimate.roundedRowCount == 19_000)
+        #expect(estimate.summaryText.contains("around 19,000 rows"))
     }
 
-    func testShouldShowConfirmation_falseWhenRowsAndBytesAreUnderThreshold() {
+    @Test func shouldShowConfirmation_falseWhenRowsAndBytesAreUnderThreshold() {
         let estimate = ExportPreviewEstimate(rowCount: 500, estimatedByteCount: 1_000_000)
 
-        XCTAssertFalse(estimate.shouldShowConfirmation)
+        #expect(!estimate.shouldShowConfirmation)
     }
 
-    func testShouldShowConfirmation_trueWhenRowCountExceedsThreshold() {
+    @Test func shouldShowConfirmation_trueWhenRowCountExceedsThreshold() {
         let estimate = ExportPreviewEstimate(rowCount: 501, estimatedByteCount: 5_000)
 
-        XCTAssertTrue(estimate.shouldShowConfirmation)
+        #expect(estimate.shouldShowConfirmation)
     }
 
-    func testShouldShowConfirmation_trueWhenByteCountExceedsThreshold() {
+    @Test func shouldShowConfirmation_trueWhenByteCountExceedsThreshold() {
         let estimate = ExportPreviewEstimate(rowCount: 10, estimatedByteCount: 1_000_001)
 
-        XCTAssertTrue(estimate.shouldShowConfirmation)
+        #expect(estimate.shouldShowConfirmation)
     }
 
-    func testMakePreviewEstimate_matchesGeneratedCSVByteCount() {
+    @Test func makePreviewEstimate_matchesGeneratedCSVByteCount() {
         let weightSample = HKQuantitySample(
             type: weightType,
             quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 80.0),
@@ -108,7 +109,7 @@ final class ExportPreviewEstimateTests: XCTestCase {
             dateFormat: .yyyyMMddHHmmss
         )
 
-        XCTAssertEqual(estimate.rowCount, 5)
-        XCTAssertEqual(estimate.estimatedByteCount, csv.utf8.count)
+        #expect(estimate.rowCount == 5)
+        #expect(estimate.estimatedByteCount == csv.utf8.count)
     }
 }

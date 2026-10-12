@@ -117,24 +117,23 @@ Hemoglobin A1C export has been **verified working end-to-end** on a physical dev
 
 ## Releases
 
-Three GitHub Actions workflows handle the release pipeline. Every pull request merged to `main` cuts a new version.
+Every pull request merged to `main` cuts a new version and uploads it to TestFlight. Nothing runs from a laptop. The chain:
+
+1. A merge to `main` starts `bump-build-number.yml` on the Linux runner. It bumps the build number and the patch version, commits the bump, pushes a `vX.Y.Z` tag, creates the GitHub release, and dispatches `release-testflight.yml` on the tag.
+2. `release-testflight.yml` runs on the Mac runner. It tests, archives, exports a signed IPA and uploads it to internal TestFlight.
 
 | Workflow | Trigger | Runner | What it does |
 |----------|---------|--------|--------------|
-| `.github/workflows/bump-build-number.yml` | PR merge to `main` | `[self-hosted, Linux, X64]` | Increments `CURRENT_PROJECT_VERSION` and the `MARKETING_VERSION` patch component, commits the bump, and pushes a `vX.Y.Z` tag |
-| `.github/workflows/publish-release.yml` | `v*` tag push | `[self-hosted, Linux, X64]` | Creates the GitHub release with auto-generated notes |
-| `.github/workflows/release-testflight.yml` | Manual dispatch + daily 13:00 UTC schedule | `[self-hosted, macOS, ARM64]` (`MacMiniM6_01`) | Tests, archives, exports a signed IPA via [`ci/ExportOptions.plist`](ci/ExportOptions.plist), and uploads it to internal TestFlight |
+| `.github/workflows/bump-build-number.yml` | PR merge to `main` | `[self-hosted, Linux, X64]` | Increments `CURRENT_PROJECT_VERSION` and the `MARKETING_VERSION` patch component, commits the bump, pushes a `vX.Y.Z` tag, creates the GitHub release with generated notes, and dispatches the TestFlight upload on the tag |
+| `.github/workflows/release-testflight.yml` | Dispatch from the bump workflow, or by hand | `[self-hosted, macOS, ARM64]` (`MacMiniM6_01`) | Tests, archives, exports a signed IPA via [`ci/ExportOptions.plist`](ci/ExportOptions.plist), and uploads it to internal TestFlight |
+| `.github/workflows/publish-release.yml` | `v*` tag pushed by hand | `[self-hosted, Linux, X64]` | Fallback: creates the GitHub release for a tag that did not come from the bump workflow |
 
-Manual TestFlight upload for the current `main`:
+A tag that the bump workflow pushes with `GITHUB_TOKEN` does not trigger other workflows. That is why the bump workflow creates the release and dispatches TestFlight itself.
 
-```sh
-gh workflow run release-testflight.yml --repo evanwtf/HealthExporter
-```
-
-Upload a specific tag or commit:
+Rebuild and upload a specific tag by hand. App Store Connect rejects a build number that it already has, so this only helps when the earlier upload failed:
 
 ```sh
-gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f ref=vX.Y.Z
+gh workflow run release-testflight.yml --repo evanwtf/HealthExporter --ref vX.Y.Z
 ```
 
 Dry run: test, archive and export a signed IPA, but do not upload it:
@@ -143,7 +142,7 @@ Dry run: test, archive and export a signed IPA, but do not upload it:
 gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false
 ```
 
-The TestFlight workflow needs these secrets. Its first step after the daily-change check fails the job if one is missing.
+The TestFlight workflow needs these secrets. Its "Check required secrets" step fails the job early if one is missing.
 
 - Repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`: an App Store Connect API key with the App Manager role. One team key serves all the team's apps.
 - Organization secret `MACOS_KEYCHAIN_PASSWORD`: the password for the runner's login keychain. Its selected repositories must include `HealthExporter`.

@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 @testable import HealthExporter
 
-final class DayRangeSummaryFormatterTests: XCTestCase {
+struct DayRangeSummaryFormatterTests {
 
     private var referenceDate: Date {
         var components = DateComponents()
@@ -15,19 +16,19 @@ final class DayRangeSummaryFormatterTests: XCTestCase {
         return Calendar(identifier: .gregorian).date(from: components)!
     }
 
-    func testSummaryText_formatsSevenDayRangeRelativeToToday() {
+    @Test func summaryText_formatsSevenDayRangeRelativeToToday() {
         let calendar = Calendar(identifier: .gregorian)
 
         let summary = DayRangeSummaryFormatter.summaryText(forDays: 7, relativeTo: referenceDate, calendar: calendar)
 
-        XCTAssertEqual(summary, "March 14, 2026 to today")
+        #expect(summary == "March 14, 2026 to today")
     }
 
-    func testSummaryText_formatsOneDayRange() {
+    @Test func summaryText_formatsOneDayRange() {
         let calendar = Calendar(identifier: .gregorian)
 
         let summary = DayRangeSummaryFormatter.summaryText(forDays: 1, relativeTo: referenceDate, calendar: calendar)
 
-        XCTAssertEqual(summary, "March 20, 2026 to today")
+        #expect(summary == "March 20, 2026 to today")
     }
 }

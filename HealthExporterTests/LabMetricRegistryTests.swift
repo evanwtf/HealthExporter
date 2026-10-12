@@ -1,71 +1,72 @@
-import XCTest
+import Foundation
+import Testing
 @testable import HealthExporter
 
-final class LabMetricRegistryTests: XCTestCase {
+struct LabMetricRegistryTests {
 
     // MARK: - LabPanel
 
-    func testLabPanel_hasFiveCases() {
-        XCTAssertEqual(LabPanel.allCases.count, 5)
+    @Test func labPanel_hasFiveCases() {
+        #expect(LabPanel.allCases.count == 5)
     }
 
-    func testLabPanel_containsExpectedGroups() {
+    @Test func labPanel_containsExpectedGroups() {
         let cases = Set(LabPanel.allCases)
-        XCTAssertEqual(cases, [.lipid, .cbc, .cmp, .thyroid, .other])
+        #expect(cases == [.lipid, .cbc, .cmp, .thyroid, .other])
     }
 
-    func testLabPanel_displayNamesMatchExportSections() {
-        XCTAssertEqual(LabPanel.lipid.displayName, "Lipid panel")
-        XCTAssertEqual(LabPanel.cbc.displayName, "CBC")
-        XCTAssertEqual(LabPanel.cmp.displayName, "CMP / BMP")
-        XCTAssertEqual(LabPanel.thyroid.displayName, "Thyroid")
-        XCTAssertEqual(LabPanel.other.displayName, "Other")
+    @Test func labPanel_displayNamesMatchExportSections() {
+        #expect(LabPanel.lipid.displayName == "Lipid panel")
+        #expect(LabPanel.cbc.displayName == "CBC")
+        #expect(LabPanel.cmp.displayName == "CMP / BMP")
+        #expect(LabPanel.thyroid.displayName == "Thyroid")
+        #expect(LabPanel.other.displayName == "Other")
     }
 
     // MARK: - LabMetric
 
-    func testLabMetric_idEqualsLoincCode() {
+    @Test func labMetric_idEqualsLoincCode() {
         let metric = LabMetric(
             name: "Hemoglobin A1C",
             loincCode: "4548-4",
             group: .other,
             valuePrecision: 2
         )
-        XCTAssertEqual(metric.id, metric.loincCode)
-        XCTAssertEqual(metric.id, "4548-4")
+        #expect(metric.id == metric.loincCode)
+        #expect(metric.id == "4548-4")
     }
 
     // MARK: - LabMetricRegistry
 
-    func testRegistry_containsHemoglobinA1C() {
+    @Test func registry_containsHemoglobinA1C() {
         let a1c = LabMetricRegistry.all.first { $0.loincCode == LOINCCode.hemoglobinA1C }
-        XCTAssertNotNil(a1c)
-        XCTAssertEqual(a1c?.name, "Hemoglobin A1C")
-        XCTAssertEqual(a1c?.group, .other)
-        XCTAssertEqual(a1c?.valuePrecision, 2)
+        #expect(a1c != nil)
+        #expect(a1c?.name == "Hemoglobin A1C")
+        #expect(a1c?.group == .other)
+        #expect(a1c?.valuePrecision == 2)
     }
 
-    func testRegistry_loincCodesAreUnique() {
+    @Test func registry_loincCodesAreUnique() {
         let codes = LabMetricRegistry.all.map(\.loincCode)
-        XCTAssertEqual(Set(codes).count, codes.count, "Duplicate LOINC codes in registry: \(codes)")
+        #expect(Set(codes).count == codes.count, "Duplicate LOINC codes in registry: \(codes)")
     }
 
-    func testRegistry_lookupByLoincCode_returnsMatchingMetric() {
+    @Test func registry_lookupByLoincCode_returnsMatchingMetric() {
         let metric = LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)
-        XCTAssertNotNil(metric)
-        XCTAssertEqual(metric?.loincCode, LOINCCode.hemoglobinA1C)
+        #expect(metric != nil)
+        #expect(metric?.loincCode == LOINCCode.hemoglobinA1C)
     }
 
-    func testRegistry_lookupByLoincCode_missingCode_returnsNil() {
-        XCTAssertNil(LabMetricRegistry.metric(forLoincCode: "9999-9"))
+    @Test func registry_lookupByLoincCode_missingCode_returnsNil() {
+        #expect(LabMetricRegistry.metric(forLoincCode: "9999-9") == nil)
     }
 
-    func testRegistry_metricsForPanel_other_includesA1C() {
+    @Test func registry_metricsForPanel_other_includesA1C() {
         let others = LabMetricRegistry.metrics(in: .other)
-        XCTAssertTrue(others.contains { $0.loincCode == LOINCCode.hemoglobinA1C })
+        #expect(others.contains { $0.loincCode == LOINCCode.hemoglobinA1C })
     }
 
-    func testRegistry_metricsForPanel_lipid_includesExpectedMetrics() {
+    @Test func registry_metricsForPanel_lipid_includesExpectedMetrics() {
         let lipids = LabMetricRegistry.metrics(in: .lipid)
         let expectedCodes: Set<String> = [
             LOINCCode.totalCholesterol,
@@ -74,20 +75,20 @@ final class LabMetricRegistryTests: XCTestCase {
             LOINCCode.triglycerides
         ]
 
-        XCTAssertEqual(Set(lipids.map(\.loincCode)), expectedCodes)
-        XCTAssertTrue(lipids.allSatisfy { $0.group == .lipid })
-        XCTAssertTrue(lipids.allSatisfy { $0.valuePrecision == 0 })
+        #expect(Set(lipids.map(\.loincCode)) == expectedCodes)
+        #expect(lipids.allSatisfy { $0.group == .lipid })
+        #expect(lipids.allSatisfy { $0.valuePrecision == 0 })
     }
 
-    func testRegistry_lipidMetricsHaveExpectedNames() {
+    @Test func registry_lipidMetricsHaveExpectedNames() {
         let metricsByCode = Dictionary(uniqueKeysWithValues: LabMetricRegistry.metrics(in: .lipid).map { ($0.loincCode, $0.name) })
-        XCTAssertEqual(metricsByCode[LOINCCode.totalCholesterol], "Total Cholesterol")
-        XCTAssertEqual(metricsByCode[LOINCCode.hdlCholesterol], "HDL Cholesterol")
-        XCTAssertEqual(metricsByCode[LOINCCode.ldlCholesterolDirect], "LDL Cholesterol")
-        XCTAssertEqual(metricsByCode[LOINCCode.triglycerides], "Triglycerides")
+        #expect(metricsByCode[LOINCCode.totalCholesterol] == "Total Cholesterol")
+        #expect(metricsByCode[LOINCCode.hdlCholesterol] == "HDL Cholesterol")
+        #expect(metricsByCode[LOINCCode.ldlCholesterolDirect] == "LDL Cholesterol")
+        #expect(metricsByCode[LOINCCode.triglycerides] == "Triglycerides")
     }
 
-    func testRegistry_metricsForPanel_cbc_includesExpectedMetrics() {
+    @Test func registry_metricsForPanel_cbc_includesExpectedMetrics() {
         let cbc = LabMetricRegistry.metrics(in: .cbc)
         let expectedCodes: Set<String> = [
             LOINCCode.whiteBloodCellCount,
@@ -101,11 +102,11 @@ final class LabMetricRegistryTests: XCTestCase {
             LOINCCode.redCellDistributionWidth
         ]
 
-        XCTAssertEqual(Set(cbc.map(\.loincCode)), expectedCodes)
-        XCTAssertTrue(cbc.allSatisfy { $0.group == .cbc })
+        #expect(Set(cbc.map(\.loincCode)) == expectedCodes)
+        #expect(cbc.allSatisfy { $0.group == .cbc })
     }
 
-    func testRegistry_metricsForPanel_cmp_includesExpectedMetrics() {
+    @Test func registry_metricsForPanel_cmp_includesExpectedMetrics() {
         let cmp = LabMetricRegistry.metrics(in: .cmp)
         let expectedCodes: Set<String> = [
             LOINCCode.fastingGlucose,
@@ -125,11 +126,11 @@ final class LabMetricRegistryTests: XCTestCase {
             LOINCCode.alkalinePhosphatase
         ]
 
-        XCTAssertEqual(Set(cmp.map(\.loincCode)), expectedCodes)
-        XCTAssertTrue(cmp.allSatisfy { $0.group == .cmp })
+        #expect(Set(cmp.map(\.loincCode)) == expectedCodes)
+        #expect(cmp.allSatisfy { $0.group == .cmp })
     }
 
-    func testRegistry_metricsForPanel_thyroid_includesExpectedMetrics() {
+    @Test func registry_metricsForPanel_thyroid_includesExpectedMetrics() {
         let thyroid = LabMetricRegistry.metrics(in: .thyroid)
         let expectedCodes: Set<String> = [
             LOINCCode.thyroidStimulatingHormone,
@@ -137,11 +138,11 @@ final class LabMetricRegistryTests: XCTestCase {
             LOINCCode.freeT3
         ]
 
-        XCTAssertEqual(Set(thyroid.map(\.loincCode)), expectedCodes)
-        XCTAssertTrue(thyroid.allSatisfy { $0.group == .thyroid })
+        #expect(Set(thyroid.map(\.loincCode)) == expectedCodes)
+        #expect(thyroid.allSatisfy { $0.group == .thyroid })
     }
 
-    func testRegistry_metricsForPanel_other_includesExpectedTrackedLabs() {
+    @Test func registry_metricsForPanel_other_includesExpectedTrackedLabs() {
         let others = LabMetricRegistry.metrics(in: .other)
         let expectedCodes: Set<String> = [
             LOINCCode.hemoglobinA1C,
@@ -153,48 +154,46 @@ final class LabMetricRegistryTests: XCTestCase {
             LOINCCode.highSensitivityCRP
         ]
 
-        XCTAssertEqual(Set(others.map(\.loincCode)), expectedCodes)
-        XCTAssertTrue(others.allSatisfy { $0.group == .other })
+        #expect(Set(others.map(\.loincCode)) == expectedCodes)
+        #expect(others.allSatisfy { $0.group == .other })
     }
 
     // MARK: - Alternate LOINC codes
 
-    func testRegistry_allCodesIncludingAlternatesAreUnique() {
+    @Test func registry_allCodesIncludingAlternatesAreUnique() {
         let codes = LabMetricRegistry.all.flatMap(\.allLoincCodes)
-        XCTAssertEqual(Set(codes).count, codes.count, "A LOINC code maps to two metrics: \(codes)")
+        #expect(Set(codes).count == codes.count, "A LOINC code maps to two metrics: \(codes)")
     }
 
-    func testRegistry_alternatesResolveToPrimaryMetric() {
-        let expected: [String: String] = [
-            "13457-7": LOINCCode.ldlCholesterolDirect,
-            "18262-6": LOINCCode.ldlCholesterolDirect,
-            "2345-7": LOINCCode.fastingGlucose,
-            "98979-8": LOINCCode.estimatedGlomerularFiltrationRate,
-            "62238-1": LOINCCode.estimatedGlomerularFiltrationRate,
-            "17856-6": LOINCCode.hemoglobinA1C
-        ]
-        for (alternate, primary) in expected {
-            XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: alternate)?.loincCode, primary, alternate)
-            XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: alternate)?.id, primary, alternate)
-        }
+    @Test(arguments: [
+        ("13457-7", LOINCCode.ldlCholesterolDirect),
+        ("18262-6", LOINCCode.ldlCholesterolDirect),
+        ("2345-7", LOINCCode.fastingGlucose),
+        ("98979-8", LOINCCode.estimatedGlomerularFiltrationRate),
+        ("62238-1", LOINCCode.estimatedGlomerularFiltrationRate),
+        ("17856-6", LOINCCode.hemoglobinA1C)
+    ])
+    func registry_alternatesResolveToPrimaryMetric(alternate: String, primary: String) {
+        #expect(LabMetricRegistry.metric(forLoincCode: alternate)?.loincCode == primary, "\(alternate)")
+        #expect(LabMetricRegistry.metric(forLoincCode: alternate)?.id == primary, "\(alternate)")
     }
 
-    func testRegistry_primaryIdentityUnchanged() {
-        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.ldlCholesterolDirect)?.id, "2089-1")
-        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.fastingGlucose)?.id, "1558-6")
-        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.estimatedGlomerularFiltrationRate)?.id, "33914-3")
-        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)?.id, "4548-4")
+    @Test func registry_primaryIdentityUnchanged() {
+        #expect(LabMetricRegistry.metric(forLoincCode: LOINCCode.ldlCholesterolDirect)?.id == "2089-1")
+        #expect(LabMetricRegistry.metric(forLoincCode: LOINCCode.fastingGlucose)?.id == "1558-6")
+        #expect(LabMetricRegistry.metric(forLoincCode: LOINCCode.estimatedGlomerularFiltrationRate)?.id == "33914-3")
+        #expect(LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)?.id == "4548-4")
     }
 
-    func testCodeIndex_onlyCoversRequestedMetrics() {
+    @Test func codeIndex_onlyCoversRequestedMetrics() {
         let index = LabMetricRegistry.codeIndex(for: LabMetricRegistry.metrics(in: .lipid))
-        XCTAssertEqual(index["13457-7"]?.loincCode, LOINCCode.ldlCholesterolDirect)
-        XCTAssertNil(index[LOINCCode.hemoglobinA1C])
+        #expect(index["13457-7"]?.loincCode == LOINCCode.ldlCholesterolDirect)
+        #expect(index[LOINCCode.hemoglobinA1C] == nil)
     }
 
-    func testCodeIndex_primaryCodeWinsOverAnotherMetricsAlternate() {
+    @Test func codeIndex_primaryCodeWinsOverAnotherMetricsAlternate() {
         let a = LabMetric(name: "A", loincCode: "1-1", group: .other, valuePrecision: 0, alternateLoincCodes: ["2-2"])
         let b = LabMetric(name: "B", loincCode: "2-2", group: .other, valuePrecision: 0)
-        XCTAssertEqual(LabMetricRegistry.codeIndex(for: [a, b])["2-2"]?.name, "B")
+        #expect(LabMetricRegistry.codeIndex(for: [a, b])["2-2"]?.name == "B")
     }
 }

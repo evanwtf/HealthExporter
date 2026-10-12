@@ -63,10 +63,34 @@ xcrun simctl bootstatus "$SIMULATOR_ID" -b
 # xcodebuild refuses to overwrite an existing result bundle.
 rm -rf "$RESULT_BUNDLE"
 
+# Unit tests use Swift Testing; only ScreenshotTests uses XCTest. xcodebuild
+# prints a separate summary for each framework, so print one total from the
+# result bundle. The script exits with the xcodebuild status.
+status=0
 xcodebuild test \
   -project HealthExporter.xcodeproj \
   -scheme HealthExporter \
   -destination "id=$SIMULATOR_ID" \
   -only-testing:HealthExporterTests \
   -resultBundlePath "$RESULT_BUNDLE" \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=NO || status=$?
+
+if [ -d "$RESULT_BUNDLE" ]; then
+  SUMMARY=$(xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --compact \
+    | /usr/bin/python3 -c '
+import json, sys
+s = json.load(sys.stdin)
+print(
+    f"Test summary: {s.get(\"totalTestCount\", 0)} tests, "
+    f"{s.get(\"passedTests\", 0)} passed, {s.get(\"failedTests\", 0)} failed, "
+    f"{s.get(\"skippedTests\", 0)} skipped, {s.get(\"expectedFailures\", 0)} expected failures "
+    f"(result: {s.get(\"result\", \"unknown\")})"
+)
+') || SUMMARY="Test summary: could not read $RESULT_BUNDLE"
+  echo "$SUMMARY"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+  fi
+fi
+
+exit "$status"

@@ -1,84 +1,85 @@
-import XCTest
+import Foundation
+import Testing
 import UniformTypeIdentifiers
 @testable import HealthExporter
 
-final class CSVDocumentTests: XCTestCase {
+struct CSVDocumentTests {
 
     // MARK: - init(content:)
 
-    func testInitContent_storesContent() {
+    @Test func initContent_storesContent() {
         let doc = CSVDocument(content: "Date,Metric,Value\n2024-01-01,Weight,180.5")
-        XCTAssertEqual(doc.content, "Date,Metric,Value\n2024-01-01,Weight,180.5")
+        #expect(doc.content == "Date,Metric,Value\n2024-01-01,Weight,180.5")
     }
 
-    func testInitContent_emptyString() {
+    @Test func initContent_emptyString() {
         let doc = CSVDocument(content: "")
-        XCTAssertEqual(doc.content, "")
+        #expect(doc.content == "")
     }
 
-    func testInitContent_multilineCSV() {
+    @Test func initContent_multilineCSV() {
         let csv = "Date,Metric,Value,Unit,Source\n2024-01-15,Weight,176.37,lbs,Apple Watch\n2024-01-15,Steps,9876,count,iPhone"
         let doc = CSVDocument(content: csv)
-        XCTAssertEqual(doc.content, csv)
+        #expect(doc.content == csv)
     }
 
     // MARK: - readableContentTypes
 
-    func testReadableContentTypes_includesCSV() {
-        XCTAssertTrue(CSVDocument.readableContentTypes.contains(.commaSeparatedText))
+    @Test func readableContentTypes_includesCSV() {
+        #expect(CSVDocument.readableContentTypes.contains(.commaSeparatedText))
     }
 
     // MARK: - fileWrapper
 
-    func testFileWrapper_producesValidUTF8Data() throws {
+    @Test func fileWrapper_producesValidUTF8Data() throws {
         let original = "Date,Metric,Value,Unit,Source\n2024-01-15,Weight,176.37,lbs,Apple Watch"
         let doc = CSVDocument(content: original)
 
         // Use the FileDocument protocol method directly via reflection-free approach:
         // Create a FileWrapper from the content's UTF-8 data and verify round-trip
-        let data = original.data(using: .utf8)!
+        let data = doc.content.data(using: .utf8)!
         let decoded = String(data: data, encoding: .utf8)
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
-    func testContent_utf8DataRoundTrip() {
+    @Test func content_utf8DataRoundTrip() {
         let original = "Date,Metric,Value\n2024-01-01,Gewicht,80.5 — kg"
         let doc = CSVDocument(content: original)
         let data = doc.content.data(using: .utf8)!
         let decoded = String(data: data, encoding: .utf8)
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
-    func testContent_utf8DataRoundTrip_withSpecialCharacters() {
+    @Test func content_utf8DataRoundTrip_withSpecialCharacters() {
         let original = "Date,Metric,Value\n2024-01-01,Température,37°C"
         let doc = CSVDocument(content: original)
         let data = doc.content.data(using: .utf8)!
         let decoded = String(data: data, encoding: .utf8)
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
     // MARK: - Content mutation
 
-    func testContent_isMutable() {
+    @Test func content_isMutable() {
         var doc = CSVDocument(content: "original")
         doc.content = "modified"
-        XCTAssertEqual(doc.content, "modified")
+        #expect(doc.content == "modified")
     }
 
     // MARK: - Invalid UTF-8 handling
 
-    func testInvalidUTF8_cannotDecodeToString() {
+    @Test func invalidUTF8_cannotDecodeToString() {
         // Verify that invalid UTF-8 bytes fail String decoding, which is what
         // CSVDocument.init(configuration:) relies on to throw .fileReadCorruptFile
         let invalidUTF8 = Data([0xC0, 0x01, 0xFE, 0xFF, 0x80, 0x81])
         let decoded = String(data: invalidUTF8, encoding: .utf8)
-        XCTAssertNil(decoded, "Invalid UTF-8 should fail to decode")
+        #expect(decoded == nil, "Invalid UTF-8 should fail to decode")
     }
 
-    func testValidUTF8_decodesSuccessfully() {
+    @Test func validUTF8_decodesSuccessfully() {
         let validCSV = "Date,Metric,Value\n2024-01-01,Weight,180.5"
         let data = validCSV.data(using: .utf8)!
         let decoded = String(data: data, encoding: .utf8)
-        XCTAssertEqual(decoded, validCSV)
+        #expect(decoded == validCSV)
     }
 }

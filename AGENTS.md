@@ -94,7 +94,7 @@ CSV format details:
 - Default units are Fahrenheit and pounds
 
 ## Testing Guidelines
-This repo uses `XCTest`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift` and methods named `test...`. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.
+Unit tests use Swift Testing (`import Testing`): a suite is a `struct` (or a `final class` when it needs `deinit` as teardown), each test is a `@Test` function, and checks use `#expect` and `#require`. Use `@Test(arguments:)` when one check runs over a table of inputs. Only `ScreenshotTests.swift` uses `XCTest`, because it attaches PNGs with `XCTAttachment`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift`. `ci/run_ios_tests.sh` prints one total for both frameworks (`Test summary: N tests, ...`) from the result bundle. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.
 
 ## CI and releases
 - `iOS Tests` (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. Fork pull requests do not run on the runner.

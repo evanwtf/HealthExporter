@@ -1,11 +1,12 @@
-import XCTest
+import Foundation
+import Testing
 @testable import HealthExporter
 
 /// Locks the exact byte format of A1C CSV rows so the lab-pipeline refactor
 /// cannot accidentally change output. Uses `.iso8601` date format because it
 /// is forced to UTC by `CSVGenerator.makeDateFormatter`, giving a deterministic
 /// expected string independent of the test host's locale or timezone.
-final class A1CCSVBytePinningTests: XCTestCase {
+struct A1CCSVBytePinningTests {
 
     private var fixedDate: Date {
         ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
@@ -36,51 +37,51 @@ final class A1CCSVBytePinningTests: XCTestCase {
 
     // MARK: - Exact byte format
 
-    func testA1CRow_exactByteFormat_percentUnit() {
+    @Test func a1cRow_exactByteFormat_percentUnit() {
         let sample = a1cSample(date: fixedDate, value: 7.2, unit: "%", source: "TestClinic")
         let expected = CSVGenerator.csvPreamble + """
         2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,7.20,%,TestClinic,
 
         """
-        XCTAssertEqual(generateCSV(for: [sample]), expected)
+        #expect(generateCSV(for: [sample]) == expected)
     }
 
-    func testA1CRow_exactByteFormat_mmolPerMolUnit() {
+    @Test func a1cRow_exactByteFormat_mmolPerMolUnit() {
         let sample = a1cSample(date: fixedDate, value: 55.0, unit: "mmol/mol", source: "LabCorp")
         let expected = CSVGenerator.csvPreamble + """
         2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,55.00,mmol/mol,LabCorp,
 
         """
-        XCTAssertEqual(generateCSV(for: [sample]), expected)
+        #expect(generateCSV(for: [sample]) == expected)
     }
 
-    func testA1CRow_exactByteFormat_sourceWithCommaIsCSVEscaped() {
+    @Test func a1cRow_exactByteFormat_sourceWithCommaIsCSVEscaped() {
         let sample = a1cSample(date: fixedDate, value: 6.1, unit: "%", source: "Foo, Inc.")
         let expected = CSVGenerator.csvPreamble + """
         2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,"Foo, Inc.",
 
         """
-        XCTAssertEqual(generateCSV(for: [sample]), expected)
+        #expect(generateCSV(for: [sample]) == expected)
     }
 
-    func testA1CRow_exactByteFormat_sourceWithQuoteIsCSVEscaped() {
+    @Test func a1cRow_exactByteFormat_sourceWithQuoteIsCSVEscaped() {
         let sample = a1cSample(date: fixedDate, value: 6.1, unit: "%", source: "Mom's Lab")
         let expected = CSVGenerator.csvPreamble + """
         2024-06-15T10:30:00Z,Hemoglobin A1C,4548-4,6.10,%,Mom's Lab,
 
         """
-        XCTAssertEqual(generateCSV(for: [sample]), expected)
+        #expect(generateCSV(for: [sample]) == expected)
     }
 
-    func testA1CRow_exactByteFormat_valuePrecisionIsTwoDecimals() {
+    @Test func a1cRow_exactByteFormat_valuePrecisionIsTwoDecimals() {
         let sample = a1cSample(date: fixedDate, value: 5.0, unit: "%", source: "TestClinic")
         // 5.0 must render as "5.00" — two decimals, zero-padded
-        XCTAssertTrue(generateCSV(for: [sample]).contains(",5.00,"))
+        #expect(generateCSV(for: [sample]).contains(",5.00,"))
     }
 
     // MARK: - Ascending sort order (default)
 
-    func testA1CRow_ascendingSort_oldestFirst() {
+    @Test func a1cRow_ascendingSort_oldestFirst() {
         let older = ISO8601DateFormatter().date(from: "2024-01-01T00:00:00Z")!
         let newer = ISO8601DateFormatter().date(from: "2024-12-31T23:59:59Z")!
         let samples = [
@@ -92,6 +93,6 @@ final class A1CCSVBytePinningTests: XCTestCase {
         2024-12-31T23:59:59Z,Hemoglobin A1C,4548-4,7.50,%,C,
 
         """
-        XCTAssertEqual(generateCSV(for: samples), expected)
+        #expect(generateCSV(for: samples) == expected)
     }
 }

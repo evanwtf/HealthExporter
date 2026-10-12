@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 @testable import HealthExporter
 
-final class LabResultSampleTests: XCTestCase {
+struct LabResultSampleTests {
 
     private var referenceDate: Date {
         ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
@@ -9,7 +10,7 @@ final class LabResultSampleTests: XCTestCase {
 
     // MARK: - Memberwise initializer
 
-    func testMemberwiseInit_preservesAllValues() {
+    @Test func memberwiseInit_preservesAllValues() {
         let sample = LabResultSample(
             metricName: "Hemoglobin A1C",
             loincCode: "4548-4",
@@ -18,15 +19,15 @@ final class LabResultSampleTests: XCTestCase {
             unit: "%",
             source: "MyClinic"
         )
-        XCTAssertEqual(sample.metricName, "Hemoglobin A1C")
-        XCTAssertEqual(sample.loincCode, "4548-4")
-        XCTAssertEqual(sample.effectiveDateTime, referenceDate)
-        XCTAssertEqual(sample.value, 7.5, accuracy: 0.001)
-        XCTAssertEqual(sample.unit, "%")
-        XCTAssertEqual(sample.source, "MyClinic")
+        #expect(sample.metricName == "Hemoglobin A1C")
+        #expect(sample.loincCode == "4548-4")
+        #expect(sample.effectiveDateTime == referenceDate)
+        #expect(abs(sample.value - 7.5) <= 0.001)
+        #expect(sample.unit == "%")
+        #expect(sample.source == "MyClinic")
     }
 
-    func testMemberwiseInit_defaultSource_isEmpty() {
+    @Test func memberwiseInit_defaultSource_isEmpty() {
         let sample = LabResultSample(
             metricName: "Hemoglobin A1C",
             loincCode: "4548-4",
@@ -34,7 +35,7 @@ final class LabResultSampleTests: XCTestCase {
             value: 6.1,
             unit: "%"
         )
-        XCTAssertEqual(sample.source, "")
+        #expect(sample.source == "")
     }
 
     // MARK: - FHIR data initializer
@@ -51,55 +52,55 @@ final class LabResultSampleTests: XCTestCase {
         return try! JSONSerialization.data(withJSONObject: json)
     }
 
-    func testInit_fromFHIRData_a1cObservation_populatesSampleWithRegistryName() throws {
+    @Test func init_fromFHIRData_a1cObservation_populatesSampleWithRegistryName() throws {
         let sample = LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "TestClinic")
 
-        let unwrapped = try XCTUnwrap(sample)
-        XCTAssertEqual(unwrapped.metricName, "Hemoglobin A1C")
-        XCTAssertEqual(unwrapped.loincCode, LOINCCode.hemoglobinA1C)
-        XCTAssertEqual(unwrapped.value, 7.2, accuracy: 0.001)
-        XCTAssertEqual(unwrapped.unit, "%")
-        XCTAssertEqual(unwrapped.source, "TestClinic")
-        XCTAssertNil(unwrapped.comparator)
+        let unwrapped = try #require(sample)
+        #expect(unwrapped.metricName == "Hemoglobin A1C")
+        #expect(unwrapped.loincCode == LOINCCode.hemoglobinA1C)
+        #expect(abs(unwrapped.value - 7.2) <= 0.001)
+        #expect(unwrapped.unit == "%")
+        #expect(unwrapped.source == "TestClinic")
+        #expect(unwrapped.comparator == nil)
     }
 
-    func testInit_fromFHIRData_unknownLoincInRegistry_returnsNil() {
-        XCTAssertNil(LabResultSample(fromFHIRData: fhirData(codes: ["9999-9"]), source: ""))
+    @Test func init_fromFHIRData_unknownLoincInRegistry_returnsNil() {
+        #expect(LabResultSample(fromFHIRData: fhirData(codes: ["9999-9"]), source: "") == nil)
     }
 
-    func testInit_fromFHIRData_missingObservation_returnsNil() {
+    @Test func init_fromFHIRData_missingObservation_returnsNil() {
         let data = "not json".data(using: .utf8)!
-        XCTAssertNil(LabResultSample(fromFHIRData: data, source: ""))
+        #expect(LabResultSample(fromFHIRData: data, source: "") == nil)
     }
 
-    func testInit_fromFHIRData_alternateCode_mapsToMetricAndKeepsFoundCode() throws {
-        let sample = try XCTUnwrap(LabResultSample(fromFHIRData: fhirData(codes: ["13457-7"], value: 101, unit: "mg/dL"), source: "Lab"))
-        XCTAssertEqual(sample.metricName, "LDL Cholesterol")
-        XCTAssertEqual(sample.loincCode, "13457-7")
+    @Test func init_fromFHIRData_alternateCode_mapsToMetricAndKeepsFoundCode() throws {
+        let sample = try #require(LabResultSample(fromFHIRData: fhirData(codes: ["13457-7"], value: 101, unit: "mg/dL"), source: "Lab"))
+        #expect(sample.metricName == "LDL Cholesterol")
+        #expect(sample.loincCode == "13457-7")
     }
 
-    func testInit_fromFHIRData_codeNotRequested_returnsNil() {
+    @Test func init_fromFHIRData_codeNotRequested_returnsNil() {
         let lipidsOnly = LabMetricRegistry.codeIndex(for: LabMetricRegistry.metrics(in: .lipid))
-        XCTAssertNil(LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "", codeIndex: lipidsOnly))
+        #expect(LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "", codeIndex: lipidsOnly) == nil)
     }
 
-    func testInit_fromFHIRData_recordMatchingTwoMetrics_yieldsOneSampleForFirstCoding() throws {
+    @Test func init_fromFHIRData_recordMatchingTwoMetrics_yieldsOneSampleForFirstCoding() throws {
         let data = fhirData(codes: [LOINCCode.hdlCholesterol, LOINCCode.ldlCholesterolDirect], value: 50, unit: "mg/dL")
-        let sample = try XCTUnwrap(LabResultSample(fromFHIRData: data, source: ""))
-        XCTAssertEqual(sample.metricName, "HDL Cholesterol")
-        XCTAssertEqual(sample.loincCode, LOINCCode.hdlCholesterol)
+        let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
+        #expect(sample.metricName == "HDL Cholesterol")
+        #expect(sample.loincCode == LOINCCode.hdlCholesterol)
     }
 
-    func testInit_fromFHIRData_skipsUnrequestedCodingAndUsesNextMatch() throws {
+    @Test func init_fromFHIRData_skipsUnrequestedCodingAndUsesNextMatch() throws {
         let data = fhirData(codes: ["9999-9", "17856-6"], value: 6.1)
-        let sample = try XCTUnwrap(LabResultSample(fromFHIRData: data, source: ""))
-        XCTAssertEqual(sample.metricName, "Hemoglobin A1C")
-        XCTAssertEqual(sample.loincCode, "17856-6")
+        let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
+        #expect(sample.metricName == "Hemoglobin A1C")
+        #expect(sample.loincCode == "17856-6")
     }
 
-    func testInit_fromFHIRData_carriesComparator() throws {
+    @Test func init_fromFHIRData_carriesComparator() throws {
         let data = fhirData(codes: [LOINCCode.estimatedGlomerularFiltrationRate], value: 60, unit: "mL/min/1.73m2", comparator: ">")
-        let sample = try XCTUnwrap(LabResultSample(fromFHIRData: data, source: ""))
-        XCTAssertEqual(sample.comparator, ">")
+        let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
+        #expect(sample.comparator == ">")
     }
 }

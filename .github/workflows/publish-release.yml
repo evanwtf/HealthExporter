@@ -1,3 +1,5 @@
+# Fallback for tags pushed by hand. After a merge to main, bump-build-number.yml
+# creates the release itself: its GITHUB_TOKEN tag push does not trigger this.
 name: Publish Release
 
 on:

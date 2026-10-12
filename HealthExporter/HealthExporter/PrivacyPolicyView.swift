@@ -123,8 +123,7 @@ struct PrivacyPolicyView: View {
                     ForEach(bullets, id: \.self) { item in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text("\u{2022}")
-                                .fontWeight(.heavy)
-                                .foregroundStyle(.tint)
+                                .foregroundStyle(Color("InkSecondary"))
                                 .accessibilityHidden(true)
                             Text(item)
                                 .fixedSize(horizontal: false, vertical: true)

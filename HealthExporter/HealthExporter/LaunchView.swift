@@ -42,6 +42,8 @@ struct LaunchView: View {
                 }
 
                 privacyLine
+
+                aboutLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
@@ -128,6 +130,17 @@ struct LaunchView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var aboutLine: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Link("Report a Problem", destination: URL(string: "https://github.com/evanwtf/HealthExporter/issues/new?template=bug_report.md")!)
+                .font(.footnote)
+                .accessibilityIdentifier("reportProblemLink")
+            Text("\(versionText) \u{00B7} \u{00A9} \(String(Calendar.current.component(.year, from: Date()))) Evan Hoffman")
+                .font(.footnote)
+                .foregroundStyle(Color("InkSecondary"))
+        }
+    }
+
     private var bottomBar: some View {
         VStack(alignment: .leading, spacing: 14) {
             NavigationLink(destination: DataSelectionView(settings: settings)) {
@@ -141,16 +154,6 @@ struct LaunchView: View {
             .controlSize(.large)
             .accessibilityIdentifier("nextButton")
 
-            HStack(alignment: .firstTextBaseline) {
-                Link("Report a Problem", destination: URL(string: "https://github.com/evanwtf/HealthExporter/issues/new?template=bug_report.md")!)
-                    .font(.footnote)
-                    .accessibilityIdentifier("reportProblemLink")
-                Spacer(minLength: 12)
-                Text("\(versionText) \u{00B7} \u{00A9} \(String(Calendar.current.component(.year, from: Date()))) Evan Hoffman")
-                    .font(.footnote)
-                    .foregroundStyle(Color("InkSecondary"))
-                    .multilineTextAlignment(.trailing)
-            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)

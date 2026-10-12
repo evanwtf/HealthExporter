@@ -6,8 +6,9 @@ struct PrivacyPolicyView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Group {
                     Text("Privacy Policy")
-                        .font(.title)
-                        .fontWeight(.bold)
+                        .font(.title.weight(.semibold))
+                        .fontWidth(.expanded)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text("Last updated: May 2026")
                         .font(.caption)
@@ -63,8 +64,9 @@ struct PrivacyPolicyView: View {
 
                 Group {
                     Text("Disclaimer")
-                        .font(.title)
-                        .fontWeight(.bold)
+                        .font(.title.weight(.semibold))
+                        .fontWidth(.expanded)
+                        .accessibilityAddTraits(.isHeader)
 
                     sectionView(title: "No Warranty",
                         body: "HealthExporterCSV is provided \"as is\" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.")
@@ -89,6 +91,8 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.headline)
+                .fontWidth(.expanded)
+                .accessibilityAddTraits(.isHeader)
             Text(body)
                 .font(.body)
             if !bullets.isEmpty {

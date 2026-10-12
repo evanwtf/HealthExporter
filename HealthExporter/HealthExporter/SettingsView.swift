@@ -16,11 +16,12 @@ struct SettingsView: View {
                         .accessibilityIdentifier("autoDismissSaveConfirmationToggle")
                 } header: {
                     Text("Export Behavior")
+                        .sectionHeaderStyle()
                 } footer: {
                     Text("Closes the save confirmation after 5 seconds.")
                 }
 
-                Section(header: Text("Export Format")) {
+                Section(header: Text("Export Format").sectionHeaderStyle()) {
                     Picker("Date Format", selection: $settings.dateFormat) {
                         ForEach(DateFormatOption.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
@@ -35,7 +36,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("sortOrderPicker")
                 }
 
-                Section(header: Text("Units")) {
+                Section(header: Text("Units").sectionHeaderStyle()) {
                     Picker("Temperature", selection: $settings.temperatureUnit) {
                         ForEach(TemperatureUnit.allCases, id: \.self) { unit in
                             Text(unit.rawValue).tag(unit)
@@ -52,7 +53,7 @@ struct SettingsView: View {
                 }
 
                 #if targetEnvironment(simulator)
-                Section(header: Text("Testing")) {
+                Section(header: Text("Testing").sectionHeaderStyle()) {
                     Button("Generate Weight Data", action: generateTestData)
 
                     if !testDataMessage.isEmpty {
@@ -63,7 +64,7 @@ struct SettingsView: View {
                 }
                 #endif
 
-                Section(header: Text("About")) {
+                Section(header: Text("About").sectionHeaderStyle()) {
                     NavigationLink(destination: PrivacyPolicyView()) {
                         Text("Privacy Policy & Disclaimer")
                     }
@@ -75,6 +76,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .tint(.accentColor)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

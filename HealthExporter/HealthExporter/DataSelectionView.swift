@@ -386,9 +386,11 @@ struct DataSelectionView: View {
             }) {
                 Label("Export CSV", systemImage: "square.and.arrow.up")
                     .fontWeight(.semibold)
+                    .foregroundStyle(Color("OnAccent"))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle)
             .controlSize(.large)
             .disabled(!exportEnabled || isPreparingExport)
             .accessibilityIdentifier("exportButton")
@@ -404,6 +406,24 @@ struct DataSelectionView: View {
             VStack(spacing: 0) {
                 Form {
                     Section {
+                        CSVPreviewView(
+                            exportWeight: settings.exportWeight,
+                            exportSteps: settings.exportSteps,
+                            exportGlucose: settings.exportGlucose,
+                            labMetrics: labMetricsToFetch,
+                            vitalMetrics: settings.selectedVitalMetrics,
+                            weightUnit: settings.weightUnit,
+                            temperatureUnit: settings.temperatureUnit,
+                            dateFormat: settings.dateFormat
+                        )
+                    } header: {
+                        Text("Preview")
+                            .sectionHeaderStyle()
+                    } footer: {
+                        Text("Example rows, not your data. Your file has one row per reading.")
+                    }
+
+                    Section {
                         Toggle(isOn: $settings.exportWeight) {
                             metricLabel("Weight", systemImage: "scalemass")
                         }
@@ -417,7 +437,8 @@ struct DataSelectionView: View {
                         }
                         .accessibilityIdentifier("glucoseToggle")
                     } header: {
-                        Label("Activity & Glucose", systemImage: "figure.walk")
+                        Label("Activity & Glucose", systemImage: "chart.xyaxis.line")
+                            .sectionHeaderStyle()
                     }
 
                     Section {
@@ -426,6 +447,7 @@ struct DataSelectionView: View {
                         }
                     } header: {
                         Label("Labs", systemImage: "cross.case")
+                            .sectionHeaderStyle()
                     } footer: {
                         Text("Lab sections require access to Clinical Health Records.")
                     }
@@ -434,8 +456,10 @@ struct DataSelectionView: View {
                         vitalsDisclosure()
                     } header: {
                         Label("Vitals", systemImage: "heart.text.square")
+                            .sectionHeaderStyle()
                     }
                 }
+                .tint(.accentColor)
 
                 dateRangeFooter()
             }

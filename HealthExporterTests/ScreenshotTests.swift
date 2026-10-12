@@ -120,6 +120,26 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    func testVitalsKilogramsDataSelectionView() {
+        let settings = sharedSettings()
+        let saved = (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+                     settings.selectedVitalMetrics, settings.weightUnit)
+        settings.exportWeight = true
+        settings.exportSteps = false
+        settings.exportGlucose = false
+        settings.selectedVitalMetrics = [.restingHeartRate, .bodyTemperature]
+        settings.weightUnit = .kilograms
+        defer {
+            (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+             settings.selectedVitalMetrics, settings.weightUnit) = saved
+        }
+        capture("08-data-selection-vitals-kg") {
+            NavigationStack {
+                DataSelectionView(settings: settings)
+            }
+        }
+    }
+
     func testPrivacyPolicyView() {
         capture("04-privacy") {
             NavigationStack {

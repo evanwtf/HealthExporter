@@ -3,7 +3,8 @@ import SwiftUI
 struct LaunchView: View {
     @ObservedObject var settings: SettingsManager
     @State private var showingSettings = false
-    @ScaledMetric(relativeTo: .title2) private var featureIconWidth: CGFloat = 36
+    @State private var revealedRows = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var versionText: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -11,29 +12,55 @@ struct LaunchView: View {
         return "v\(version) (\(build))"
     }
 
+    private static let heroColumns = ["Date", "Metric", "Value", "Unit"]
+
+    /// The header columns the hero shows, read from the real CSV header.
+    private static var heroHeader: [String] {
+        CSVGenerator.csvHeader
+            .components(separatedBy: ",")
+            .filter { heroColumns.contains($0) }
+    }
+
+    private static let heroRows: [CSVGridView.Row] = [
+        .init(id: "weight", cells: ["2026-03-14", "Weight", "182.40", "lbs"]),
+        .init(id: "steps", cells: ["2026-03-14", "Steps", "8214", "steps"]),
+        .init(id: "glucose", cells: ["2026-03-13", "Blood Glucose", "98", "mg/dL"]),
+        .init(id: "a1c", cells: ["2026-02-02", "Hemoglobin A1C", "5.60", "%"]),
+    ]
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 32) {
-                header
-                VStack(alignment: .leading, spacing: 20) {
-                    featureRow(
-                        systemImage: "lock.shield",
-                        title: "Private by design",
-                        detail: "Everything happens on your iPhone. No accounts, no servers, no tracking."
-                    )
-                    featureRow(
-                        systemImage: "heart.text.square",
-                        title: "Your health data",
-                        detail: "Weight, steps, blood glucose, vitals and clinical lab results."
-                    )
-                    featureRow(
-                        systemImage: "tablecells",
-                        title: "One CSV file",
-                        detail: "Open it in Numbers, Excel or Google Sheets."
-                    )
+            VStack(alignment: .leading, spacing: 28) {
+                CSVGridView(header: Self.heroHeader, rows: Self.heroRows, visibleRowCount: revealedRows)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Example rows")
+                    .accessibilityValue("A sample CSV file with a date, metric, value and unit in each row.")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("HealthExporterCSV")
+                        .font(.title.weight(.semibold))
+                        .fontWidth(.expanded)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("appTitle")
+
+                    Text("Export weight, steps, blood glucose, vitals and clinical lab results to one CSV file.")
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Label {
+                    Text("Everything happens on your iPhone. No accounts, no servers, no tracking.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "lock.shield")
+                        .foregroundStyle(.tint)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
         }
@@ -54,49 +81,29 @@ struct LaunchView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(settings: settings)
         }
-    }
-
-    private var header: some View {
-        VStack(spacing: 12) {
-            Image("AppIconImage")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 96, height: 96)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                .accessibilityHidden(true)
-
-            Text("HealthExporterCSV")
-                .font(.largeTitle.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .accessibilityIdentifier("appTitle")
-
-            Text("Export your health data to CSV")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        .task {
+            await revealHeroRows()
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private func featureRow(systemImage: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .frame(width: featureIconWidth)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// Plays the row entrance once. Under Reduce Motion every row shows at once.
+    private func revealHeroRows() async {
+        guard revealedRows < Self.heroRows.count else { return }
+        if reduceMotion {
+            revealedRows = Self.heroRows.count
+            return
+        }
+        while revealedRows < Self.heroRows.count {
+            do {
+                try await Task.sleep(for: .milliseconds(110))
+            } catch {
+                revealedRows = Self.heroRows.count
+                return
+            }
+            withAnimation(.easeOut(duration: 0.25)) {
+                revealedRows += 1
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var bottomBar: some View {
@@ -104,9 +111,11 @@ struct LaunchView: View {
             NavigationLink(destination: DataSelectionView(settings: settings)) {
                 Text("Choose Data")
                     .fontWeight(.semibold)
+                    .foregroundStyle(Color("OnAccent"))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle)
             .controlSize(.large)
             .accessibilityIdentifier("nextButton")
 

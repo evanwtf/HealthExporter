@@ -53,14 +53,19 @@ if [ -z "$simctl_ready" ]; then
   exit 1
 fi
 
-# Newest "iPhone N Pro"; else the first iPhone device type.
+# Newest "iPhone N Pro Max", then the newest "iPhone N Pro", then the first
+# iPhone device type. A Pro Max has the 6.9-inch screen, the size that App
+# Store Connect requires for iPhone screenshots, so ScreenshotTests renders
+# images that can go straight to the App Store.
 DEVICE_TYPE_ID=$(xcrun simctl list devicetypes -j | /usr/bin/python3 -c '
 import json, re, sys
 types = json.load(sys.stdin).get("devicetypes", [])
 iphones = [t for t in types if t.get("name", "").startswith("iPhone")]
-pros = [t for t in iphones if re.fullmatch(r"iPhone \d+ Pro", t["name"])]
-pros.sort(key=lambda t: int(t["name"].split()[1]))
-pick = pros[-1] if pros else (iphones[0] if iphones else None)
+def newest(pattern):
+    found = [t for t in iphones if re.fullmatch(pattern, t["name"])]
+    found.sort(key=lambda t: int(t["name"].split()[1]))
+    return found[-1] if found else None
+pick = newest(r"iPhone \d+ Pro Max") or newest(r"iPhone \d+ Pro") or (iphones[0] if iphones else None)
 if pick is None:
     sys.exit("No iPhone simulator device type available")
 print(pick["identifier"])

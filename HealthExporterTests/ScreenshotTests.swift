@@ -10,9 +10,6 @@ import XCTest
 /// would change the isolation of its initializers. XCTest runs each test
 /// method on the main thread, so the methods that touch UI are `@MainActor`.
 final nonisolated class ScreenshotTests: XCTestCase {
-    private static let windowSize = CGSize(width: 402, height: 874)
-    private static let scale: CGFloat = 3
-
     /// Computed, so the non-Sendable `[String: Any]` is never shared state.
     private static var seededKeys: [String: Any] {
         [
@@ -182,11 +179,14 @@ final nonisolated class ScreenshotTests: XCTestCase {
     }
 
     @MainActor private func render(_ view: some View, style: UIUserInterfaceStyle) -> UIImage {
-        let frame = CGRect(origin: .zero, size: Self.windowSize)
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
             XCTFail("The test host has no window scene")
             return UIImage()
         }
+        // The simulator's full screen, so each image has the device's pixel
+        // size. CI runs on the newest iPhone Pro Max: the 6.9-inch size that
+        // App Store Connect requires for iPhone screenshots.
+        let frame = scene.effectiveGeometry.coordinateSpace.bounds
         let window = UIWindow(windowScene: scene)
         window.frame = frame
         window.overrideUserInterfaceStyle = style
@@ -196,7 +196,7 @@ final nonisolated class ScreenshotTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(1.0))
 
         let format = UIGraphicsImageRendererFormat()
-        format.scale = Self.scale
+        format.scale = scene.traitCollection.displayScale
         let image = UIGraphicsImageRenderer(bounds: frame, format: format).image { _ in
             window.drawHierarchy(in: frame, afterScreenUpdates: true)
         }

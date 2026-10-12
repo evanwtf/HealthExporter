@@ -13,7 +13,9 @@ Optional:
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -29,6 +31,21 @@ DEFAULT_BUNDLE_ID = "com.evanhoffman.HealthExporter"
 TOKEN_TTL_SECONDS = 15 * 60
 
 JSONObject = dict[str, Any]
+
+
+def configure_logging() -> None:
+    """Log to stdout, and keep httpx and httpcore quiet.
+
+    httpx logs each request URL at INFO. The screenshot upload URLs are
+    pre-signed, so a logged URL is a credential. Keep these loggers at WARNING.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stdout,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 class ASCError(Exception):

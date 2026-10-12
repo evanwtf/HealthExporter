@@ -1,0 +1,9 @@
+# The App Store screenshots for iPhone, in store order: one name per line.
+# Each name is a PNG in the `screenshots` CI artifact, without ".png".
+# scripts/upload_appstore_screenshots.py reads this file. This file is the
+# one place where the set is chosen. The owner approved this set (#132).
+01-launch-light
+08-data-selection-mixed-light
+09-lab-panel-detail-light
+08-data-selection-mixed-dark
+04-privacy-light

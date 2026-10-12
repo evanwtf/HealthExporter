@@ -1,0 +1,17 @@
+HealthExporter: what to test in this build
+
+- Choose Data has a new layout. Each category (Weight, Steps, Blood Glucose,
+  Vitals and each lab panel) is a tile. Tap a tile to turn it on or off. The
+  Vitals and lab tiles open a list where you pick single items.
+- Exports can be stopped. While "Preparing export..." shows, tap Cancel. The
+  screen returns to your selection with no error.
+- A partial export says so. If some metrics fail to load, the export goes on
+  with the others, and an alert names each metric that failed.
+- On iOS 27 you can give Health access that starts at a date. When that date
+  is after the start of your export, an alert says when the data for each
+  metric starts.
+- The disclaimer at the top of the CSV no longer splits into columns when you
+  open the file in a spreadsheet.
+
+Please check that the file you export opens in Numbers or Excel, and that the
+numbers match the Health app.

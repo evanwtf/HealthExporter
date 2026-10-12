@@ -1,6 +1,6 @@
 import Foundation
 
-struct DayRangeSummaryFormatter {
+enum DayRangeSummaryFormatter {
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM d, yyyy"

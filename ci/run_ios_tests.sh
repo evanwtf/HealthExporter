@@ -17,12 +17,41 @@ xcodebuild -version
 # framework loaded, and every simctl call fails with "CoreSimulator is out of
 # date". Restart it so it reloads against the selected Xcode.
 launchctl kickstart -k "gui/$(id -u)/com.apple.CoreSimulator.CoreSimulatorService" || true
-for _ in {1..30}; do
-  if xcrun simctl list devicetypes >/dev/null 2>&1; then
+
+# `xcrun simctl` does not fail when it cannot reach CoreSimulatorService: it
+# waits forever. That happens when no GUI session is logged in on the runner,
+# or when an Xcode upgrade leaves the daemon wedged. One such call once held
+# the only macOS runner for the whole 6-hour job timeout. macOS has no
+# `timeout(1)`, so run each probe in the background with a 30-second watchdog.
+probe_simctl() {
+  local pid waited=0
+  xcrun simctl list devicetypes >/dev/null 2>&1 &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge 30 ]; then
+      kill -9 "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
+}
+
+simctl_ready=""
+for _ in {1..10}; do
+  if probe_simctl; then
+    simctl_ready=1
     break
   fi
   sleep 1
 done
+
+if [ -z "$simctl_ready" ]; then
+  echo "::error::CoreSimulator is not responding. The usual cause is an Xcode upgrade with no 'sudo xcodebuild -runFirstLaunch'; the other is no GUI session on the runner. See docs/macos-runner-recovery.md, section 8."
+  exit 1
+fi
 
 # Newest "iPhone N Pro"; else the first iPhone device type.
 DEVICE_TYPE_ID=$(xcrun simctl list devicetypes -j | /usr/bin/python3 -c '

@@ -25,10 +25,12 @@ jobs:
   upload:
     name: Test, archive, and upload to TestFlight
     runs-on: [self-hosted, macOS, ARM64]
+    # A hung simulator must not hold the shared runner for the 6-hour default.
+    timeout-minutes: 90
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
           fetch-depth: 0
@@ -143,9 +145,59 @@ jobs:
             --apiKey "$ASC_API_KEY_ID" \
             --apiIssuer "$ASC_API_ISSUER_ID"
 
-      - name: Clean up API key
+      - name: Set up uv
+        if: ${{ inputs.upload }}
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Read the build version
+        id: version
+        if: ${{ inputs.upload }}
+        # Fails when the project's version entries disagree.
+        run: uv run --frozen scripts/check_version.py --github-output "$GITHUB_OUTPUT"
+
+      # Target the build just uploaded, never "latest": App Store Connect lists
+      # a new upload only after a delay, and "latest" can then resolve to the
+      # previous build and rewrite its notes. Retry while ASC indexes it.
+      # Build numbers repeat across versions, so pass the version too.
+      - name: Set TestFlight "What to Test" notes
+        if: ${{ inputs.upload }}
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ env.ASC_KEY_PATH }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ ! -s ci/testflight-notes.txt ]; then
+            echo "::warning::ci/testflight-notes.txt is missing or empty; the build has no notes."
+            exit 0
+          fi
+          for attempt in $(seq 1 10); do
+            if uv run --frozen scripts/update_testflight_notes.py \
+                 --build "$BUILD_NUMBER" \
+                 --app-version "$APP_VERSION" \
+                 --notes-file ci/testflight-notes.txt; then
+              exit 0
+            fi
+            echo "Build $BUILD_NUMBER ($APP_VERSION) is not in App Store Connect yet (attempt $attempt/10); retrying in 30 s"
+            sleep 30
+          done
+          echo "::error::Could not set the TestFlight notes for build $BUILD_NUMBER ($APP_VERSION)"
+          exit 1
+
+      - name: Clean up API key and lock the keychain
         if: always()
         run: |
           if [ -n "${ASC_KEY_DIR:-}" ] && [ -d "$ASC_KEY_DIR" ]; then
             rm -rf "$ASC_KEY_DIR"
           fi
+          # The unlock step keeps the keychain open for 2 hours. Restore the
+          # default lock settings and lock it now, so the shared runner's
+          # keychain does not stay open after the job.
+          KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+          security set-keychain-settings "$KEYCHAIN" || true
+          security lock-keychain "$KEYCHAIN" || true

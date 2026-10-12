@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`, `LabSelection.swift`), and CSV output (`CSVGenerator.swift`, `CSVFile.swift`, `ExportSize.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/`; there is no workspace and no Swift package. `CLAUDE.md` and `.github/copilot-instructions.md` are symlinks to this file — edit `AGENTS.md`.
+`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`, `LabSelection.swift`), and CSV output (`CSVGenerator.swift`, `CSVFile.swift`, `ExportSize.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/`; there is no workspace and no Swift package. `CLAUDE.md`, `GEMINI.md` and `.github/copilot-instructions.md` are symlinks to this file — edit `AGENTS.md`. Agent skills live in `.agents/skills/`; `.claude/skills` is a symlink to that folder.
 
 ## Architecture Notes
 Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (welcome screen; `Choose Data` button, Settings gear in the toolbar) → `DataSelectionView`; `SettingsView` is presented as a sheet from the welcome screen. `HealthExporterTests/ScreenshotTests.swift` renders each screen in light and dark mode and attaches PNGs to the CI result bundle (`test-results` artifact).
@@ -33,19 +33,28 @@ Open the project in Xcode for day-to-day work:
 open HealthExporter.xcodeproj
 ```
 
-Run the full unit test suite from the command line:
+The checks to run before a push are in "Verification". The unit tests run in CI.
+
+HealthKit and Clinical Records need a physical device, and the simulator covers them only in part. To install a Debug build on the owner's iPhone, use the `deploy-to-phone` skill (`.agents/skills/deploy-to-phone/SKILL.md`).
+
+## Verification
+Run these checks before you push:
 
 ```bash
-xcodebuild test -project HealthExporter.xcodeproj -scheme HealthExporter -destination 'platform=iOS Simulator,OS=latest,name=iPhone 17 Pro' CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+ci/lint_swift.sh
+xcodebuild build-for-testing -project HealthExporter.xcodeproj -scheme HealthExporter -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+uv run ruff check scripts && uv run mypy && uv run pytest -rs
+uvx pre-commit run --all-files
 ```
 
-Build without signing for simulator validation:
+- `ci/lint_swift.sh` runs SwiftFormat and SwiftLint (`--strict`) on `HealthExporter/` and `HealthExporterTests/`. It installs a missing tool with Homebrew. CI runs it before the tests, and a finding fails the job. To fix the format, run `swiftformat HealthExporter HealthExporterTests`.
+- `build-for-testing` compiles the app and the tests. It does not start a simulator. The build must have 0 errors and 0 Swift warnings.
+- The `uv run` line checks the Python scripts in `scripts/`. Run it when you change them.
+- `uvx pre-commit run --all-files` runs every hook in `.pre-commit-config.yaml`. To run the hooks on each commit, run `uvx pre-commit install` once per clone.
 
-```bash
-xcodebuild build -project HealthExporter.xcodeproj -scheme HealthExporter -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
-```
+The unit tests and the screenshots run in CI on the shared macOS runner. Do not run them on a laptop. The runner is shared with other repos, so batch your changes: a branch should need few CI runs.
 
-Use Xcode on a physical device for HealthKit and Clinical Records verification; simulator coverage is limited.
+If you change only docs or agent instructions, check the diff and say that you did not run the checks.
 
 ## Export Flow
 The app is read-only with respect to HealthKit in production. `ExportDataLoader.requestAuthorization(for:)` calls `requestAuthorization(toShare: [], read: ...)` with the types of the selected metrics only. It includes the clinical-records read type only when labs are selected.
@@ -101,19 +110,57 @@ CSV format details:
 - Default units are Fahrenheit and pounds
 
 ## Testing Guidelines
-Unit tests use Swift Testing (`import Testing`): a suite is a `struct` (or a `final class` when it needs `deinit` as teardown), each test is a `@Test` function, and checks use `#expect` and `#require`. Use `@Test(arguments:)` when one check runs over a table of inputs. Only `ScreenshotTests.swift` uses `XCTest`, because it attaches PNGs with `XCTAttachment`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift`. `ci/run_ios_tests.sh` prints one total for both frameworks (`Test summary: N tests, ...`) from the result bundle. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. Run `Product > Test` in Xcode or the `xcodebuild test` command above before opening a PR.
+Unit tests use Swift Testing (`import Testing`): a suite is a `struct` (or a `final class` when it needs `deinit` as teardown), each test is a `@Test` function, and checks use `#expect` and `#require`. Use `@Test(arguments:)` when one check runs over a table of inputs. Only `ScreenshotTests.swift` uses `XCTest`, because it attaches PNGs with `XCTAttachment`. Add tests in `HealthExporterTests/` with filenames like `FeatureNameTests.swift`. `ci/run_ios_tests.sh` prints one total for both frameworks (`Test summary: N tests, ...`) from the result bundle. Cover CSV formatting, date filtering, unit conversion, and metric availability logic. The tests run in CI. Before a push, compile them with the `build-for-testing` command in "Verification".
 
 ## CI and releases
-- `iOS Tests` (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through `ci/run_ios_tests.sh`. Run that script locally to reproduce a CI test run. Fork pull requests do not run on the runner.
-- Every pull request merged to `main` cuts a release. `bump-build-number.yml` (Linux runner) bumps the build number and the version, pushes a `vX.Y.Z` tag, creates the GitHub release and dispatches `release-testflight.yml` on the tag. That workflow then tests, archives, exports and uploads to TestFlight on the Mac runner. Nothing runs from a laptop.
-- The version bump comes from the merged pull request's label: `semver:minor` for a layout change (2.4.9 → 2.5.0), `semver:major` for a major one (→ 3.0.0), and no label for a patch (→ 2.4.10). Add the label before you merge. Land changes through one pull request per work session. Do not push directly to `main`.
-- `publish-release.yml` is only a fallback for tags pushed by hand.
-- TestFlight dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
-- The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. The archive signs automatically for development. The export signs manually with the runner's `Apple Distribution` identity and the `HealthExporter App Store` profile, which `ci/install_profile.swift` downloads by name on every run; an Admin creates or renews that profile in the developer portal (see `docs/macos-runner-recovery.md`).
+Runners are named by their labels only: Linux jobs run on `[self-hosted, Linux, X64]`, and macOS jobs on `[self-hosted, macOS, ARM64]`. The macOS runner is shared with other repos. Nothing runs from a laptop.
+
+Workflows:
+- `iOS Tests` (`ios-tests.yml`). The `Detect iOS changes` job lists the pull request's files with `gh api`. When every changed path is in `docs/`, `assets/`, `*.md`, `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` or `.github/dependabot.yml`, the workflow skips the tests. If that job fails, the tests run. The test job is named `iOS tests`, and the ruleset on `main` names it as a required check, with `iOS tests (fork guard)`. Do not rename either job. It runs `ci/lint_swift.sh`, then `ci/run_ios_tests.sh`. The tests run after a lint failure too, so one run reports both. A new push to a pull request cancels the old run. A push to `main` does not run the tests: each release merge dispatches `release-testflight.yml`, which runs them on the release tag.
+- A fork pull request never runs on the macOS runner, because the runner holds a signing keychain. When it changes iOS paths, the `iOS tests (fork guard)` job fails with "A maintainer must push this branch to the repo to run the tests."
+- `ci/run_ios_tests.sh` probes `xcrun simctl` with a 30-second watchdog. When CoreSimulator does not respond, the job fails in about 5 minutes; see `docs/macos-runner-recovery.md`, section 8. Every job has `timeout-minutes`: 45 for the tests, 90 for TestFlight, 10 for Linux jobs.
+- `Scripts` (`scripts.yml`, Linux) runs on changes to `scripts/`, `pyproject.toml`, `uv.lock` or `project.pbxproj`, and by dispatch. It runs `uv sync --frozen`, `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest -rs`, and fails on a skipped test. It also runs `scripts/check_version.py`. Run the same checks locally: `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest -rs`.
+- `Gitleaks` (`gitleaks.yml`, Linux) scans the new commits of every pull request and push for secrets, with a pinned gitleaks release. Known false positives go in `.gitleaksignore`.
+- Dependabot (`.github/dependabot.yml`) updates the GitHub Actions monthly, with the `skip-release` label.
+
+Releases:
+- Every pull request merged to `main` cuts a release unless it has the `skip-release` label. `bump-build-number.yml` runs on `pull_request_target` from `main`, on the Linux runner. It never runs code from the pull request.
+- The label on the merged pull request picks the version part. Apply exactly one before you merge (the pull request template lists them):
+  - `semver:patch`: a fix or small change (2.5.4 → 2.5.5). No label also means a patch.
+  - `semver:minor`: a layout change (2.5.4 → 2.6.0).
+  - `semver:major`: a major change (→ 3.0.0).
+  - `skip-release`: docs, CI or tooling only. No bump, no commit, no tag, no release and no TestFlight upload.
+  - `skip-release` with any `semver:*` label fails the job.
+- The release job:
+  1. `scripts/bump_version.py` replaces every `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` entry in `project.pbxproj`.
+  2. `scripts/check_version.py --tag vX.Y.Z` fails when the entries disagree or the tag is not `v` + `MARKETING_VERSION`.
+  3. It commits `Release vX.Y.Z (build N)`, with `Source merge: #N (title)` and `[skip ci]`.
+  4. It pushes the commit and the tag with one `git push --atomic`.
+  5. It creates the GitHub release and dispatches `release-testflight.yml` on the tag.
+- If `main` holds a release commit whose version has no tag, the "Detect stranded release" step tags that commit instead of bumping again. The release step skips a release that already exists.
+- Never edit `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` by hand, and never push a `v*` tag by hand. `publish-release.yml` is only a fallback for a tag pushed by hand.
+- `RELEASE_DEPLOY_KEY` is optional. When the secret is set, the release job checks out and pushes with that deploy key, which can bypass the ruleset on `main`. When it is not set, the job pushes with `GITHUB_TOKEN`. Add the key before the ruleset requires status checks; `GITHUB_TOKEN` cannot bypass them.
+- Land changes through one pull request per work session. Do not push directly to `main`.
+
+TestFlight:
+- `release-testflight.yml` tests, archives, exports and uploads to TestFlight on the macOS runner. Dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
+- After the upload, `scripts/update_testflight_notes.py` sets the "What to Test" notes from `ci/testflight-notes.txt`. It targets the exact build number and version, and retries 10 times at 30-second intervals while App Store Connect lists the build. A pull request that changes what a user sees updates `ci/testflight-notes.txt`.
+- External testers: `gh workflow run promote-testflight-external.yml --repo evanwtf/HealthExporter -f build=<N>` adds a processed build to the external group (`External Hoffgroup`) and submits it for Beta App Review. Use `-f group=<name>` for one group, and `-f submit_review=false` to skip the review. The script is `scripts/promote_testflight_external.py`; `--inspect` changes nothing.
+- The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. The archive signs automatically for development. The export signs manually with the runner's `Apple Distribution` identity and the `HealthExporter App Store` profile, which `ci/install_profile.swift` downloads by name on every run; an Admin creates or renews that profile in the developer portal (see `docs/macos-runner-recovery.md`). The cleanup step deletes the API key, restores the keychain's lock settings and locks it, even when the job fails.
 
 ## Commit & Pull Request Guidelines
-Recent history favors short, imperative commit subjects such as `Fix: clear csvContent on export failure to free memory`, `Update docs to match current codebase`, and version bumps like `Bump build number to 18 [skip ci]`. Keep commits focused. PRs should describe the user-visible change, list testing performed, link related issues, and include screenshots for SwiftUI/UI updates. Note any device-only validation when HealthKit behavior cannot be reproduced in CI.
+Use short, imperative commit subjects such as `Fix: clear csvContent on export failure to free memory` or `Update docs to match current codebase`. Only the release job writes `Release vX.Y.Z (build N)` commits. Keep commits focused. PRs should describe the user-visible change, list testing performed, link related issues, and include screenshots for SwiftUI/UI updates. Note any device-only validation when HealthKit behavior cannot be reproduced in CI.
 When posting text blobs to GitHub, always write the content to a temporary file first and pass that file to the CLI. Use this for issue bodies, PR descriptions, comments, and similar multi-line text to avoid string-quoting problems.
+
+## PR Labels
+`bump-build-number.yml` reads the labels of the merged pull request. Give each pull request exactly one of these labels:
+
+- `semver:patch`: a patch release (2.4.9 → 2.4.10). A pull request with no release label also gets a patch release.
+- `semver:minor`: any layout change (2.4.9 → 2.5.0).
+- `semver:major`: a major change (→ 3.0.0).
+- `skip-release`: docs, CI or tooling only. The merge does not bump the version, tag a release or upload to TestFlight.
+
+Never put `skip-release` and a `semver:*` label on the same pull request. The release job fails when it finds both.
 
 ## Security & Configuration Tips
 Do not commit real secrets; use `Secrets.plist.example` as the template. Keep HealthKit data on-device, avoid logging sensitive values, and preserve the privacy-first design.
@@ -126,3 +173,13 @@ Required capabilities and configuration:
 - Keep `NSHealthUpdateUsageDescription` in the app target even though the production export flow is read-only. `HealthKitManager.generateTestData()` calls `healthStore.save(...)` inside simulator-only code, and App Store validation still expects the write-purpose string to exist when that API is referenced.
 
 HealthKit requires a physical device for full verification. The simulator has limited support; use the simulator-only test data generator for UI development when needed.
+
+## Guardrails
+Never:
+
+- Hand-edit `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION`. The release workflow owns them.
+- Push a tag by hand. The release workflow tags each release.
+- Push to `main`. Open a pull request, even for a one-line fix.
+- Change the persisted `SettingsManager` keys (`SettingsManager.Key`) or their value formats. A changed key loses each user's saved settings.
+- Change `ITSAppUsesNonExemptEncryption`, unless the app starts to use non-exempt encryption.
+- Put host names, LAN addresses or secret names in this repo. The repo is public. Name the runners by their labels only.

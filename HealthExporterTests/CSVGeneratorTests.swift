@@ -1,17 +1,16 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct CSVGeneratorTests {
-
-    private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-    private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-    private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
-    private let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)!
-    private let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)!
-    private let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
-    private let bodyTemperatureType = HKQuantityType.quantityType(forIdentifier: .bodyTemperature)!
+    private let weightType = HKQuantityType(.bodyMass)
+    private let stepsType = HKQuantityType(.stepCount)
+    private let glucoseType = HKQuantityType(.bloodGlucose)
+    private let systolicType = HKQuantityType(.bloodPressureSystolic)
+    private let diastolicType = HKQuantityType(.bloodPressureDiastolic)
+    private let oxygenType = HKQuantityType(.oxygenSaturation)
+    private let bodyTemperatureType = HKQuantityType(.bodyTemperature)
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
     /// Returns just the data rows of a CSV (disclaimer and column header lines stripped).
@@ -24,17 +23,7 @@ struct CSVGeneratorTests {
     }
 
     /// A fixed reference date (2024-01-15 09:30:00 UTC) for deterministic test output.
-    private var referenceDate: Date {
-        var components = DateComponents()
-        components.year = 2024
-        components.month = 1
-        components.day = 15
-        components.hour = 9
-        components.minute = 30
-        components.second = 0
-        components.timeZone = TimeZone(secondsFromGMT: 0)
-        return Calendar(identifier: .gregorian).date(from: components)!
-    }
+    private let referenceDate = Date(timeIntervalSince1970: 1_705_311_000)
 
     // MARK: - Weight CSV
 
@@ -110,9 +99,9 @@ struct CSVGeneratorTests {
         #expect(csv.contains(",lbs"))
     }
 
-    @Test func generateWeightCSV_multipleEntries_correctLineCount() {
-        let samples = (0..<5).map { i -> HKQuantitySample in
-            let date = Calendar.current.date(byAdding: .day, value: -i, to: referenceDate)!
+    @Test func generateWeightCSV_multipleEntries_correctLineCount() throws {
+        let samples = try (0 ..< 5).map { i -> HKQuantitySample in
+            let date = try #require(Calendar.current.date(byAdding: .day, value: -i, to: referenceDate))
             return HKQuantitySample(
                 type: weightType,
                 quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: Double(70 + i)),
@@ -250,7 +239,7 @@ struct CSVGeneratorTests {
         #expect(csv.contains(",mg/dL"))
     }
 
-    @Test func generateCombinedCSV_mixedData_allMetricsPresent() {
+    @Test func generateCombinedCSV_mixedData_allMetricsPresent() throws {
         let weightSample = HKQuantitySample(
             type: weightType,
             quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: 75.0),
@@ -269,7 +258,7 @@ struct CSVGeneratorTests {
             start: referenceDate,
             end: referenceDate
         )
-        let glucoseSample = GlucoseSampleMgDl(from: hkGlucose)!
+        let glucoseSample = try #require(GlucoseSampleMgDl(from: hkGlucose))
 
         let csv = CSVGenerator.generateCombinedCSV(
             weightSamples: [weightSample],
@@ -305,7 +294,7 @@ struct CSVGeneratorTests {
             labResults: nil,
             vitalSamples: [
                 .bloodPressureSystolic: [systolic],
-                .bloodPressureDiastolic: [diastolic]
+                .bloodPressureDiastolic: [diastolic],
             ],
             weightUnit: .kilograms
         )
@@ -405,14 +394,14 @@ struct CSVGeneratorTests {
         #expect(csv.hasSuffix("\n"), "CSV output should end with a newline")
     }
 
-    @Test func generateCombinedCSV_glucoseFormattedAsRoundedInteger() {
+    @Test func generateCombinedCSV_glucoseFormattedAsRoundedInteger() throws {
         let hkSample = HKQuantitySample(
             type: glucoseType,
             quantity: HKQuantity(unit: mgDlUnit, doubleValue: 145.6),
             start: referenceDate,
             end: referenceDate
         )
-        let glucoseSample = GlucoseSampleMgDl(from: hkSample)!
+        let glucoseSample = try #require(GlucoseSampleMgDl(from: hkSample))
         let csv = CSVGenerator.generateCombinedCSV(
             weightSamples: nil,
             stepsSamples: nil,
@@ -620,9 +609,9 @@ struct CSVGeneratorTests {
 
     // MARK: - Sort Order
 
-    @Test func generateCombinedCSV_descendingOrder_newestFirst() {
+    @Test func generateCombinedCSV_descendingOrder_newestFirst() throws {
         let olderDate = referenceDate
-        let newerDate = Calendar.current.date(byAdding: .day, value: 1, to: referenceDate)!
+        let newerDate = try #require(Calendar.current.date(byAdding: .day, value: 1, to: referenceDate))
 
         let sample1 = HKQuantitySample(
             type: weightType,
@@ -776,12 +765,12 @@ struct CSVGeneratorTests {
 
     // MARK: - Meal Time column
 
-    @Test func glucoseRows_exactByteFormat_withMealTime() {
+    @Test func glucoseRows_exactByteFormat_withMealTime() throws {
         let iso = ISO8601DateFormatter()
-        let samples = [
-            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T07:00:00Z")!, value: 98, source: "Meter", mealTime: .preprandial),
-            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T09:00:00Z")!, value: 142.4, source: "Meter", mealTime: .postprandial),
-            GlucoseSampleMgDl(startDate: iso.date(from: "2024-06-15T13:00:00Z")!, value: 110, source: "Meter", mealTime: nil),
+        let samples = try [
+            GlucoseSampleMgDl(startDate: #require(iso.date(from: "2024-06-15T07:00:00Z")), value: 98, source: "Meter", mealTime: .preprandial),
+            GlucoseSampleMgDl(startDate: #require(iso.date(from: "2024-06-15T09:00:00Z")), value: 142.4, source: "Meter", mealTime: .postprandial),
+            GlucoseSampleMgDl(startDate: #require(iso.date(from: "2024-06-15T13:00:00Z")), value: 110, source: "Meter", mealTime: nil),
         ]
         let csv = CSVGenerator.generateCombinedCSV(
             weightSamples: nil,

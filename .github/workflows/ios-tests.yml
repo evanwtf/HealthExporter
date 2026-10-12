@@ -1,10 +1,15 @@
 name: iOS Tests
 
 on:
-  push:
-    branches: [main]
+  # No `paths:` on pull_request: every pull request must report the
+  # `iOS tests` check. The `changes` job skips the tests when only docs or
+  # tooling changed, and GitHub counts a job skipped by `if:` as a pass.
   pull_request:
     branches: [main]
+  # No push trigger on main. Every release merge dispatches
+  # release-testflight.yml, which runs this suite on the release tag, and a
+  # skip-release merge has no Swift changes. A push run would only repeat a
+  # test on the one shared macOS runner.
   # Run on any branch without a pull request, e.g. to render screenshots:
   # gh workflow run ios-tests.yml --ref <branch>
   workflow_dispatch:
@@ -12,27 +17,96 @@ on:
 permissions:
   contents: read
 
+# One macOS runner serves every iOS job, so a superseded run must not hold it.
+# A new push to a pull request cancels the old run, even mid-job.
 concurrency:
-  group: ios-tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: ios-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect iOS changes
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          # Paths that never need the iOS tests.
+          IGNORE: '^docs/|^assets/|\.md$|^\.github/ISSUE_TEMPLATE/|^\.github/pull_request_template\.md$|^\.github/dependabot\.yml$'
+        run: |
+          set -euo pipefail
+          # Push and dispatch runs keep their own trigger rules: always run.
+          if [ -z "$PR" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')"
+          printf 'Changed files:\n%s\n' "$files"
+          # A rename lists only its new path. An empty list must not skip.
+          if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -Evq "$IGNORE"; then
+            echo "Only docs, assets or repo metadata changed: skipping the iOS tests."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The macOS runner holds a signing keychain, so a fork pull request never
+  # runs on it. GitHub counts the skipped `iOS tests` job as a pass, so this
+  # job fails instead, and the merge waits for a maintainer.
+  fork-guard:
+    name: iOS tests (fork guard)
+    needs: changes
+    if: >-
+      ${{ !cancelled()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name != github.repository
+      && needs.changes.outputs.run != 'false' }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Refuse a fork pull request
+        run: |
+          echo "::error::A maintainer must push this branch to the repo to run the tests."
+          exit 1
+
   test:
-    name: Build & Test
-    # The self-hosted runner holds a signing keychain: never run fork PRs on it.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # A ruleset requires this name. Do not rename it.
+    name: iOS tests
+    needs: changes
+    # Runs unless the filter said no; if the filter job fails, run anyway.
+    # Never on a fork pull request: see fork-guard.
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.run != 'false'
+      && (github.event_name != 'pull_request'
+          || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, macOS, ARM64]
+    # A hung simulator must not hold the shared runner for the 6-hour default.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # Seconds, before the minutes of the simulator tests.
+      - name: Lint Swift
+        run: ci/lint_swift.sh
+
+      # Run the tests after a lint failure too, so one run reports both.
       - name: Run tests
+        if: ${{ !cancelled() }}
         run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestResults.xcresult"
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: ${{ runner.temp }}/TestResults.xcresult

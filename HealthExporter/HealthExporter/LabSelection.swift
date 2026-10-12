@@ -36,7 +36,8 @@ nonisolated struct LabSelection: Equatable, Sendable {
         }
         // Turning one lab off in a selected panel keeps the panel's other labs on.
         if let panel = LabMetricRegistry.metric(forLoincCode: loincCode)?.group,
-           panels.contains(panel) {
+           panels.contains(panel)
+        {
             let remainingCodes = LabMetricRegistry.metrics(in: panel)
                 .map(\.loincCode)
                 .filter { $0 != loincCode }

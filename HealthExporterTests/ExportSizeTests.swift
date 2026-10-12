@@ -1,30 +1,20 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct ExportSizeTests {
-
-    private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-    private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-    private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
-    private let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+    private let weightType = HKQuantityType(.bodyMass)
+    private let stepsType = HKQuantityType(.stepCount)
+    private let glucoseType = HKQuantityType(.bloodGlucose)
+    private let oxygenType = HKQuantityType(.oxygenSaturation)
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
-    private var referenceDate: Date {
-        var components = DateComponents()
-        components.year = 2024
-        components.month = 1
-        components.day = 15
-        components.hour = 9
-        components.minute = 30
-        components.second = 0
-        components.timeZone = TimeZone(secondsFromGMT: 0)
-        return Calendar(identifier: .gregorian).date(from: components)!
-    }
+    /// 2024-01-15T09:30:00Z.
+    private let referenceDate = Date(timeIntervalSince1970: 1_705_311_000)
 
     @Test func summaryText_givesTheExactRowCountAndSize() {
-        let size = ExportSize(rowCount: 19_432, byteCount: 1_980_000)
+        let size = ExportSize(rowCount: 19432, byteCount: 1_980_000)
 
         #expect(size.summaryText == "This will export 19,432 rows (\(size.formattedByteCount)).")
         #expect(!size.summaryText.contains("around"))
@@ -49,7 +39,7 @@ struct ExportSizeTests {
     }
 
     @Test func shouldShowConfirmation_trueWhenRowCountExceedsThreshold() {
-        let size = ExportSize(rowCount: 501, byteCount: 5_000)
+        let size = ExportSize(rowCount: 501, byteCount: 5000)
 
         #expect(size.shouldShowConfirmation)
     }
@@ -69,7 +59,7 @@ struct ExportSizeTests {
         )
         let stepsSample = HKQuantitySample(
             type: stepsType,
-            quantity: HKQuantity(unit: .count(), doubleValue: 9_876),
+            quantity: HKQuantity(unit: .count(), doubleValue: 9876),
             start: referenceDate.addingTimeInterval(60),
             end: referenceDate.addingTimeInterval(60)
         )
@@ -79,7 +69,7 @@ struct ExportSizeTests {
             start: referenceDate.addingTimeInterval(120),
             end: referenceDate.addingTimeInterval(120)
         )
-        let glucoseSample = GlucoseSampleMgDl(from: glucoseHkSample)!
+        let glucoseSample = try #require(GlucoseSampleMgDl(from: glucoseHkSample))
         let labSample = LabResultSample(
             metricName: "Hemoglobin A1C",
             loincCode: LOINCCode.hemoglobinA1C,

@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct ExportErrorTests {
-
     // MARK: - healthKitAuthorizationFailed
 
     @Test func authorizationFailed_withoutUnderlyingError() {
@@ -13,7 +12,7 @@ struct ExportErrorTests {
 
     @Test func authorizationFailed_withUnderlyingError() {
         let underlying = NSError(domain: "HKErrorDomain", code: 5, userInfo: [
-            NSLocalizedDescriptionKey: "Access denied"
+            NSLocalizedDescriptionKey: "Access denied",
         ])
         let error = ExportError.healthKitAuthorizationFailed(underlying: underlying)
         #expect(error.errorDescription == "HealthKit authorization failed: Access denied")
@@ -28,7 +27,7 @@ struct ExportErrorTests {
 
     @Test func queryFailed_withUnderlyingError() {
         let underlying = NSError(domain: "HKErrorDomain", code: 6, userInfo: [
-            NSLocalizedDescriptionKey: "Unavailable"
+            NSLocalizedDescriptionKey: "Unavailable",
         ])
         let error = ExportError.healthKitQueryFailed(metric: "Weight", underlying: underlying)
         #expect(error.errorDescription == "Failed to fetch Weight data: Unavailable")
@@ -50,7 +49,7 @@ struct ExportErrorTests {
 
     @Test func fileWriteFailed_withUnderlyingError() {
         let underlying = NSError(domain: NSCocoaErrorDomain, code: 4, userInfo: [
-            NSLocalizedDescriptionKey: "Disk full"
+            NSLocalizedDescriptionKey: "Disk full",
         ])
         let error = ExportError.fileWriteFailed(underlying: underlying)
         #expect(error.errorDescription == "Failed to save the CSV file: Disk full")

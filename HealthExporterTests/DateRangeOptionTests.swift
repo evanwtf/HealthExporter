@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct DateRangeOptionTests {
-
     @Test func allCasesCount() {
         #expect(DateRangeOption.allCases.count == 4)
     }

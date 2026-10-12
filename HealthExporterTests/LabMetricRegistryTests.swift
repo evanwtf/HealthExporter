@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct LabMetricRegistryTests {
-
     // MARK: - LabPanel
 
     @Test func labPanel_hasFiveCases() {
@@ -72,7 +71,7 @@ struct LabMetricRegistryTests {
             LOINCCode.totalCholesterol,
             LOINCCode.hdlCholesterol,
             LOINCCode.ldlCholesterolDirect,
-            LOINCCode.triglycerides
+            LOINCCode.triglycerides,
         ]
 
         #expect(Set(lipids.map(\.loincCode)) == expectedCodes)
@@ -99,7 +98,7 @@ struct LabMetricRegistryTests {
             LOINCCode.meanCorpuscularVolume,
             LOINCCode.meanCorpuscularHemoglobin,
             LOINCCode.meanCorpuscularHemoglobinConcentration,
-            LOINCCode.redCellDistributionWidth
+            LOINCCode.redCellDistributionWidth,
         ]
 
         #expect(Set(cbc.map(\.loincCode)) == expectedCodes)
@@ -123,7 +122,7 @@ struct LabMetricRegistryTests {
             LOINCCode.bilirubinTotal,
             LOINCCode.alanineAminotransferase,
             LOINCCode.aspartateAminotransferase,
-            LOINCCode.alkalinePhosphatase
+            LOINCCode.alkalinePhosphatase,
         ]
 
         #expect(Set(cmp.map(\.loincCode)) == expectedCodes)
@@ -135,7 +134,7 @@ struct LabMetricRegistryTests {
         let expectedCodes: Set<String> = [
             LOINCCode.thyroidStimulatingHormone,
             LOINCCode.freeT4,
-            LOINCCode.freeT3
+            LOINCCode.freeT3,
         ]
 
         #expect(Set(thyroid.map(\.loincCode)) == expectedCodes)
@@ -151,7 +150,7 @@ struct LabMetricRegistryTests {
             LOINCCode.ferritin,
             LOINCCode.iron,
             LOINCCode.totalIronBindingCapacity,
-            LOINCCode.highSensitivityCRP
+            LOINCCode.highSensitivityCRP,
         ]
 
         #expect(Set(others.map(\.loincCode)) == expectedCodes)

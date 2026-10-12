@@ -1,5 +1,7 @@
 # Fallback for tags pushed by hand. After a merge to main, bump-build-number.yml
-# creates the release itself: its GITHUB_TOKEN tag push does not trigger this.
+# creates the release itself. Its tag push starts this workflow only when it
+# pushes with the RELEASE_DEPLOY_KEY deploy key; then both jobs may try to
+# create the release, and the one that loses the race exits 0.
 name: Publish Release
 
 on:
@@ -14,6 +16,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
 
     steps:
       - name: Publish release
@@ -28,6 +31,12 @@ jobs:
             exit 0
           fi
 
-          gh release create "$TAG_NAME" \
+          if ! gh release create "$TAG_NAME" \
             --title "$TAG_NAME" \
-            --generate-notes
+            --generate-notes; then
+            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+              echo "Release $TAG_NAME was created by another job"
+              exit 0
+            fi
+            exit 1
+          fi

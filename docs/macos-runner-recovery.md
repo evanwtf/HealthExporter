@@ -20,6 +20,7 @@ recovery steps apply whenever signing material on the runner gets lost.
 5. [Verify end-to-end](#5-verify-end-to-end)
 6. [Prevention for next time](#6-prevention-for-next-time)
 7. [Reference — workflow, secrets, paths](#7-reference--workflow-secrets-paths)
+8. [`simctl` does not respond](#8-simctl-does-not-respond)
 
 ---
 
@@ -373,3 +374,66 @@ Things that would have cut this incident from "an hour of cert rebuilding" to
   - Certificates: https://developer.apple.com/account/resources/certificates/list
   - Profiles: https://developer.apple.com/account/resources/profiles/list
 - Org runners page: https://github.com/organizations/evanwtf/settings/actions/runners
+
+---
+
+## 8. `simctl` does not respond
+
+`ci/run_ios_tests.sh` probes `xcrun simctl` before it creates a simulator.
+`simctl` does not fail when CoreSimulator is down: it waits forever. The
+script runs each probe with a 30-second watchdog and tries 10 times, so the
+job fails after about 5 minutes, not at the 45-minute job limit. The job
+ends with:
+
+```
+::error::CoreSimulator is not responding. ...
+```
+
+The `launchctl kickstart` line near the top of the log often prints
+`Could not find service "com.apple.CoreSimulator.CoreSimulatorService"`. That
+line is harmless: the call is guarded with `|| true`. It is not the cause.
+
+### Diagnose
+
+On the runner:
+
+```bash
+# 1. The usual cause: Xcode was upgraded and its first-launch packages are not
+#    installed. simctl then prints an install banner and blocks.
+xcrun simctl list devicetypes 2>&1 | head -3
+
+# 2. Each blocked probe leaves a first-launch process behind.
+ps -Ao pid,etime,command | grep "xcodebuild -runFirstLaunch" | grep -v grep
+
+# 3. The other cause: no GUI session (FileVault blocks auto-login, so an
+#    unattended reboot leaves none).
+who | grep console
+```
+
+If step 1 prints `Install Failed: Authorization is required to install the
+packages.`, Xcode's first launch never ran.
+
+### Fix
+
+Cancel any queued macOS job first. A job in the probe loop keeps starting new
+first-launch processes.
+
+```bash
+pkill -f "xcodebuild -runFirstLaunch"
+sudo xcodebuild -runFirstLaunch
+```
+
+The second command ends with `Install Succeeded`. If no GUI session exists,
+log in at the console instead.
+
+### Verify
+
+```bash
+time xcrun simctl list devicetypes | head -3   # about a second, no banner
+```
+
+Then re-run the failed job with `gh run rerun <run-id>`.
+
+### Prevention
+
+Run `sudo xcodebuild -runFirstLaunch` after every Xcode upgrade on the runner.

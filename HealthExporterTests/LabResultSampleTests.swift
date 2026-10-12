@@ -1,12 +1,10 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct LabResultSampleTests {
-
-    private var referenceDate: Date {
-        ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
-    }
+    /// 2024-06-15T10:30:00Z.
+    private let referenceDate = Date(timeIntervalSince1970: 1_718_447_400)
 
     // MARK: - Memberwise initializer
 
@@ -35,25 +33,25 @@ struct LabResultSampleTests {
             value: 6.1,
             unit: "%"
         )
-        #expect(sample.source == "")
+        #expect(sample.source.isEmpty)
     }
 
     // MARK: - FHIR data initializer
 
-    private func fhirData(codes: [String], value: Any = 7.2, unit: String = "%", comparator: String? = nil) -> Data {
+    private func fhirData(codes: [String], value: Any = 7.2, unit: String = "%", comparator: String? = nil) throws -> Data {
         var quantity: [String: Any] = ["value": value, "unit": unit]
         quantity["comparator"] = comparator
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": ["coding": codes.map { ["system": "http://loinc.org", "code": $0] }],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": quantity
+            "valueQuantity": quantity,
         ]
-        return try! JSONSerialization.data(withJSONObject: json)
+        return try JSONSerialization.data(withJSONObject: json)
     }
 
     @Test func init_fromFHIRData_a1cObservation_populatesSampleWithRegistryName() throws {
-        let sample = LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "TestClinic")
+        let sample = try LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "TestClinic")
 
         let unwrapped = try #require(sample)
         #expect(unwrapped.metricName == "Hemoglobin A1C")
@@ -64,42 +62,42 @@ struct LabResultSampleTests {
         #expect(unwrapped.comparator == nil)
     }
 
-    @Test func init_fromFHIRData_unknownLoincInRegistry_returnsNil() {
-        #expect(LabResultSample(fromFHIRData: fhirData(codes: ["9999-9"]), source: "") == nil)
+    @Test func init_fromFHIRData_unknownLoincInRegistry_returnsNil() throws {
+        #expect(try LabResultSample(fromFHIRData: fhirData(codes: ["9999-9"]), source: "") == nil)
     }
 
     @Test func init_fromFHIRData_missingObservation_returnsNil() {
-        let data = "not json".data(using: .utf8)!
+        let data = Data("not json".utf8)
         #expect(LabResultSample(fromFHIRData: data, source: "") == nil)
     }
 
     @Test func init_fromFHIRData_alternateCode_mapsToMetricAndKeepsFoundCode() throws {
-        let sample = try #require(LabResultSample(fromFHIRData: fhirData(codes: ["13457-7"], value: 101, unit: "mg/dL"), source: "Lab"))
+        let sample = try #require(try LabResultSample(fromFHIRData: fhirData(codes: ["13457-7"], value: 101, unit: "mg/dL"), source: "Lab"))
         #expect(sample.metricName == "LDL Cholesterol")
         #expect(sample.loincCode == "13457-7")
     }
 
-    @Test func init_fromFHIRData_codeNotRequested_returnsNil() {
+    @Test func init_fromFHIRData_codeNotRequested_returnsNil() throws {
         let lipidsOnly = LabMetricRegistry.codeIndex(for: LabMetricRegistry.metrics(in: .lipid))
-        #expect(LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "", codeIndex: lipidsOnly) == nil)
+        #expect(try LabResultSample(fromFHIRData: fhirData(codes: [LOINCCode.hemoglobinA1C]), source: "", codeIndex: lipidsOnly) == nil)
     }
 
     @Test func init_fromFHIRData_recordMatchingTwoMetrics_yieldsOneSampleForFirstCoding() throws {
-        let data = fhirData(codes: [LOINCCode.hdlCholesterol, LOINCCode.ldlCholesterolDirect], value: 50, unit: "mg/dL")
+        let data = try fhirData(codes: [LOINCCode.hdlCholesterol, LOINCCode.ldlCholesterolDirect], value: 50, unit: "mg/dL")
         let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
         #expect(sample.metricName == "HDL Cholesterol")
         #expect(sample.loincCode == LOINCCode.hdlCholesterol)
     }
 
     @Test func init_fromFHIRData_skipsUnrequestedCodingAndUsesNextMatch() throws {
-        let data = fhirData(codes: ["9999-9", "17856-6"], value: 6.1)
+        let data = try fhirData(codes: ["9999-9", "17856-6"], value: 6.1)
         let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
         #expect(sample.metricName == "Hemoglobin A1C")
         #expect(sample.loincCode == "17856-6")
     }
 
     @Test func init_fromFHIRData_carriesComparator() throws {
-        let data = fhirData(codes: [LOINCCode.estimatedGlomerularFiltrationRate], value: 60, unit: "mL/min/1.73m2", comparator: ">")
+        let data = try fhirData(codes: [LOINCCode.estimatedGlomerularFiltrationRate], value: 60, unit: "mL/min/1.73m2", comparator: ">")
         let sample = try #require(LabResultSample(fromFHIRData: data, source: ""))
         #expect(sample.comparator == ">")
     }

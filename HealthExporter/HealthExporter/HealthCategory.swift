@@ -12,31 +12,31 @@ enum HealthCategory: CaseIterable {
 
     var name: String {
         switch self {
-        case .weight: return "Weight"
-        case .steps: return "Steps"
-        case .glucose: return "Blood Glucose"
-        case .vitals: return "Vitals"
-        case .labs: return "Lab results"
+        case .weight: "Weight"
+        case .steps: "Steps"
+        case .glucose: "Blood Glucose"
+        case .vitals: "Vitals"
+        case .labs: "Lab results"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .weight: return "scalemass.fill"
-        case .steps: return "figure.walk"
-        case .glucose: return "drop.fill"
-        case .vitals: return "heart.fill"
-        case .labs: return "list.clipboard.fill"
+        case .weight: "scalemass.fill"
+        case .steps: "figure.walk"
+        case .glucose: "drop.fill"
+        case .vitals: "heart.fill"
+        case .labs: "list.clipboard.fill"
         }
     }
 
     var color: Color {
         switch self {
-        case .weight: return Color("CategoryWeight")
-        case .steps: return Color("CategorySteps")
-        case .glucose: return Color("CategoryGlucose")
-        case .vitals: return Color("CategoryVitals")
-        case .labs: return Color("CategoryLabs")
+        case .weight: Color("CategoryWeight")
+        case .steps: Color("CategorySteps")
+        case .glucose: Color("CategoryGlucose")
+        case .vitals: Color("CategoryVitals")
+        case .labs: Color("CategoryLabs")
         }
     }
 }

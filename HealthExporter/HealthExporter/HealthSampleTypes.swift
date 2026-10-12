@@ -1,9 +1,10 @@
 import HealthKit
 import os
 
-nonisolated private let logger = Logger(subsystem: "com.HealthExporter", category: "HealthSampleTypes")
+private nonisolated let logger = Logger(subsystem: "com.HealthExporter", category: "HealthSampleTypes")
 
 // MARK: - Glucose Sample Type
+
 nonisolated struct GlucoseSampleMgDl: Sendable {
     let startDate: Date
     let value: Double // mg/dL value (e.g., 145.0 for 145 mg/dL)
@@ -25,10 +26,10 @@ nonisolated struct GlucoseSampleMgDl: Sendable {
             logger.debug("Filtered glucose value \(mgDlValue, privacy: .private) mg/dL (below 20 threshold) from \(sample.startDate, privacy: .private)")
             return nil
         }
-        self.startDate = sample.startDate
-        self.value = mgDlValue
-        self.source = sample.sourceRevision.source.name
-        self.mealTime = Self.mealTime(fromMetadata: sample.metadata)
+        startDate = sample.startDate
+        value = mgDlValue
+        source = sample.sourceRevision.source.name
+        mealTime = Self.mealTime(fromMetadata: sample.metadata)
     }
 
     /// Imported C enums accept any raw value, so map the known cases explicitly.
@@ -45,8 +46,9 @@ nonisolated struct GlucoseSampleMgDl: Sendable {
 }
 
 // MARK: - LOINC Code Constants
+
 /// Common LOINC codes for lab results
-nonisolated struct LOINCCode {
+nonisolated enum LOINCCode {
     static let hemoglobinA1C = "4548-4"
     static let hemoglobinA1CHPLC = "17856-6"
 
@@ -111,14 +113,15 @@ nonisolated struct FHIRObservation: Sendable {
     let comparator: String?
 }
 
-nonisolated struct FHIRLabResultParser {
+nonisolated enum FHIRLabResultParser {
     static let loincSystem = "http://loinc.org"
     static let allowedComparators: Set<String> = ["<", "<=", ">", ">="]
 
     /// Parses the JSON once. Returns nil when the date or numeric value is missing or invalid.
     static func parseObservation(fromFHIRData fhirData: Data) -> FHIRObservation? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: fhirData, options: []),
-              let json = jsonObject as? [String: Any] else {
+              let json = jsonObject as? [String: Any]
+        else {
             return nil
         }
 
@@ -136,7 +139,8 @@ nonisolated struct FHIRLabResultParser {
         }
 
         guard let valueQuantity = json["valueQuantity"] as? [String: Any],
-              let value = valueQuantity["value"] as? NSNumber else {
+              let value = valueQuantity["value"] as? NSNumber
+        else {
             return nil
         }
         let unit = valueQuantity["unit"] as? String ?? valueQuantity["code"] as? String ?? ""
@@ -154,7 +158,8 @@ nonisolated struct FHIRLabResultParser {
     /// Parses the observation and returns it only when it carries `loincCode`.
     static func extractLabResult(fromFHIRData fhirData: Data, loincCode: String) -> FHIRObservation? {
         guard let observation = parseObservation(fromFHIRData: fhirData),
-              observation.loincCodes.contains(loincCode) else {
+              observation.loincCodes.contains(loincCode)
+        else {
             return nil
         }
         return observation
@@ -166,7 +171,7 @@ nonisolated struct FHIRLabResultParser {
 
     private static let utcCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.timeZone = .gmt
         return calendar
     }()
 
@@ -201,10 +206,11 @@ nonisolated struct FHIRLabResultParser {
         }
 
         let parts = string.split(separator: "-", omittingEmptySubsequences: false)
-        guard (1...3).contains(parts.count),
+        guard (1 ... 3).contains(parts.count),
               parts[0].count == 4,
               parts.dropFirst().allSatisfy({ $0.count == 2 }),
-              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } }) else {
+              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } })
+        else {
             return nil
         }
         let numbers = parts.compactMap { Int($0) }

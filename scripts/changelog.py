@@ -20,8 +20,9 @@ heading names one version, newest first. A `---` line after the sections
 starts the footer, which is not part of any section. HTML comments
 (`<!-- ... -->`) are removed before the notes are used or measured.
 
-The notes are plain text: no backticks, bold or Markdown links. Each section
-is at most 4000 characters, the TestFlight limit.
+The notes are plain text: no backticks, bold, Markdown links, '<' or '>'.
+App Store Connect refuses '<' and '>' in What's New. Each section is at most
+4000 characters, the TestFlight limit.
 
 Subcommands:
 
@@ -81,6 +82,9 @@ FOOTER_LINE = re.compile(r"^---[ \t]*$", re.MULTILINE)
 
 # Markdown that a tester would see as raw characters in TestFlight.
 FORMATTING = {"`": "a backtick", "**": "bold", "](": "a Markdown link"}
+# App Store Connect refuses What's New text with these characters: "must not
+# contain markup language".
+MARKUP_CHARACTERS = ("<", ">")
 
 
 class ChangelogError(Exception):
@@ -230,6 +234,13 @@ def check_section(section: Section) -> None:
                 f"{section.name} must be plain text for testers: it has {name} "
                 f"({marker!r}). Move notes for developers into a comment."
             )
+    found = [c for c in MARKUP_CHARACTERS if c in notes]
+    if found:
+        raise ChangelogError(
+            f"{section.name} has {' and '.join(repr(c) for c in found)}. "
+            "App Store Connect refuses them in What's New as markup. "
+            "Write the words, such as 'more than' or 'less than'."
+        )
 
 
 def check(text: str, *, require_unreleased: bool = False) -> list[Section]:

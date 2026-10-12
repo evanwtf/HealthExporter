@@ -62,7 +62,7 @@ Release notes for each version of HealthExporter, newest first. The release job 
 ## v2.4.13 (build 47), 2026-10-12
 
 - The CSV has a new last column, Meal Time. A glucose row shows Before Meal or After Meal when the reading has that tag.
-- A lab result reported as a limit, such as >60 or <0.3, keeps its sign in the export.
+- A lab result reported as a limit, such as more than 60 or less than 0.3, keeps that limit in the export.
 - LDL, glucose, eGFR and A1C now also match the codes that most labs send. The lab "Fasting Glucose" is now "Glucose", because it matches any glucose result.
 - "Last N Records" now applies to each lab on its own, so a selected lab no longer comes out empty.
 - Lab results with a partial date, or with no unit, are no longer left out of the export.

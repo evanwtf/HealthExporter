@@ -152,7 +152,7 @@ Changelog (`docs/changelog.md`):
 - The file is the one source of release notes: the GitHub release and the TestFlight "What to Test" notes both come from it.
 - Layout: `# Changelog`, one short paragraph, `## Unreleased`, then one `## vX.Y.Z (build N), YYYY-MM-DD` section per version, newest first. A `---` line after the last section starts the footer, which is in no section.
 - A pull request that cuts a release adds its lines under `## Unreleased`. Only the release job writes a version heading.
-- Testers read the notes. Write one plain sentence or two after each `- `, for a user. No Markdown links, backticks or bold: `check` fails on them.
+- Testers read the notes. Write one plain sentence or two after each `- `, for a user. No Markdown links, backticks, bold, `<` or `>`: `check` fails on them. App Store Connect refuses `<` and `>` in What's New as markup, so write "more than" or "less than".
 - HTML comments (`<!-- ... -->`) are removed before the notes are used and before the empty check. Put notes for developers there.
 - A section is at most 4000 characters after the comments are removed, the TestFlight limit.
 - `scripts/changelog.py check` also fails on a missing or second `## Unreleased`, a malformed heading, a version that appears twice, and versions out of order.

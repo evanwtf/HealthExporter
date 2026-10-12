@@ -144,16 +144,17 @@ final class FHIRLabResultParserTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    func testMissingUnitInValueQuantity_returnsNil() {
+    func testMissingUnitInValueQuantity_fallsBackToEmptyUnit() {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
-            "valueQuantity": ["value": 7.2]  // missing "unit"
+            "valueQuantity": ["value": 7.2]  // missing "unit" and "code"
         ]
         let data = try! JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
-        XCTAssertNil(result)
+        XCTAssertEqual(result?.unit, "")
+        XCTAssertEqual(result?.value ?? 0, 7.2, accuracy: 0.001)
     }
 
     // MARK: - Empty coding array
@@ -189,5 +190,136 @@ final class FHIRLabResultParserTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertEqual(result!.value, 6.8, accuracy: 0.001)
+    }
+
+    // MARK: - Unit fallback
+
+    func testMissingUnit_fallsBackToUCUMCode() {
+        let json: [String: Any] = [
+            "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
+            "effectiveDateTime": "2024-06-15T10:30:00Z",
+            "valueQuantity": ["value": 7.2, "system": "http://unitsofmeasure.org", "code": "%"]
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        XCTAssertEqual(FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")?.unit, "%")
+    }
+
+    // MARK: - Comparator
+
+    private func observation(valueQuantity: [String: Any]) -> FHIRObservation? {
+        let json: [String: Any] = [
+            "code": ["coding": [["system": "http://loinc.org", "code": "33914-3"]]],
+            "effectiveDateTime": "2024-06-15T10:30:00Z",
+            "valueQuantity": valueQuantity
+        ]
+        return FHIRLabResultParser.parseObservation(fromFHIRData: try! JSONSerialization.data(withJSONObject: json))
+    }
+
+    func testComparator_eachAllowedValueIsKept() {
+        for comparator in ["<", "<=", ">", ">="] {
+            let result = observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": comparator])
+            XCTAssertEqual(result?.comparator, comparator)
+        }
+    }
+
+    func testComparator_absentIsNil() {
+        XCTAssertNil(observation(valueQuantity: ["value": 60, "unit": "mL/min"])?.comparator)
+    }
+
+    func testComparator_unknownValueIsNil() {
+        XCTAssertNil(observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": "ad"])?.comparator)
+    }
+
+    // MARK: - Codes
+
+    func testParseObservation_returnsLOINCCodesInRecordOrder() {
+        let json: [String: Any] = [
+            "code": ["coding": [
+                ["system": "http://loinc.org", "code": "13457-7"],
+                ["system": "http://snomed.org", "code": "12345"],
+                ["system": "http://loinc.org", "code": "2089-1"]
+            ]],
+            "effectiveDateTime": "2024-06-15T10:30:00Z",
+            "valueQuantity": ["value": 100, "unit": "mg/dL"]
+        ]
+        let result = FHIRLabResultParser.parseObservation(fromFHIRData: try! JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(result?.loincCodes, ["13457-7", "2089-1"])
+    }
+
+    // MARK: - FHIR date forms
+
+    private func utc(_ y: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0, _ s: Int = 0) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: y, month: mo, day: d, hour: h, minute: mi, second: s))!
+    }
+
+    func testParseDate_fullDateTimeWithoutFraction() {
+        XCTAssertEqual(FHIRLabResultParser.parseDate("2024-06-15T10:30:00Z"), utc(2024, 6, 15, 10, 30))
+    }
+
+    func testParseDate_fullDateTimeWithOffset() {
+        XCTAssertEqual(FHIRLabResultParser.parseDate("2024-06-15T10:30:00-04:00"), utc(2024, 6, 15, 14, 30))
+    }
+
+    func testParseDate_fractionalSeconds() {
+        let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.123Z")
+        XCTAssertNotNil(date)
+        XCTAssertEqual(date!.timeIntervalSince(utc(2024, 6, 15, 10, 30)), 0.123, accuracy: 0.001)
+    }
+
+    func testParseDate_fractionalSecondsWithOffset() {
+        let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.5+02:00")
+        XCTAssertNotNil(date)
+        XCTAssertEqual(date!.timeIntervalSince(utc(2024, 6, 15, 8, 30)), 0.5, accuracy: 0.001)
+    }
+
+    func testParseDate_dateOnly_isStartOfDayUTC() {
+        XCTAssertEqual(FHIRLabResultParser.parseDate("2024-06-15"), utc(2024, 6, 15))
+    }
+
+    func testParseDate_yearMonth_isFirstOfMonthUTC() {
+        XCTAssertEqual(FHIRLabResultParser.parseDate("2024-06"), utc(2024, 6, 1))
+    }
+
+    func testParseDate_yearOnly_isJanuaryFirstUTC() {
+        XCTAssertEqual(FHIRLabResultParser.parseDate("2024"), utc(2024, 1, 1))
+    }
+
+    func testParseDate_garbage_isNil() {
+        for value in ["", "June 15, 2024", "2024-13", "2024-02-30", "24-06-15", "2024-6-15", "2024-06-15T10:30", "abcd", "2024-06-15Z"] {
+            XCTAssertNil(FHIRLabResultParser.parseDate(value), value)
+        }
+    }
+
+    // MARK: - Effective date fallbacks
+
+    private func observationData(dateFields: [String: Any]) -> Data {
+        var json: [String: Any] = [
+            "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
+            "valueQuantity": ["value": 7.2, "unit": "%"]
+        ]
+        json.merge(dateFields) { _, new in new }
+        return try! JSONSerialization.data(withJSONObject: json)
+    }
+
+    func testEffectiveInstant_usedWhenDateTimeAbsent() {
+        let data = observationData(dateFields: ["effectiveInstant": "2024-06-15T10:30:00.250Z"])
+        let result = FHIRLabResultParser.parseObservation(fromFHIRData: data)
+        XCTAssertEqual(result!.effectiveDateTime.timeIntervalSince(utc(2024, 6, 15, 10, 30)), 0.25, accuracy: 0.001)
+    }
+
+    func testEffectivePeriodStart_usedWhenDateTimeAndInstantAbsent() {
+        let data = observationData(dateFields: ["effectivePeriod": ["start": "2024-06-15", "end": "2024-06-16"]])
+        XCTAssertEqual(FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime, utc(2024, 6, 15))
+    }
+
+    func testEffectiveDateTime_winsOverFallbacks() {
+        let data = observationData(dateFields: [
+            "effectiveDateTime": "2024-06-15T10:30:00Z",
+            "effectiveInstant": "2023-01-01T00:00:00Z",
+            "effectivePeriod": ["start": "2022-01-01"]
+        ])
+        XCTAssertEqual(FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime, utc(2024, 6, 15, 10, 30))
     }
 }

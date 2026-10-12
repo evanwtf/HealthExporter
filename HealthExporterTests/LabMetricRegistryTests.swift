@@ -156,4 +156,45 @@ final class LabMetricRegistryTests: XCTestCase {
         XCTAssertEqual(Set(others.map(\.loincCode)), expectedCodes)
         XCTAssertTrue(others.allSatisfy { $0.group == .other })
     }
+
+    // MARK: - Alternate LOINC codes
+
+    func testRegistry_allCodesIncludingAlternatesAreUnique() {
+        let codes = LabMetricRegistry.all.flatMap(\.allLoincCodes)
+        XCTAssertEqual(Set(codes).count, codes.count, "A LOINC code maps to two metrics: \(codes)")
+    }
+
+    func testRegistry_alternatesResolveToPrimaryMetric() {
+        let expected: [String: String] = [
+            "13457-7": LOINCCode.ldlCholesterolDirect,
+            "18262-6": LOINCCode.ldlCholesterolDirect,
+            "2345-7": LOINCCode.fastingGlucose,
+            "98979-8": LOINCCode.estimatedGlomerularFiltrationRate,
+            "62238-1": LOINCCode.estimatedGlomerularFiltrationRate,
+            "17856-6": LOINCCode.hemoglobinA1C
+        ]
+        for (alternate, primary) in expected {
+            XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: alternate)?.loincCode, primary, alternate)
+            XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: alternate)?.id, primary, alternate)
+        }
+    }
+
+    func testRegistry_primaryIdentityUnchanged() {
+        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.ldlCholesterolDirect)?.id, "2089-1")
+        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.fastingGlucose)?.id, "1558-6")
+        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.estimatedGlomerularFiltrationRate)?.id, "33914-3")
+        XCTAssertEqual(LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)?.id, "4548-4")
+    }
+
+    func testCodeIndex_onlyCoversRequestedMetrics() {
+        let index = LabMetricRegistry.codeIndex(for: LabMetricRegistry.metrics(in: .lipid))
+        XCTAssertEqual(index["13457-7"]?.loincCode, LOINCCode.ldlCholesterolDirect)
+        XCTAssertNil(index[LOINCCode.hemoglobinA1C])
+    }
+
+    func testCodeIndex_primaryCodeWinsOverAnotherMetricsAlternate() {
+        let a = LabMetric(name: "A", loincCode: "1-1", group: .other, valuePrecision: 0, alternateLoincCodes: ["2-2"])
+        let b = LabMetric(name: "B", loincCode: "2-2", group: .other, valuePrecision: 0)
+        XCTAssertEqual(LabMetricRegistry.codeIndex(for: [a, b])["2-2"]?.name, "B")
+    }
 }

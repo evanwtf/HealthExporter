@@ -48,10 +48,13 @@ struct GlucoseSampleMgDl {
 /// Common LOINC codes for lab results
 struct LOINCCode {
     static let hemoglobinA1C = "4548-4"
+    static let hemoglobinA1CHPLC = "17856-6"
 
     static let totalCholesterol = "2093-3"
     static let hdlCholesterol = "2085-9"
     static let ldlCholesterolDirect = "2089-1"
+    static let ldlCholesterolCalculated = "13457-7"
+    static let ldlCholesterolDirectAssay = "18262-6"
     static let triglycerides = "2571-8"
 
     static let whiteBloodCellCount = "6690-2"
@@ -65,9 +68,12 @@ struct LOINCCode {
     static let redCellDistributionWidth = "788-0"
 
     static let fastingGlucose = "1558-6"
+    static let glucoseSerumPlasma = "2345-7"
     static let bloodUreaNitrogen = "3094-0"
     static let creatinine = "2160-0"
     static let estimatedGlomerularFiltrationRate = "33914-3"
+    static let eGFRCKDEPI2021 = "98979-8"
+    static let eGFRCKDEPI = "62238-1"
     static let sodium = "2951-2"
     static let potassium = "2823-3"
     static let chloride = "2075-0"
@@ -93,63 +99,117 @@ struct LOINCCode {
 }
 
 // MARK: - FHIR Lab Result Helper
-/// Helper struct for extracting lab result data from FHIR resources
-struct FHIRLabResultParser {
-    /// Extracts lab result data from a clinical record for a specific LOINC code
-    /// - Parameters:
-    ///   - clinicalRecord: The HKClinicalRecord containing FHIR data
-    ///   - loincCode: The LOINC code to search for (e.g., "4548-4" for Hemoglobin A1C)
-    /// - Returns: Tuple of (effectiveDateTime, value, unit) if found, nil otherwise
-    /// Extracts lab result data from a clinical record for a specific LOINC code
-    static func extractLabResult(from clinicalRecord: HKClinicalRecord, loincCode: String) -> (effectiveDateTime: Date, value: Double, unit: String)? {
-        guard let fhirResource = clinicalRecord.fhirResource else {
-            return nil
-        }
-        return extractLabResult(fromFHIRData: fhirResource.data, loincCode: loincCode)
-    }
 
-    /// Extracts lab result data from raw FHIR JSON data for a specific LOINC code.
-    /// This is the pure parsing logic, separated from HKClinicalRecord for testability.
-    static func extractLabResult(fromFHIRData fhirData: Data, loincCode: String) -> (effectiveDateTime: Date, value: Double, unit: String)? {
+/// The fields of one FHIR Observation that the exporter uses.
+struct FHIRObservation {
+    /// LOINC codes from `code.coding`, in record order.
+    let loincCodes: [String]
+    let effectiveDateTime: Date
+    let value: Double
+    let unit: String
+    /// One of `<`, `<=`, `>`, `>=`, or nil.
+    let comparator: String?
+}
+
+struct FHIRLabResultParser {
+    static let loincSystem = "http://loinc.org"
+    static let allowedComparators: Set<String> = ["<", "<=", ">", ">="]
+
+    /// Parses the JSON once. Returns nil when the date or numeric value is missing or invalid.
+    static func parseObservation(fromFHIRData fhirData: Data) -> FHIRObservation? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: fhirData, options: []),
               let json = jsonObject as? [String: Any] else {
             return nil
         }
 
-        // Check if this is a lab result with the specified LOINC code
-        guard let code = json["code"] as? [String: Any],
-              let coding = code["coding"] as? [[String: Any]],
-              coding.contains(where: { ($0["system"] as? String) == "http://loinc.org" && ($0["code"] as? String) == loincCode }) else {
+        let coding = (json["code"] as? [String: Any])?["coding"] as? [[String: Any]] ?? []
+        let loincCodes = coding.compactMap { entry -> String? in
+            guard (entry["system"] as? String) == loincSystem else { return nil }
+            return entry["code"] as? String
+        }
+
+        let dateString = json["effectiveDateTime"] as? String
+            ?? json["effectiveInstant"] as? String
+            ?? (json["effectivePeriod"] as? [String: Any])?["start"] as? String
+        guard let dateString, let effectiveDateTime = parseDate(dateString) else {
             return nil
         }
 
-        // Extract effective date time
-        guard let effectiveDateTimeStr = json["effectiveDateTime"] as? String else {
-            return nil
-        }
-
-        // Parse ISO 8601 datetime
-        let iso8601Formatter = ISO8601DateFormatter()
-        guard let effectiveDateTime = iso8601Formatter.date(from: effectiveDateTimeStr) else {
-            return nil
-        }
-
-        // Extract value from valueQuantity
         guard let valueQuantity = json["valueQuantity"] as? [String: Any],
-              let value = valueQuantity["value"] as? NSNumber,
-              let unit = valueQuantity["unit"] as? String else {
+              let value = valueQuantity["value"] as? NSNumber else {
             return nil
         }
+        let unit = valueQuantity["unit"] as? String ?? valueQuantity["code"] as? String ?? ""
+        let comparator = (valueQuantity["comparator"] as? String).flatMap { allowedComparators.contains($0) ? $0 : nil }
 
-        return (effectiveDateTime, value.doubleValue, unit)
+        return FHIRObservation(
+            loincCodes: loincCodes,
+            effectiveDateTime: effectiveDateTime,
+            value: value.doubleValue,
+            unit: unit,
+            comparator: comparator
+        )
+    }
+
+    /// Parses the observation and returns it only when it carries `loincCode`.
+    static func extractLabResult(fromFHIRData fhirData: Data, loincCode: String) -> FHIRObservation? {
+        guard let observation = parseObservation(fromFHIRData: fhirData),
+              observation.loincCodes.contains(loincCode) else {
+            return nil
+        }
+        return observation
+    }
+
+    private static let dateTimeFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let fractionalDateTimeFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    /// Parses a FHIR `dateTime` or `instant`: a full date-time with or without
+    /// fractional seconds, or a partial date (`YYYY-MM-DD`, `YYYY-MM`, `YYYY`).
+    /// A partial date resolves to the start of that period in UTC.
+    static func parseDate(_ string: String) -> Date? {
+        if string.contains("T") {
+            return fractionalDateTimeFormatter.date(from: string) ?? dateTimeFormatter.date(from: string)
+        }
+
+        let parts = string.split(separator: "-", omittingEmptySubsequences: false)
+        guard (1...3).contains(parts.count),
+              parts[0].count == 4,
+              parts.dropFirst().allSatisfy({ $0.count == 2 }),
+              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } }) else {
+            return nil
+        }
+        let numbers = parts.compactMap { Int($0) }
+        var components = DateComponents()
+        components.year = numbers[0]
+        components.month = numbers.count > 1 ? numbers[1] : 1
+        components.day = numbers.count > 2 ? numbers[2] : 1
+        guard components.isValidDate(in: utcCalendar) else {
+            return nil
+        }
+        return utcCalendar.date(from: components)
     }
 }
 
 // MARK: - Generic Lab Result Sample
 
 /// Generic lab result row used by the lab pipeline. Carries everything needed
-/// to render a CSV row: human-readable metric name, LOINC identifier, and the
-/// observation's date/value/unit/source.
+/// to render a CSV row: human-readable metric name, the LOINC code found in the
+/// record, and the observation's date/value/unit/source/comparator.
 struct LabResultSample {
     let metricName: String
     let loincCode: String
@@ -157,6 +217,7 @@ struct LabResultSample {
     let value: Double
     let unit: String
     let source: String
+    let comparator: String?
 
     init(
         metricName: String,
@@ -164,7 +225,8 @@ struct LabResultSample {
         effectiveDateTime: Date,
         value: Double,
         unit: String,
-        source: String = ""
+        source: String = "",
+        comparator: String? = nil
     ) {
         self.metricName = metricName
         self.loincCode = loincCode
@@ -172,33 +234,31 @@ struct LabResultSample {
         self.value = value
         self.unit = unit
         self.source = source
+        self.comparator = comparator
     }
 
-    /// Builds a LabResultSample from raw FHIR JSON data for a known LOINC code.
-    /// Returns nil if the FHIR resource cannot be parsed or the LOINC code is
-    /// not registered in `LabMetricRegistry`.
-    init?(fromFHIRData fhirData: Data, loincCode: String, source: String) {
-        guard let metric = LabMetricRegistry.metric(forLoincCode: loincCode),
-              let result = FHIRLabResultParser.extractLabResult(fromFHIRData: fhirData, loincCode: loincCode) else {
-            return nil
-        }
-        self.metricName = metric.name
-        self.loincCode = loincCode
-        self.effectiveDateTime = result.effectiveDateTime
-        self.value = result.value
-        self.unit = result.unit
-        self.source = source
-    }
-
-    /// Builds a LabResultSample from an HKClinicalRecord for a known LOINC code.
-    init?(from clinicalRecord: HKClinicalRecord, loincCode: String) {
-        guard let fhirResource = clinicalRecord.fhirResource else {
+    /// Builds one sample from a parsed observation. The first LOINC coding (in
+    /// record order) found in `codeIndex` picks the metric, so a record coded
+    /// for two requested metrics produces one row, not two.
+    init?(observation: FHIRObservation, source: String, codeIndex: [String: LabMetric]) {
+        guard let match = observation.loincCodes.lazy.compactMap({ code in codeIndex[code].map { (code, $0) } }).first else {
             return nil
         }
         self.init(
-            fromFHIRData: fhirResource.data,
-            loincCode: loincCode,
-            source: clinicalRecord.sourceRevision.source.name
+            metricName: match.1.name,
+            loincCode: match.0,
+            effectiveDateTime: observation.effectiveDateTime,
+            value: observation.value,
+            unit: observation.unit,
+            source: source,
+            comparator: observation.comparator
         )
+    }
+
+    init?(fromFHIRData fhirData: Data, source: String, codeIndex: [String: LabMetric] = LabMetricRegistry.codeIndex) {
+        guard let observation = FHIRLabResultParser.parseObservation(fromFHIRData: fhirData) else {
+            return nil
+        }
+        self.init(observation: observation, source: source, codeIndex: codeIndex)
     }
 }

@@ -20,14 +20,19 @@ enum LabPanel: String, CaseIterable, Codable {
 }
 
 /// Static description of a single lab observation supported for export.
-/// `id == loincCode` so the registry is keyed by the LOINC code throughout.
+/// `id == loincCode` so the registry is keyed by the primary LOINC code
+/// throughout. `alternateLoincCodes` are other codes labs use for the same
+/// measurement; they match records but never change the identity.
 struct LabMetric: Identifiable, Hashable {
     let name: String
     let loincCode: String
     let group: LabPanel
     let valuePrecision: Int
+    var alternateLoincCodes: [String] = []
 
     var id: String { loincCode }
+
+    var allLoincCodes: [String] { [loincCode] + alternateLoincCodes }
 }
 
 /// Centralized list of lab metrics the exporter knows how to render.
@@ -38,7 +43,8 @@ enum LabMetricRegistry {
             name: "Hemoglobin A1C",
             loincCode: LOINCCode.hemoglobinA1C,
             group: .other,
-            valuePrecision: 2
+            valuePrecision: 2,
+            alternateLoincCodes: [LOINCCode.hemoglobinA1CHPLC]
         ),
         LabMetric(
             name: "Total Cholesterol",
@@ -56,7 +62,8 @@ enum LabMetricRegistry {
             name: "LDL Cholesterol",
             loincCode: LOINCCode.ldlCholesterolDirect,
             group: .lipid,
-            valuePrecision: 0
+            valuePrecision: 0,
+            alternateLoincCodes: [LOINCCode.ldlCholesterolCalculated, LOINCCode.ldlCholesterolDirectAssay]
         ),
         LabMetric(
             name: "Triglycerides",
@@ -119,10 +126,11 @@ enum LabMetricRegistry {
             valuePrecision: 1
         ),
         LabMetric(
-            name: "Fasting Glucose",
+            name: "Glucose",
             loincCode: LOINCCode.fastingGlucose,
             group: .cmp,
-            valuePrecision: 0
+            valuePrecision: 0,
+            alternateLoincCodes: [LOINCCode.glucoseSerumPlasma]
         ),
         LabMetric(
             name: "BUN",
@@ -140,7 +148,8 @@ enum LabMetricRegistry {
             name: "eGFR",
             loincCode: LOINCCode.estimatedGlomerularFiltrationRate,
             group: .cmp,
-            valuePrecision: 0
+            valuePrecision: 0,
+            alternateLoincCodes: [LOINCCode.eGFRCKDEPI2021, LOINCCode.eGFRCKDEPI]
         ),
         LabMetric(
             name: "Sodium",
@@ -264,8 +273,28 @@ enum LabMetricRegistry {
         )
     ]
 
+    /// Every primary and alternate code in the registry, mapped to its metric.
+    static let codeIndex = codeIndex(for: all)
+
+    /// Maps each primary and alternate code of `metrics` to its metric. Primary
+    /// codes are added first, so a code that is one metric's primary and
+    /// another's alternate resolves to the primary owner.
+    static func codeIndex(for metrics: [LabMetric]) -> [String: LabMetric] {
+        var index: [String: LabMetric] = [:]
+        for metric in metrics {
+            index[metric.loincCode] = index[metric.loincCode] ?? metric
+        }
+        for metric in metrics {
+            for code in metric.alternateLoincCodes where index[code] == nil {
+                index[code] = metric
+            }
+        }
+        return index
+    }
+
+    /// Looks up a metric by its primary or an alternate LOINC code.
     static func metric(forLoincCode loincCode: String) -> LabMetric? {
-        all.first { $0.loincCode == loincCode }
+        codeIndex[loincCode]
     }
 
     static func metrics(in panel: LabPanel) -> [LabMetric] {

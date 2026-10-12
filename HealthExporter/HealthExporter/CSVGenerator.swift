@@ -112,7 +112,7 @@ class CSVGenerator {
         let unit = csvEscape(sample.unit)
         let source = csvEscape(sample.source)
         let precision = LabMetricRegistry.metric(forLoincCode: sample.loincCode)?.valuePrecision ?? 2
-        let value = String(format: "%.\(precision)f", sample.value)
+        let value = (sample.comparator ?? "") + String(format: "%.\(precision)f", sample.value)
         return "\(date),\(metric),\(loinc),\(value),\(unit),\(source),\n"
     }
 

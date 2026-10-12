@@ -62,6 +62,26 @@ enum HealthKitQueryHelpers {
         return samples.filter { $0.effectiveDateTime >= aligned.start && $0.effectiveDateTime < aligned.end }
     }
 
+    /// Keeps the newest `limit` samples for each lab metric. Alternate LOINC
+    /// codes count toward their metric. `limit <= 0` (`HKObjectQueryNoLimit`)
+    /// keeps everything. Kept samples stay in input order.
+    static func limitLabResultsPerMetric(_ samples: [LabResultSample], limit: Int) -> [LabResultSample] {
+        guard limit > 0 else { return samples }
+
+        let newestFirst = samples.indices.sorted { samples[$0].effectiveDateTime > samples[$1].effectiveDateTime }
+        var countByMetric: [String: Int] = [:]
+        var kept = Set<Int>()
+        for index in newestFirst {
+            let code = samples[index].loincCode
+            let key = LabMetricRegistry.metric(forLoincCode: code)?.loincCode ?? code
+            let count = countByMetric[key, default: 0]
+            guard count < limit else { continue }
+            countByMetric[key] = count + 1
+            kept.insert(index)
+        }
+        return samples.indices.filter { kept.contains($0) }.map { samples[$0] }
+    }
+
     /// Generates a contiguous set of daily weight samples for simulator testing.
     static func generateWeightTestSamples(
         days: Int = 60,
@@ -213,38 +233,32 @@ class HealthKitManager {
             return
         }
 
-        // Requires iOS 15.0+ for clinical records
-        guard #available(iOS 15.0, *) else {
-            completion(nil, NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Clinical Records require iOS 15.0 or later"]))
-            return
-        }
-
         guard let clinicalType = HKObjectType.clinicalType(forIdentifier: .labResultRecord) else {
             completion(nil, NSError(domain: "HealthKit", code: 3, userInfo: [NSLocalizedDescriptionKey: "Clinical Lab Result type not available"]))
             return
         }
 
+        let codeIndex = LabMetricRegistry.codeIndex(for: metrics)
         let predicate = dateRange.flatMap { HealthKitQueryHelpers.predicateForDateRange($0) }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-        let query = HKSampleQuery(sampleType: clinicalType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]) { _, records, error in
+        // Fetch every record: `limit` is applied per lab after LOINC matching,
+        // not to all clinical records at once.
+        let query = HKSampleQuery(sampleType: clinicalType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, records, error in
             guard error == nil else {
                 completion(nil, error)
                 return
             }
 
             let clinicalRecords = (records as? [HKClinicalRecord]) ?? []
-            var samples: [LabResultSample] = []
-            for record in clinicalRecords {
-                for metric in metrics {
-                    if let sample = LabResultSample(from: record, loincCode: metric.loincCode) {
-                        samples.append(sample)
-                    }
-                }
+            var samples = clinicalRecords.compactMap { record -> LabResultSample? in
+                guard let data = record.fhirResource?.data else { return nil }
+                return LabResultSample(fromFHIRData: data, source: record.sourceRevision.source.name, codeIndex: codeIndex)
             }
 
             if let dateRange = dateRange {
                 samples = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: dateRange)
             }
+            samples = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: limit)
 
             completion(samples, nil)
         }

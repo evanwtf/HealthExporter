@@ -711,6 +711,55 @@ final class CSVGeneratorTests: XCTestCase {
         XCTAssertTrue(csv.contains(",Mystery Lab,\"0000,0\",1.00,\"x,y\",\"Lab\nTwo\""))
     }
 
+    // MARK: - Comparator and alternate codes
+
+    private func labCSV(_ sample: LabResultSample) -> String {
+        CSVGenerator.generateCombinedCSV(
+            weightSamples: nil,
+            stepsSamples: nil,
+            glucoseSamples: nil,
+            labResults: [sample],
+            weightUnit: .kilograms,
+            dateFormat: .iso8601
+        )
+    }
+
+    func testLabResultRow_comparatorPrefixesValue() {
+        let egfr = LabResultSample(
+            metricName: "eGFR",
+            loincCode: "98979-8",
+            effectiveDateTime: referenceDate,
+            value: 60,
+            unit: "mL/min/{1.73_m2}",
+            source: "Lab",
+            comparator: ">"
+        )
+        XCTAssertEqual(labCSV(egfr), CSVGenerator.csvPreamble + "2024-01-15T09:30:00Z,eGFR,98979-8,>60,mL/min/{1.73_m2},Lab,\n")
+
+        let crp = LabResultSample(
+            metricName: "hs-CRP",
+            loincCode: LOINCCode.highSensitivityCRP,
+            effectiveDateTime: referenceDate,
+            value: 0.3,
+            unit: "mg/L",
+            source: "Lab",
+            comparator: "<"
+        )
+        XCTAssertTrue(labCSV(crp).contains(",hs-CRP,30522-7,<0.30,mg/L,Lab,\n"))
+    }
+
+    func testLabResultRow_alternateCodeUsesMetricPrecision() {
+        let ldl = LabResultSample(
+            metricName: "LDL Cholesterol",
+            loincCode: "13457-7",
+            effectiveDateTime: referenceDate,
+            value: 101.4,
+            unit: "mg/dL",
+            source: "Lab"
+        )
+        XCTAssertTrue(labCSV(ldl).contains(",LDL Cholesterol,13457-7,101,mg/dL,Lab,\n"))
+    }
+
     // MARK: - Meal Time column
 
     func testGlucoseRows_exactByteFormat_withMealTime() {

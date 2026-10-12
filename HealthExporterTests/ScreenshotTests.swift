@@ -120,6 +120,36 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    func testMixedSelectionDataSelectionView() {
+        let settings = sharedSettings()
+        let saved = (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+                     settings.selectedLabPanels, settings.favoriteLabCodes, settings.selectedVitalMetrics)
+        settings.exportWeight = true
+        settings.exportSteps = false
+        settings.exportGlucose = true
+        settings.selectedLabPanels = [.lipid, .thyroid]
+        settings.favoriteLabCodes = [LOINCCode.hemoglobinA1C]
+        settings.selectedVitalMetrics = [.bloodPressure, .restingHeartRate]
+        defer {
+            (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+             settings.selectedLabPanels, settings.favoriteLabCodes, settings.selectedVitalMetrics) = saved
+        }
+        capture("08-data-selection-mixed") {
+            NavigationStack {
+                DataSelectionView(settings: settings)
+            }
+        }
+    }
+
+    func testLabPanelDetailView() {
+        let settings = sharedSettings()
+        capture("09-lab-panel-detail") {
+            NavigationStack {
+                DataSelectionView(settings: settings).labPanelDetail(.other)
+            }
+        }
+    }
+
     func testPrivacyPolicyView() {
         capture("04-privacy") {
             NavigationStack {

@@ -9,6 +9,7 @@ struct HealthExporterApp: App {
             NavigationStack {
                 LaunchView(settings: settings)
             }
+            .tint(.accentColor)
         }
     }
 }

@@ -11,7 +11,7 @@ struct PrivacyPolicyView: View {
 
                     Text("Last updated: May 2026")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color("SecondaryText"))
 
                     sectionView(title: "Overview",
                         body: "HealthExporterCSV is designed with your privacy as a core principle. All data processing happens entirely on your device. No health data is ever sent to external servers, collected by the developer, or shared with third parties.")
@@ -81,8 +81,17 @@ struct PrivacyPolicyView: View {
             }
             .padding()
         }
+        .fontDesign(.rounded)
         .navigationTitle("Privacy & Disclaimer")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Privacy & Disclaimer")
+                    .font(.headline)
+                    .fontDesign(.rounded)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
     }
 
     private func sectionView(title: String, body: String, bullets: [String] = [], closing: String? = nil) -> some View {

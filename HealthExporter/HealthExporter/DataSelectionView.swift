@@ -34,6 +34,12 @@ struct DataSelectionView: View {
     let healthManager = HealthKitManager()
 
     @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
+    @ScaledMetric(relativeTo: .title2) private var detailButtonSize: CGFloat = 44
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var tileColumnCount: Int {
+        dynamicTypeSize.isAccessibilitySize ? 1 : 2
+    }
 
     private static let dayOptions = Array(1...30) + [60, 90, 180, 365, 730]
     private static let recordOptions = Array(stride(from: 100, through: 1_000, by: 100)) + Array(stride(from: 2_000, through: 10_000, by: 1_000))
@@ -132,19 +138,6 @@ struct DataSelectionView: View {
         )
     }
 
-    private func panelExpansionBinding(for panel: LabPanel) -> Binding<Bool> {
-        Binding(
-            get: { settings.expandedLabPanels.contains(panel) },
-            set: { newValue in
-                if newValue {
-                    settings.expandedLabPanels.insert(panel)
-                } else {
-                    settings.expandedLabPanels.remove(panel)
-                }
-            }
-        )
-    }
-
     private func vitalMetricBinding(for metric: VitalMetric) -> Binding<Bool> {
         Binding(
             get: { settings.selectedVitalMetrics.contains(metric) },
@@ -212,52 +205,170 @@ struct DataSelectionView: View {
         saveSuccessDismissTask = nil
     }
 
-    private func labPanelDisclosure(_ panel: LabPanel) -> some View {
-        let metrics = LabMetricRegistry.metrics(in: panel)
-        let selectedCount = panelSelectedCount(panel)
-        return DisclosureGroup(isExpanded: panelExpansionBinding(for: panel)) {
-            ForEach(metrics) { metric in
-                Toggle(metric.name, isOn: labSelectionBinding(for: metric.loincCode))
-                    .accessibilityIdentifier("lab_\(metric.loincCode)")
+    private func countLine(selected: Int, total: Int, noun: String) -> String {
+        if selected == 0 || selected == total {
+            return "\(total) \(noun)"
+        }
+        return "\(selected) of \(total) \(noun)"
+    }
+
+    private var weightDetail: String {
+        settings.weightUnit == .kilograms ? "In kilograms" : "In pounds"
+    }
+
+    private func metricTile(
+        _ category: HealthCategory,
+        detail: String,
+        isOn: Binding<Bool>,
+        identifier: String
+    ) -> some View {
+        Toggle(category.name, isOn: isOn)
+            .toggleStyle(CategoryTileToggleStyle(category: category, detail: detail))
+            .accessibilityIdentifier(identifier)
+    }
+
+    private func tileWithDetails<Destination: View>(
+        _ category: HealthCategory,
+        title: String,
+        detail: String,
+        isOn: Binding<Bool>,
+        identifier: String,
+        detailsIdentifier: String,
+        detailsLabel: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            Toggle(title, isOn: isOn)
+                .toggleStyle(CategoryTileToggleStyle(
+                    category: category,
+                    detail: detail,
+                    reservesTrailingAccessory: true
+                ))
+                .accessibilityIdentifier(identifier)
+
+            NavigationLink(destination: destination()) {
+                Image(systemName: "list.bullet")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isOn.wrappedValue ? Color.white : category.color)
+                    .frame(width: detailButtonSize, height: detailButtonSize)
+                    .background(
+                        Circle().fill(isOn.wrappedValue ? Color.white.opacity(0.22) : category.color.opacity(0.14))
+                    )
+                    .contentShape(Circle())
             }
-        } label: {
-            Toggle(isOn: labPanelSelectionBinding(for: panel)) {
-                HStack(spacing: 6) {
-                    Text(panel.displayName)
-                    if !metrics.isEmpty {
-                        Text("\(selectedCount)/\(metrics.count)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                }
-            }
-            .accessibilityIdentifier("panel_\(panel.rawValue)")
+            .buttonStyle(.plain)
+            .padding(8)
+            .accessibilityLabel(detailsLabel)
+            .accessibilityIdentifier(detailsIdentifier)
         }
     }
 
-    private func vitalsDisclosure() -> some View {
-        let allVitals = VitalMetric.allCases
-        let selectedCount = settings.selectedVitalMetrics.count
-        return DisclosureGroup(isExpanded: $settings.expandedVitalsSection) {
-            ForEach(allVitals) { metric in
-                Toggle(metric.displayName, isOn: vitalMetricBinding(for: metric))
-                    .accessibilityIdentifier("vital_\(metric.rawValue)")
+    func labPanelDetail(_ panel: LabPanel) -> some View {
+        SelectionDetailView(
+            settings: settings,
+            title: panel.displayName,
+            category: .labs,
+            rows: LabMetricRegistry.metrics(in: panel).map { metric in
+                SelectionDetailRow(
+                    id: metric.loincCode,
+                    title: metric.name,
+                    caption: "LOINC \(metric.loincCode)",
+                    accessibilityIdentifier: "lab_\(metric.loincCode)",
+                    isOn: labSelectionBinding(for: metric.loincCode)
+                )
             }
-        } label: {
-            Toggle(isOn: vitalSectionBinding()) {
-                HStack(spacing: 6) {
-                    Text("Vitals")
-                    if !allVitals.isEmpty {
-                        Text("\(selectedCount)/\(allVitals.count)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+        )
+    }
+
+    func vitalsDetail() -> some View {
+        SelectionDetailView(
+            settings: settings,
+            title: "Vitals",
+            category: .vitals,
+            rows: VitalMetric.allCases.map { metric in
+                SelectionDetailRow(
+                    id: metric.rawValue,
+                    title: metric.displayName,
+                    caption: nil,
+                    accessibilityIdentifier: "vital_\(metric.rawValue)",
+                    isOn: vitalMetricBinding(for: metric)
+                )
+            }
+        )
+    }
+
+    private func labPanelTile(_ panel: LabPanel) -> some View {
+        let total = LabMetricRegistry.metrics(in: panel).count
+        return tileWithDetails(
+            .labs,
+            title: panel.displayName,
+            detail: countLine(selected: panelSelectedCount(panel), total: total, noun: total == 1 ? "lab" : "labs"),
+            isOn: labPanelSelectionBinding(for: panel),
+            identifier: "panel_\(panel.rawValue)",
+            detailsIdentifier: "panelDetails_\(panel.rawValue)",
+            detailsLabel: "Choose labs in \(panel.displayName)"
+        ) {
+            labPanelDetail(panel)
+        }
+    }
+
+    private func vitalsTile() -> some View {
+        tileWithDetails(
+            .vitals,
+            title: "Vitals",
+            detail: countLine(
+                selected: settings.selectedVitalMetrics.count,
+                total: VitalMetric.allCases.count,
+                noun: "vitals"
+            ),
+            isOn: vitalSectionBinding(),
+            identifier: "vitalsSectionToggle",
+            detailsIdentifier: "vitalsDetails",
+            detailsLabel: "Choose vitals"
+        ) {
+            vitalsDetail()
+        }
+    }
+
+    /// Lays tiles out in rows so each row takes the height of its tallest tile.
+    private func tileGrid(_ tiles: [AnyView]) -> some View {
+        let columns = tileColumnCount
+        let rows = stride(from: 0, to: tiles.count, by: columns).map { start in
+            Array(tiles[start..<min(start + columns, tiles.count)].enumerated())
+        }
+        return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            ForEach(rows.indices, id: \.self) { rowIndex in
+                GridRow {
+                    ForEach(rows[rowIndex], id: \.offset) { item in
+                        item.element
+                    }
+                    if rows[rowIndex].count < columns {
+                        Color.clear
+                            .gridCellUnsizedAxes([.horizontal, .vertical])
                     }
                 }
             }
-            .accessibilityIdentifier("vitalsSectionToggle")
         }
+    }
+
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var measurementTiles: [AnyView] {
+        [
+            AnyView(metricTile(.weight, detail: weightDetail, isOn: $settings.exportWeight, identifier: "weightToggle")),
+            AnyView(metricTile(.steps, detail: "Step count", isOn: $settings.exportSteps, identifier: "stepsToggle")),
+            AnyView(metricTile(.glucose, detail: "Before/after meal tags", isOn: $settings.exportGlucose, identifier: "glucoseToggle")),
+            AnyView(vitalsTile()),
+        ]
+    }
+
+    private var labTiles: [AnyView] {
+        LabPanel.allCases.map { AnyView(labPanelTile($0)) }
     }
 
     private func segmentLabel(for option: DateRangeOption) -> String {
@@ -279,22 +390,6 @@ struct DataSelectionView: View {
         }
         .pickerStyle(.segmented)
         .accessibilityIdentifier("dateRangePicker")
-    }
-
-    private func metricLabel(_ title: String, systemImage: String, caption: String? = nil) -> some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                if let caption {
-                    Text(caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } icon: {
-            Image(systemName: systemImage)
-                .foregroundStyle(.tint)
-        }
     }
 
     @ViewBuilder
@@ -368,16 +463,16 @@ struct DataSelectionView: View {
                 .frame(minHeight: dateRangeEditorMinHeight, alignment: .top)
 
             if !hasSelectedMetric {
-                Text("Please select at least one metric")
+                Text("Choose at least one type of data.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color("ErrorText"))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
                 Text("End date must be on or after start date")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color("ErrorText"))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -389,6 +484,7 @@ struct DataSelectionView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
+            .tint(.accentColor)
             .controlSize(.large)
             .disabled(!exportEnabled || isPreparingExport)
             .accessibilityIdentifier("exportButton")
@@ -402,40 +498,27 @@ struct DataSelectionView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                Form {
-                    Section {
-                        Toggle(isOn: $settings.exportWeight) {
-                            metricLabel("Weight", systemImage: "scalemass")
-                        }
-                        .accessibilityIdentifier("weightToggle")
-                        Toggle(isOn: $settings.exportSteps) {
-                            metricLabel("Steps", systemImage: "figure.walk")
-                        }
-                        .accessibilityIdentifier("stepsToggle")
-                        Toggle(isOn: $settings.exportGlucose) {
-                            metricLabel("Blood Glucose", systemImage: "drop", caption: "mg/dL")
-                        }
-                        .accessibilityIdentifier("glucoseToggle")
-                    } header: {
-                        Label("Activity & Glucose", systemImage: "figure.walk")
-                    }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Choose Data")
+                            .font(.largeTitle.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
 
-                    Section {
-                        ForEach(LabPanel.allCases, id: \.self) { panel in
-                            labPanelDisclosure(panel)
-                        }
-                    } header: {
-                        Label("Labs", systemImage: "cross.case")
-                    } footer: {
+                        sectionHeading("Measurements")
+                        tileGrid(measurementTiles)
+
+                        sectionHeading("Lab results")
+                            .padding(.top, 8)
+                        tileGrid(labTiles)
                         Text("Lab sections require access to Clinical Health Records.")
+                            .font(.footnote)
+                            .foregroundStyle(Color("SecondaryText"))
                     }
-
-                    Section {
-                        vitalsDisclosure()
-                    } header: {
-                        Label("Vitals", systemImage: "heart.text.square")
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
+                .background(Color(uiColor: .systemGroupedBackground))
 
                 dateRangeFooter()
             }
@@ -451,8 +534,16 @@ struct DataSelectionView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
-        .navigationTitle("Select Data to Export")
+        .fontDesign(.rounded)
+        .navigationTitle("Choose Data")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // The large title is in the content, in SF Pro Rounded.
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
+            }
+        }
         .onAppear { updateExportEnabled() }
         .onChange(of: settings.exportWeight) { updateExportEnabled() }
         .onChange(of: settings.exportSteps) { updateExportEnabled() }

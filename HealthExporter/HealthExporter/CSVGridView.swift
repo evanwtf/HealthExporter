@@ -23,7 +23,6 @@ struct CSVGridView: View {
                     ForEach(Array(header.enumerated()), id: \.offset) { _, title in
                         cell(title)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.tint)
                             .background(Color("GridHeaderFill"))
                     }
                 }

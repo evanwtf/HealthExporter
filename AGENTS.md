@@ -43,14 +43,17 @@ Run these checks before you push:
 ```bash
 ci/lint_swift.sh
 xcodebuild build-for-testing -project HealthExporter.xcodeproj -scheme HealthExporter -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
-uv run ruff check scripts && uv run mypy && uv run pytest -rs
-uvx pre-commit run --all-files
+uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest -rs
+uv run scripts/changelog.py check
+pre-commit run --all-files
 ```
 
 - `ci/lint_swift.sh` runs SwiftFormat and SwiftLint (`--strict`) on `HealthExporter/` and `HealthExporterTests/`. It installs a missing tool with Homebrew. CI runs it before the tests, and a finding fails the job. To fix the format, run `swiftformat HealthExporter HealthExporterTests`.
 - `build-for-testing` compiles the app and the tests. It does not start a simulator. The build must have 0 errors and 0 Swift warnings.
 - The `uv run` line checks the Python scripts in `scripts/`. Run it when you change them.
-- `uvx pre-commit run --all-files` runs every hook in `.pre-commit-config.yaml`. To run the hooks on each commit, run `uvx pre-commit install` once per clone.
+- `scripts/changelog.py check` checks `docs/changelog.md`. Add `--require-unreleased` on a pull request that cuts a release.
+- `pre-commit run --all-files` runs every hook in `.pre-commit-config.yaml`. Install pre-commit once per machine, and the hook once per clone: `uv tool install pre-commit && pre-commit install`. Do not use `uvx`: the hook then calls Python from the uvx cache, and it breaks when that cache is cleaned.
+- `pre-commit install` refuses while `core.hooksPath` is set. Run `git config --local --unset-all core.hooksPath`, then run `pre-commit install` again.
 
 The unit tests and the screenshots run in CI on the shared macOS runner. Do not run them on a laptop. The runner is shared with other repos, so batch your changes: a branch should need few CI runs.
 
@@ -121,6 +124,8 @@ Workflows:
 - `ci/run_ios_tests.sh` probes `xcrun simctl` with a 30-second watchdog. When CoreSimulator does not respond, the job fails in about 5 minutes; see `docs/macos-runner-recovery.md`, section 8. Every job has `timeout-minutes`: 45 for the tests, 90 for TestFlight, 10 for Linux jobs.
 - `Scripts` (`scripts.yml`, Linux) runs on changes to `scripts/`, `pyproject.toml`, `uv.lock` or `project.pbxproj`, and by dispatch. It runs `uv sync --frozen`, `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest -rs`, and fails on a skipped test. It also runs `scripts/check_version.py`. Run the same checks locally: `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest -rs`.
 - `Gitleaks` (`gitleaks.yml`, Linux) scans the new commits of every pull request and push for secrets, with a pinned gitleaks release. Known false positives go in `.gitleaksignore`.
+- `Changelog` (`changelog.yml`, Linux) checks `docs/changelog.md` on every pull request, with no paths filter. A pull request labeled `skip-release` gets `scripts/changelog.py check`. Every other pull request gets `check --require-unreleased`, which fails when `## Unreleased` is empty. A label change reruns the check, but not the iOS tests. Do not rename the job.
+- The ruleset on `main` requires the `iOS tests`, `iOS tests (fork guard)`, `Gitleaks` and `Changelog` checks. A pull request must be up to date with `main` before it merges.
 - Dependabot (`.github/dependabot.yml`) updates the GitHub Actions monthly, with the `skip-release` label.
 
 Releases:
@@ -132,19 +137,31 @@ Releases:
   - `skip-release`: docs, CI or tooling only. No bump, no commit, no tag, no release and no TestFlight upload.
   - `skip-release` with any `semver:*` label fails the job.
 - The release job:
-  1. `scripts/bump_version.py` replaces every `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` entry in `project.pbxproj`.
-  2. `scripts/check_version.py --tag vX.Y.Z` fails when the entries disagree or the tag is not `v` + `MARKETING_VERSION`.
-  3. It commits `Release vX.Y.Z (build N)`, with `Source merge: #N (title)` and `[skip ci]`.
-  4. It pushes the commit and the tag with one `git push --atomic`.
-  5. It creates the GitHub release and dispatches `release-testflight.yml` on the tag.
-- If `main` holds a release commit whose version has no tag, the "Detect stranded release" step tags that commit instead of bumping again. The release step skips a release that already exists.
-- Never edit `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` by hand, and never push a `v*` tag by hand. `publish-release.yml` is only a fallback for a tag pushed by hand.
+  1. `scripts/changelog.py check --require-unreleased` fails when `## Unreleased` in `docs/changelog.md` is empty.
+  2. `scripts/bump_version.py` replaces every `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` entry in `project.pbxproj`.
+  3. `scripts/check_version.py --tag vX.Y.Z` fails when the entries disagree or the tag is not `v` + `MARKETING_VERSION`.
+  4. `scripts/changelog.py release` renames `## Unreleased` to `## vX.Y.Z (build N), YYYY-MM-DD` (the UTC date) and adds a new, empty `## Unreleased` above it. `scripts/changelog.py notes` writes that section as the release notes.
+  5. It commits `project.pbxproj` and `docs/changelog.md` as `Release vX.Y.Z (build N)`, with `Source merge: #N (title)` and `[skip ci]`.
+  6. It pushes the commit and the tag with one `git push --atomic`.
+  7. It creates the GitHub release from the notes, plus a "Full Changelog" compare link from the previous tag, and dispatches `release-testflight.yml` on the tag.
+- Every refusal happens before the push, so a refused release pushes nothing.
+- If `main` holds a release commit whose version has no tag, the "Detect stranded release" step tags that commit instead of bumping again. The notes come from `docs/changelog.md` in that commit, and the job writes them before it pushes the tag. The release step skips a release that already exists.
+- Never edit `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` by hand, and never push a `v*` tag by hand. `publish-release.yml` is only a fallback for a tag pushed by hand. It takes the notes from `docs/changelog.md` at the tag, and it refuses to publish a version with no section.
+
+Changelog (`docs/changelog.md`):
+- The file is the one source of release notes: the GitHub release and the TestFlight "What to Test" notes both come from it.
+- Layout: `# Changelog`, one short paragraph, `## Unreleased`, then one `## vX.Y.Z (build N), YYYY-MM-DD` section per version, newest first. A `---` line after the last section starts the footer, which is in no section.
+- A pull request that cuts a release adds its lines under `## Unreleased`. Only the release job writes a version heading.
+- Testers read the notes. Write one plain sentence or two after each `- `, for a user. No Markdown links, backticks or bold: `check` fails on them.
+- HTML comments (`<!-- ... -->`) are removed before the notes are used and before the empty check. Put notes for developers there.
+- A section is at most 4000 characters after the comments are removed, the TestFlight limit.
+- `scripts/changelog.py check` also fails on a missing or second `## Unreleased`, a malformed heading, a version that appears twice, and versions out of order.
 - `RELEASE_DEPLOY_KEY` is optional. When the secret is set, the release job checks out and pushes with that deploy key, which can bypass the ruleset on `main`. When it is not set, the job pushes with `GITHUB_TOKEN`. Add the key before the ruleset requires status checks; `GITHUB_TOKEN` cannot bypass them.
 - Land changes through one pull request per work session. Do not push directly to `main`.
 
 TestFlight:
 - `release-testflight.yml` tests, archives, exports and uploads to TestFlight on the macOS runner. Dry run (test, archive and export; no upload): `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false`.
-- After the upload, `scripts/update_testflight_notes.py` sets the "What to Test" notes from `ci/testflight-notes.txt`. It targets the exact build number and version, and retries 10 times at 30-second intervals while App Store Connect lists the build. A pull request that changes what a user sees updates `ci/testflight-notes.txt`.
+- After the upload, `scripts/changelog.py notes` writes the version's section of `docs/changelog.md`, and `scripts/update_testflight_notes.py` sets it as the "What to Test" notes. It targets the exact build number and version, and retries 10 times at 30-second intervals while App Store Connect lists the build. When the version has no section (a tag from before the changelog), the job logs a warning and the build has no notes.
 - External testers: `gh workflow run promote-testflight-external.yml --repo evanwtf/HealthExporter -f build=<N>` adds a processed build to the external group (`External Hoffgroup`) and submits it for Beta App Review. Use `-f group=<name>` for one group, and `-f submit_review=false` to skip the review. The script is `scripts/promote_testflight_external.py`; `--inspect` changes nothing.
 - The TestFlight job needs the repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8` (an App Store Connect API key with the App Manager role; one team key serves all the team's apps), and the organization secret `MACOS_KEYCHAIN_PASSWORD` (the runner's login keychain), whose selected repositories must include `HealthExporter`. The archive signs automatically for development. The export signs manually with the runner's `Apple Distribution` identity and the `HealthExporter App Store` profile, which `ci/install_profile.swift` downloads by name on every run; an Admin creates or renews that profile in the developer portal (see `docs/macos-runner-recovery.md`). The cleanup step deletes the API key, restores the keychain's lock settings and locks it, even when the job fails.
 
@@ -161,6 +178,8 @@ When posting text blobs to GitHub, always write the content to a temporary file 
 - `skip-release`: docs, CI or tooling only. The merge does not bump the version, tag a release or upload to TestFlight.
 
 Never put `skip-release` and a `semver:*` label on the same pull request. The release job fails when it finds both.
+
+A pull request without `skip-release` cuts a release, so it must add lines under `## Unreleased` in `docs/changelog.md`. The `Changelog` check fails when `## Unreleased` is empty, and the release job refuses too. A `skip-release` pull request needs no lines.
 
 ## Security & Configuration Tips
 Do not commit real secrets; use `Secrets.plist.example` as the template. Keep HealthKit data on-device, avoid logging sensitive values, and preserve the privacy-first design.

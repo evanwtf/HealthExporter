@@ -6,9 +6,9 @@ resource for the locale.
 
 Examples:
 
-    # One exact build, notes from a file (what CI runs)
+    # One exact build, notes from a file (CI writes it with changelog.py notes)
     uv run scripts/update_testflight_notes.py --build 57 --app-version 2.5.5 \\
-        --notes-file ci/testflight-notes.txt
+        --notes-file notes.md
 
     # The most recent build, notes on the command line
     uv run scripts/update_testflight_notes.py --build latest --notes "Try export."

@@ -1,0 +1,45 @@
+name: Changelog
+
+# Check docs/changelog.md on every pull request. A pull request that cuts a
+# release must add lines under ## Unreleased: the release job turns them into
+# the GitHub release notes and the TestFlight "What to Test" notes. A pull
+# request labeled skip-release cuts no release, so it gets the layout check
+# only.
+#
+# No `paths:` filter: every pull request must report the `Changelog` check,
+# because the ruleset on main requires it. The label types rerun the check
+# when the release label changes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Changelog
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Check the changelog
+        env:
+          SKIP_RELEASE: ${{ contains(github.event.pull_request.labels.*.name, 'skip-release') }}
+        run: |
+          if [ "$SKIP_RELEASE" = "true" ]; then
+            echo "skip-release: the layout check only."
+            uv run --frozen scripts/changelog.py check
+          else
+            uv run --frozen scripts/changelog.py check --require-unreleased
+          fi

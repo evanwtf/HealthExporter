@@ -133,6 +133,20 @@ jobs:
             echo "commit=${commit}"
           } >> "$GITHUB_OUTPUT"
 
+      # The notes come from the changelog in the stranded release commit.
+      # Write them before the tag push, so a refusal pushes nothing.
+      - name: Write the stranded release notes
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending == 'true'
+        env:
+          VERSION: ${{ steps.stranded.outputs.version }}
+          COMMIT: ${{ steps.stranded.outputs.commit }}
+        run: |
+          set -euo pipefail
+          changelog="$RUNNER_TEMP/changelog-at-release.md"
+          git show "${COMMIT}:docs/changelog.md" > "$changelog"
+          uv run --frozen scripts/changelog.py --changelog "$changelog" \
+            notes --version "$VERSION" --output "$RUNNER_TEMP/release-notes.md"
+
       - name: Complete stranded release
         if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending == 'true'
         env:
@@ -149,6 +163,12 @@ jobs:
           git tag -a "v${VERSION}" -m "v${VERSION}" "$COMMIT"
           git push origin "refs/tags/v${VERSION}"
           git checkout --quiet main
+
+      # A release needs notes. Fail here, before the bump and any push, when
+      # the merged pull request added no lines under ## Unreleased.
+      - name: Check the changelog
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
+        run: uv run --frozen scripts/changelog.py check --require-unreleased
 
       - name: Bump the version
         id: version
@@ -168,6 +188,20 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: uv run --frozen scripts/check_version.py --tag "v${VERSION}"
 
+      # Rename ## Unreleased to the new version, add an empty ## Unreleased,
+      # and write the section as the release notes. Nothing is pushed yet.
+      - name: Release the changelog section
+        if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+        run: |
+          set -euo pipefail
+          uv run --frozen scripts/changelog.py release \
+            --version "$VERSION" --build "$BUILD" --date "$(date -u +%F)"
+          uv run --frozen scripts/changelog.py notes \
+            --version "$VERSION" --output "$RUNNER_TEMP/release-notes.md"
+
       - name: Commit, tag and push the release
         if: env.SKIP_RELEASE != 'true' && steps.stranded.outputs.pending != 'true'
         env:
@@ -179,7 +213,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add HealthExporter.xcodeproj/project.pbxproj
+          git add HealthExporter.xcodeproj/project.pbxproj docs/changelog.md
           # The title comes from env, so the shell treats it as data.
           message="$RUNNER_TEMP/release-commit-message.txt"
           printf 'Release v%s (build %s)\n\nSource merge: #%s (%s)\n\n[skip ci]\n' \
@@ -200,15 +234,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ steps.stranded.outputs.pending == 'true' && steps.stranded.outputs.version || steps.version.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.latest_tag.outputs.value }}
         run: |
+          set -euo pipefail
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           if gh release view "v${VERSION}" >/dev/null 2>&1; then
             echo "Release v${VERSION} already exists; skipping."
             exit 0
           fi
+          # The notes are the changelog section, written before the push. The
+          # compare link is for the GitHub release only, not for TestFlight.
+          notes="$RUNNER_TEMP/release-notes.md"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...v%s\n' \
+              "$GITHUB_SERVER_URL" "$GH_REPO" "$PREVIOUS_TAG" "$VERSION" >> "$notes"
+          fi
+          cat "$notes"
           # A deploy-key tag push also starts publish-release.yml, which can
           # win the race. Accept a release that now exists.
-          if ! gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes --verify-tag; then
+          if ! gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "$notes" --verify-tag; then
             gh release view "v${VERSION}" >/dev/null
             echo "Release v${VERSION} was created by another job"
           fi

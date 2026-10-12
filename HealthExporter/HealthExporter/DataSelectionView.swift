@@ -488,6 +488,9 @@ struct DataSelectionView: View {
         .padding(.horizontal)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        // A filled tile under the bare edge effect tints the controls; the
+        // bar material keeps them legible and still hints at the tiles.
+        .background(.bar)
     }
 
     var body: some View {
@@ -508,8 +511,7 @@ struct DataSelectionView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             // The footer is a bar, not a view below the grid, so tiles scroll
-            // under it with the soft edge effect. A tile cut off by the footer
-            // shows that the grid continues.
+            // under it. A tile cut off by the footer shows that the grid continues.
             .scrollIndicatorsFlash(onAppear: true)
             .safeAreaBar(edge: .bottom) {
                 dateRangeFooter()

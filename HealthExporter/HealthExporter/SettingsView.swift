@@ -56,17 +56,17 @@ struct SettingsView: View {
                 }
 
                 #if targetEnvironment(simulator)
-                Section {
-                    Button("Generate Weight Data", action: generateTestData)
+                    Section {
+                        Button("Generate Weight Data", action: generateTestData)
 
-                    if !testDataMessage.isEmpty {
-                        Text(testDataMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if !testDataMessage.isEmpty {
+                            Text(testDataMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        Text("Testing")
                     }
-                } header: {
-                    Text("Testing")
-                }
                 #endif
 
                 Section {
@@ -101,7 +101,7 @@ struct SettingsView: View {
             }
             #if targetEnvironment(simulator)
             .alert("Failed to Generate Weight Data", isPresented: $showTestDataFailureAlert) {
-                Button("OK", role: .cancel) { }
+                Button("OK", role: .cancel) {}
             } message: {
                 Text(testDataMessage.replacingOccurrences(of: "✗ ", with: ""))
             }
@@ -110,17 +110,17 @@ struct SettingsView: View {
     }
 
     #if targetEnvironment(simulator)
-    private func generateTestData() {
-        Task {
-            do {
-                try await healthManager.generateTestData()
-                testDataMessage = "✓ Weight data generated (60 days)"
-            } catch {
-                testDataMessage = "✗ \(HealthKitQueryHelpers.simulatorTestDataFailureMessage(error))"
-                showTestDataFailureAlert = true
+        private func generateTestData() {
+            Task {
+                do {
+                    try await healthManager.generateTestData()
+                    testDataMessage = "✓ Weight data generated (60 days)"
+                } catch {
+                    testDataMessage = "✗ \(HealthKitQueryHelpers.simulatorTestDataFailureMessage(error))"
+                    showTestDataFailureAlert = true
+                }
             }
         }
-    }
     #endif
 }
 

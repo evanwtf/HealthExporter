@@ -1,10 +1,9 @@
 import Foundation
-import Testing
-import HealthKit
 @testable import HealthExporter
+import HealthKit
+import Testing
 
 struct ExportLogicTests {
-
     private let now = Date()
     private let calendar = Calendar(identifier: .gregorian)
 
@@ -45,16 +44,16 @@ struct ExportLogicTests {
         ))
     }
 
-    @Test func exportEnabled_a1cOnly_specificDateRange_validRange() {
-        let start = calendar.date(byAdding: .day, value: -7, to: now)!
+    @Test func exportEnabled_a1cOnly_specificDateRange_validRange() throws {
+        let start = try #require(calendar.date(byAdding: .day, value: -7, to: now))
         #expect(ExportLogic.isExportEnabled(
             exportWeight: false, exportSteps: false, exportGlucose: false, hasSelectedLabs: true,
             dateRangeOption: .specificDateRange, startDate: start, endDate: now
         ))
     }
 
-    @Test func exportDisabled_specificDateRange_invalidRange() {
-        let start = calendar.date(byAdding: .day, value: 7, to: now)!
+    @Test func exportDisabled_specificDateRange_invalidRange() throws {
+        let start = try #require(calendar.date(byAdding: .day, value: 7, to: now))
         #expect(!ExportLogic.isExportEnabled(
             exportWeight: true, exportSteps: true, exportGlucose: true, hasSelectedLabs: true,
             dateRangeOption: .specificDateRange, startDate: start, endDate: now
@@ -78,8 +77,8 @@ struct ExportLogicTests {
     /// The Range dates stay in state when another option is picked. An end
     /// before the start must not disable the other options (#120).
     @Test(arguments: [DateRangeOption.lastXDays, .lastXRecords, .allRecords])
-    func exportEnabled_invalidRangeDates_ignoredByOtherOptions(_ option: DateRangeOption) {
-        let start = calendar.date(byAdding: .day, value: 7, to: now)!
+    func exportEnabled_invalidRangeDates_ignoredByOtherOptions(_ option: DateRangeOption) throws {
+        let start = try #require(calendar.date(byAdding: .day, value: 7, to: now))
         #expect(ExportLogic.isExportEnabled(
             exportWeight: true, exportSteps: false, exportGlucose: false, hasSelectedLabs: false,
             dateRangeOption: option, startDate: start, endDate: now
@@ -103,32 +102,32 @@ struct ExportLogicTests {
 
     // MARK: - dateRange
 
-    @Test func dateRange_lastXDays_returns7DayRange() {
+    @Test func dateRange_lastXDays_returns7DayRange() throws {
         let result = ExportLogic.dateRange(
             for: .lastXDays, lastXDays: 7,
             specificStart: now, specificEnd: now,
             now: now, calendar: calendar
         )
         #expect(result != nil)
-        let expected = calendar.date(byAdding: .day, value: -6, to: now)!
-        #expect(abs(result!.startDate.timeIntervalSinceReferenceDate - expected.timeIntervalSinceReferenceDate) <= 1)
-        #expect(abs(result!.endDate.timeIntervalSinceReferenceDate - now.timeIntervalSinceReferenceDate) <= 1)
+        let expected = try #require(calendar.date(byAdding: .day, value: -6, to: now))
+        #expect(try abs(#require(result?.startDate.timeIntervalSinceReferenceDate) - expected.timeIntervalSinceReferenceDate) <= 1)
+        #expect(try abs(#require(result?.endDate.timeIntervalSinceReferenceDate) - now.timeIntervalSinceReferenceDate) <= 1)
     }
 
-    @Test func dateRange_lastXDays_returns30DayRange() {
+    @Test func dateRange_lastXDays_returns30DayRange() throws {
         let result = ExportLogic.dateRange(
             for: .lastXDays, lastXDays: 30,
             specificStart: now, specificEnd: now,
             now: now, calendar: calendar
         )
         #expect(result != nil)
-        let expected = calendar.date(byAdding: .day, value: -29, to: now)!
-        #expect(abs(result!.startDate.timeIntervalSinceReferenceDate - expected.timeIntervalSinceReferenceDate) <= 1)
+        let expected = try #require(calendar.date(byAdding: .day, value: -29, to: now))
+        #expect(try abs(#require(result?.startDate.timeIntervalSinceReferenceDate) - expected.timeIntervalSinceReferenceDate) <= 1)
     }
 
     @Test func firstFetchError_returnsWeightErrorFirst() {
         let underlying = NSError(domain: "HKErrorDomain", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: "Weight failed"
+            NSLocalizedDescriptionKey: "Weight failed",
         ])
 
         let error = ExportLogic.firstFetchError(
@@ -143,10 +142,10 @@ struct ExportLogicTests {
 
     @Test func firstFetchError_prefersEarlierSelectedMetric() {
         let stepsError = NSError(domain: "HKErrorDomain", code: 2, userInfo: [
-            NSLocalizedDescriptionKey: "Steps failed"
+            NSLocalizedDescriptionKey: "Steps failed",
         ])
         let labError = NSError(domain: "HKErrorDomain", code: 3, userInfo: [
-            NSLocalizedDescriptionKey: "A1C failed"
+            NSLocalizedDescriptionKey: "A1C failed",
         ])
 
         let error = ExportLogic.firstFetchError(
@@ -161,7 +160,7 @@ struct ExportLogicTests {
 
     @Test func firstFetchError_labErrorUsesLabResultsLabel() {
         let labError = NSError(domain: "HKErrorDomain", code: 4, userInfo: [
-            NSLocalizedDescriptionKey: "lab failed"
+            NSLocalizedDescriptionKey: "lab failed",
         ])
 
         let error = ExportLogic.firstFetchError(
@@ -176,7 +175,7 @@ struct ExportLogicTests {
 
     @Test func firstFetchError_vitalErrorUsesVitalsLabel() {
         let vitalError = NSError(domain: "HKErrorDomain", code: 5, userInfo: [
-            NSLocalizedDescriptionKey: "vitals failed"
+            NSLocalizedDescriptionKey: "vitals failed",
         ])
 
         let error = ExportLogic.firstFetchError(
@@ -208,17 +207,17 @@ struct ExportLogicTests {
         #expect(result == nil)
     }
 
-    @Test func dateRange_specificDateRange_returnsProvidedDates() {
-        let start = calendar.date(byAdding: .day, value: -14, to: now)!
-        let end = calendar.date(byAdding: .day, value: -1, to: now)!
+    @Test func dateRange_specificDateRange_returnsProvidedDates() throws {
+        let start = try #require(calendar.date(byAdding: .day, value: -14, to: now))
+        let end = try #require(calendar.date(byAdding: .day, value: -1, to: now))
         let result = ExportLogic.dateRange(
             for: .specificDateRange, lastXDays: 7,
             specificStart: start, specificEnd: end,
             now: now, calendar: calendar
         )
         #expect(result != nil)
-        #expect(result!.startDate == start)
-        #expect(result!.endDate == end)
+        #expect(result?.startDate == start)
+        #expect(result?.endDate == end)
     }
 
     // MARK: - recordLimit
@@ -247,8 +246,8 @@ struct ExportLogicTests {
     // MARK: - resolveLabMetrics
 
     private static let lipid1 = LabMetric(name: "Total Cholesterol", loincCode: "2093-3", group: .lipid, valuePrecision: 0)
-    private static let lipid2 = LabMetric(name: "HDL Cholesterol",   loincCode: "2085-9", group: .lipid, valuePrecision: 0)
-    private static let other1 = LabMetric(name: "Hemoglobin A1C",    loincCode: "4548-4", group: .other, valuePrecision: 2)
+    private static let lipid2 = LabMetric(name: "HDL Cholesterol", loincCode: "2085-9", group: .lipid, valuePrecision: 0)
+    private static let other1 = LabMetric(name: "Hemoglobin A1C", loincCode: "4548-4", group: .other, valuePrecision: 2)
     private static let stubRegistry: [LabMetric] = [lipid1, lipid2, other1]
 
     @Test func resolveLabMetrics_noPanelsNoFavorites_returnsEmpty() {
@@ -337,8 +336,8 @@ struct ExportLogicTests {
         ))
     }
 
-    @Test func hasAnyData_withWeightSamples_returnsTrue() {
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+    @Test func hasAnyData_withWeightSamples_returnsTrue() throws {
+        let weightType = try #require(HKQuantityType.quantityType(forIdentifier: .bodyMass))
         let sample = HKQuantitySample(
             type: weightType,
             quantity: HKQuantity(unit: .pound(), doubleValue: 180),
@@ -350,8 +349,8 @@ struct ExportLogicTests {
         ))
     }
 
-    @Test func hasAnyData_withVitalSamples_returnsTrue() {
-        let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+    @Test func hasAnyData_withVitalSamples_returnsTrue() throws {
+        let oxygenType = try #require(HKQuantityType.quantityType(forIdentifier: .oxygenSaturation))
         let sample = HKQuantitySample(
             type: oxygenType,
             quantity: HKQuantity(unit: .percent(), doubleValue: 0.98),
@@ -392,22 +391,22 @@ struct ExportLogicTests {
         #expect(filename.contains(dateStr))
     }
 
-    @Test func exportFilename_deterministicForSameDate() {
-        let fixedDate = ISO8601DateFormatter().date(from: "2024-06-15T14:30:45Z")!
+    @Test func exportFilename_deterministicForSameDate() throws {
+        let fixedDate = try #require(ISO8601DateFormatter().date(from: "2024-06-15T14:30:45Z"))
         let filename = ExportLogic.exportFilename(for: fixedDate)
         // The exact filename depends on the local timezone, but the format should be consistent
         #expect(filename.hasPrefix("HealthExporter_2024-06-15_"))
         #expect(filename.hasSuffix(".csv"))
     }
 
-    @Test func exportFilename_exactOutputInUTC() {
-        let fixedDate = ISO8601DateFormatter().date(from: "2024-06-15T14:30:45Z")!
-        let filename = ExportLogic.exportFilename(for: fixedDate, timeZone: TimeZone(secondsFromGMT: 0)!)
+    @Test func exportFilename_exactOutputInUTC() throws {
+        let fixedDate = try #require(ISO8601DateFormatter().date(from: "2024-06-15T14:30:45Z"))
+        let filename = try ExportLogic.exportFilename(for: fixedDate, timeZone: #require(TimeZone(secondsFromGMT: 0)))
         #expect(filename == "HealthExporter_2024-06-15_143045.csv")
     }
 
-    @Test func filenameFormatter_usesGregorianPOSIX() {
-        let formatter = ExportLogic.makeFilenameFormatter(timeZone: TimeZone(secondsFromGMT: 0)!)
+    @Test func filenameFormatter_usesGregorianPOSIX() throws {
+        let formatter = try ExportLogic.makeFilenameFormatter(timeZone: #require(TimeZone(secondsFromGMT: 0)))
         #expect(formatter.calendar.identifier == .gregorian)
         #expect(formatter.locale.identifier == "en_US_POSIX")
     }

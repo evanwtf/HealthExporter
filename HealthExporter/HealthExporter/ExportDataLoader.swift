@@ -1,7 +1,7 @@
 import HealthKit
 import os
 
-nonisolated private let logger = Logger(subsystem: "com.HealthExporter", category: "ExportDataLoader")
+private nonisolated let logger = Logger(subsystem: "com.HealthExporter", category: "ExportDataLoader")
 
 /// The fields of one clinical record that the export reads.
 /// Tests cannot build an `HKClinicalRecord`, so the store hands these over.
@@ -51,10 +51,18 @@ nonisolated struct ExportRequest: Sendable {
     /// The metrics to fetch, in display order.
     var metrics: [ExportMetric] {
         var metrics: [ExportMetric] = []
-        if includeWeight { metrics.append(.weight) }
-        if includeSteps { metrics.append(.steps) }
-        if includeGlucose { metrics.append(.glucose) }
-        if !labMetrics.isEmpty { metrics.append(.labResults) }
+        if includeWeight {
+            metrics.append(.weight)
+        }
+        if includeSteps {
+            metrics.append(.steps)
+        }
+        if includeGlucose {
+            metrics.append(.glucose)
+        }
+        if !labMetrics.isEmpty {
+            metrics.append(.labResults)
+        }
         metrics.append(contentsOf: vitalComponents.map(ExportMetric.vital))
         return metrics
     }
@@ -81,22 +89,22 @@ nonisolated enum ExportMetric: Hashable, Sendable {
     /// The name used in a failure message.
     var plainName: String {
         switch self {
-        case .weight: return "Weight"
-        case .steps: return "Steps"
-        case .glucose: return "Blood glucose"
-        case .labResults: return "Lab results"
-        case .vital(let component): return component.displayName
+        case .weight: "Weight"
+        case .steps: "Steps"
+        case .glucose: "Blood glucose"
+        case .labResults: "Lab results"
+        case let .vital(component): component.displayName
         }
     }
 
     /// The HealthKit type that holds this metric's samples.
     var objectType: HKObjectType? {
         switch self {
-        case .weight: return HKQuantityType(.bodyMass)
-        case .steps: return HKQuantityType(.stepCount)
-        case .glucose: return HKQuantityType(.bloodGlucose)
-        case .labResults: return HKObjectType.clinicalType(forIdentifier: .labResultRecord)
-        case .vital(let component): return HKQuantityType(component.healthKitIdentifier)
+        case .weight: HKQuantityType(.bodyMass)
+        case .steps: HKQuantityType(.stepCount)
+        case .glucose: HKQuantityType(.bloodGlucose)
+        case .labResults: HKObjectType.clinicalType(forIdentifier: .labResultRecord)
+        case let .vital(component): HKQuantityType(component.healthKitIdentifier)
         }
     }
 }
@@ -195,7 +203,9 @@ nonisolated struct ExportFetchResult: Sendable {
             failures.first { $0.metric == metric }?.error
         }
         let vitalError = failures.first {
-            if case .vital = $0.metric { return true }
+            if case .vital = $0.metric {
+                return true
+            }
             return false
         }?.error
         return ExportLogic.firstFetchError(
@@ -231,7 +241,7 @@ nonisolated struct ExportDataLoader: Sendable {
         let outcomes = await withTaskGroup(of: (ExportMetric, Result<MetricData, any Error>).self) { group in
             for metric in metrics {
                 group.addTask {
-                    (metric, await fetch(metric, request: request, limit: limit))
+                    await (metric, fetch(metric, request: request, limit: limit))
                 }
             }
             var outcomes: [ExportMetric: Result<MetricData, any Error>] = [:]
@@ -244,18 +254,18 @@ nonisolated struct ExportDataLoader: Sendable {
         var result = ExportFetchResult(requestedMetricCount: metrics.count)
         for metric in metrics {
             switch outcomes[metric] {
-            case .success(.quantity(let samples)):
+            case let .success(.quantity(samples)):
                 switch metric {
                 case .weight: result.weightSamples = samples
                 case .steps: result.stepsSamples = samples
-                case .vital(let component): result.vitalSamples[component] = samples
+                case let .vital(component): result.vitalSamples[component] = samples
                 case .glucose, .labResults: break
                 }
-            case .success(.glucose(let samples)):
+            case let .success(.glucose(samples)):
                 result.glucoseSamples = samples
-            case .success(.labs(let samples)):
+            case let .success(.labs(samples)):
                 result.labResults = samples
-            case .failure(let error):
+            case let .failure(error):
                 logger.error("Fetch failed for \(metric.plainName, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 result.failures.append(ExportMetricFailure(metric: metric, error: error))
             case nil:
@@ -282,7 +292,9 @@ nonisolated struct ExportDataLoader: Sendable {
         let exportStart = request.dateRange.flatMap { HealthKitQueryHelpers.dayAlignedRange(from: $0)?.start }
         return metrics.compactMap { metric in
             guard let type = metric.objectType, let earliestDate = earliestDates[type] else { return nil }
-            if let exportStart, earliestDate <= exportStart { return nil }
+            if let exportStart, earliestDate <= exportStart {
+                return nil
+            }
             return ExportAccessLimit(metric: metric, earliestDate: earliestDate)
         }
     }
@@ -291,15 +303,15 @@ nonisolated struct ExportDataLoader: Sendable {
         do {
             switch metric {
             case .weight:
-                return .success(.quantity(try await store.quantitySamples(of: .bodyMass, dateRange: request.dateRange, limit: limit)))
+                return try await .success(.quantity(store.quantitySamples(of: .bodyMass, dateRange: request.dateRange, limit: limit)))
             case .steps:
-                return .success(.quantity(try await store.quantitySamples(of: .stepCount, dateRange: request.dateRange, limit: limit)))
+                return try await .success(.quantity(store.quantitySamples(of: .stepCount, dateRange: request.dateRange, limit: limit)))
             case .glucose:
-                return .success(.glucose(try await fetchGlucose(dateRange: request.dateRange, limit: limit)))
+                return try await .success(.glucose(fetchGlucose(dateRange: request.dateRange, limit: limit)))
             case .labResults:
-                return .success(.labs(try await fetchLabResults(request)))
-            case .vital(let component):
-                return .success(.quantity(try await store.quantitySamples(
+                return try await .success(.labs(fetchLabResults(request)))
+            case let .vital(component):
+                return try await .success(.quantity(store.quantitySamples(
                     of: component.healthKitIdentifier,
                     dateRange: request.dateRange,
                     limit: limit

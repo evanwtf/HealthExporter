@@ -1,7 +1,7 @@
+@testable import HealthExporter
 import SwiftUI
 import UIKit
 import XCTest
-@testable import HealthExporter
 
 /// Renders each screen in light and dark mode and attaches the PNGs to the
 /// test result. A rendering harness for review, not a pixel comparison.
@@ -9,7 +9,7 @@ import XCTest
 /// The class is `nonisolated` because `XCTestCase` is: a main-actor subclass
 /// would change the isolation of its initializers. XCTest runs each test
 /// method on the main thread, so the methods that touch UI are `@MainActor`.
-nonisolated final class ScreenshotTests: XCTestCase {
+final nonisolated class ScreenshotTests: XCTestCase {
     private static let windowSize = CGSize(width: 402, height: 874)
     private static let scale: CGFloat = 3
 
@@ -55,7 +55,9 @@ nonisolated final class ScreenshotTests: XCTestCase {
 
     /// One shared instance: the seeded defaults are read once, at init.
     @MainActor private func sharedSettings() -> SettingsManager {
-        if let settings = Self.settings { return settings }
+        if let settings = Self.settings {
+            return settings
+        }
         let settings = SettingsManager()
         Self.settings = settings
         return settings
@@ -164,7 +166,7 @@ nonisolated final class ScreenshotTests: XCTestCase {
         }
     }
 
-    @MainActor private func capture<Content: View>(_ name: String, @ViewBuilder content: () -> Content) {
+    @MainActor private func capture(_ name: String, @ViewBuilder content: () -> some View) {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let suffix = style == .dark ? "dark" : "light"
             let image = render(content(), style: style)
@@ -179,7 +181,7 @@ nonisolated final class ScreenshotTests: XCTestCase {
         }
     }
 
-    @MainActor private func render<Content: View>(_ view: Content, style: UIUserInterfaceStyle) -> UIImage {
+    @MainActor private func render(_ view: some View, style: UIUserInterfaceStyle) -> UIImage {
         let frame = CGRect(origin: .zero, size: Self.windowSize)
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
             XCTFail("The test host has no window scene")

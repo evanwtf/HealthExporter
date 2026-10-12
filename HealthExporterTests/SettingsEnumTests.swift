@@ -1,9 +1,8 @@
 import Foundation
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct SettingsEnumTests {
-
     // MARK: - DateFormatOption
 
     @Test func dateFormatOption_allCasesCount() {

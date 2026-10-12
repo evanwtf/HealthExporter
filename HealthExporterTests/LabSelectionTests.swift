@@ -1,11 +1,15 @@
-import Testing
 @testable import HealthExporter
+import Testing
 
 struct LabSelectionTests {
-
     private let a1c = LOINCCode.hemoglobinA1C
-    private var otherCodes: [String] { LabMetricRegistry.metrics(in: .other).map(\.loincCode) }
-    private var lipidCodes: [String] { LabMetricRegistry.metrics(in: .lipid).map(\.loincCode) }
+    private var otherCodes: [String] {
+        LabMetricRegistry.metrics(in: .other).map(\.loincCode)
+    }
+
+    private var lipidCodes: [String] {
+        LabMetricRegistry.metrics(in: .lipid).map(\.loincCode)
+    }
 
     private func selection(panels: Set<LabPanel> = [], favorites: Set<String> = []) -> LabSelection {
         LabSelection(panels: panels, favoriteCodes: favorites)

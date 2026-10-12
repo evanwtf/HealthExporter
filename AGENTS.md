@@ -116,6 +116,7 @@ Required capabilities and configuration:
 - HealthKit is always required.
 - Clinical Health Records is required for lab-result export (any LOINC-coded metric, including A1C).
 - Usage descriptions are set via build settings: `NSHealthShareUsageDescription`, `NSHealthClinicalHealthRecordsShareUsageDescription`, and `NSHealthUpdateUsageDescription`.
+- `ITSAppUsesNonExemptEncryption = NO` (`INFOPLIST_KEY_ITSAppUsesNonExemptEncryption`) answers the export-compliance question for every upload. Without it, App Store Connect holds each build at "Missing Compliance" and internal testers do not get it. `InfoPlistTests` pins the value. Change it only if the app starts to use non-exempt encryption.
 - Keep `NSHealthUpdateUsageDescription` in the app target even though the production export flow is read-only. `HealthKitManager.generateTestData()` calls `healthStore.save(...)` inside simulator-only code, and App Store validation still expects the write-purpose string to exist when that API is referenced.
 
 HealthKit requires a physical device for full verification. The simulator has limited support; use the simulator-only test data generator for UI development when needed.

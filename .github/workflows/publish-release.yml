@@ -2,6 +2,9 @@
 # creates the release itself. Its tag push starts this workflow only when it
 # pushes with the RELEASE_DEPLOY_KEY deploy key; then both jobs may try to
 # create the release, and the one that loses the race exits 0.
+#
+# The notes come from the version's section in docs/changelog.md at the tag.
+# The job refuses to publish a version with no section.
 name: Publish Release
 
 on:
@@ -19,21 +22,50 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # All history, so the job can find the previous tag.
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.0
+        # The runner is shared: keep the uv cache to this run.
+        with:
+          cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-          # No checkout here: name the repo so gh ignores the reused workspace.
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "Release $TAG_NAME already exists"
             exit 0
           fi
 
+          notes="$RUNNER_TEMP/release-notes.md"
+          if ! uv run --frozen scripts/changelog.py \
+                 notes --version "${TAG_NAME#v}" --output "$notes"; then
+            echo "::error::docs/changelog.md at $TAG_NAME has no notes for ${TAG_NAME#v}. Refusing to publish."
+            exit 1
+          fi
+          # The compare link is for the GitHub release only, not for TestFlight.
+          previous="$(git tag --list 'v*' --sort=-version:refname \
+            | awk -v tag="$TAG_NAME" 'found { print; exit } $0 == tag { found = 1 }')"
+          if [ -n "$previous" ]; then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+              "$GITHUB_SERVER_URL" "$GH_REPO" "$previous" "$TAG_NAME" >> "$notes"
+          fi
+          cat "$notes"
+
           if ! gh release create "$TAG_NAME" \
             --title "$TAG_NAME" \
-            --generate-notes; then
+            --notes-file "$notes" \
+            --verify-tag; then
             if gh release view "$TAG_NAME" >/dev/null 2>&1; then
               echo "Release $TAG_NAME was created by another job"
               exit 0

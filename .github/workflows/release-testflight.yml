@@ -172,15 +172,19 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          if [ ! -s ci/testflight-notes.txt ]; then
-            echo "::warning::ci/testflight-notes.txt is missing or empty; the build has no notes."
+          # The notes are the version's section in docs/changelog.md. A tag
+          # cut before the changelog has none: warn and upload with no notes.
+          notes="$RUNNER_TEMP/testflight-notes.md"
+          if ! uv run --frozen scripts/changelog.py \
+                 notes --version "$APP_VERSION" --output "$notes"; then
+            echo "::warning::docs/changelog.md has no notes for v$APP_VERSION; the build has no notes."
             exit 0
           fi
           for attempt in $(seq 1 10); do
             if uv run --frozen scripts/update_testflight_notes.py \
                  --build "$BUILD_NUMBER" \
                  --app-version "$APP_VERSION" \
-                 --notes-file ci/testflight-notes.txt; then
+                 --notes-file "$notes"; then
               exit 0
             fi
             echo "Build $BUILD_NUMBER ($APP_VERSION) is not in App Store Connect yet (attempt $attempt/10); retrying in 30 s"

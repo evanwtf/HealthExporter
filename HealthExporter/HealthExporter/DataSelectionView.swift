@@ -505,7 +505,6 @@ struct DataSelectionView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityAddTraits(.isHeader)
 
-                        sectionHeading("Measurements")
                         tileGrid(measurementTiles)
 
                         sectionHeading("Lab results")

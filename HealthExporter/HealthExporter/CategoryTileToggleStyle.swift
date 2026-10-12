@@ -9,7 +9,8 @@ struct CategoryTileToggleStyle: ToggleStyle {
     /// Space kept free at the trailing edge for an overlaid details button.
     var reservesTrailingAccessory = false
 
-    @ScaledMetric(relativeTo: .body) private var minHeight: CGFloat = 112
+    /// Fixed, not scaled: at large sizes the text sets the height.
+    private let minHeight: CGFloat = 112
     @ScaledMetric(relativeTo: .title2) private var accessoryWidth: CGFloat = 44
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

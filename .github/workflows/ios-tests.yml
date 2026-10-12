@@ -2,68 +2,35 @@ name: iOS Tests
 
 on:
   push:
-    branches: [ main, add_tests ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Build & Test
-    runs-on: macos-15
+    # The self-hosted runner holds a signing keychain: never run fork PRs on it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: |
-          # List available Xcode installations for debugging
-          ls /Applications/ | grep -i xcode || true
-          # Prefer Xcode 26.x; fall back to whatever is newest
-          XCODE=$(find /Applications -name "Xcode*.app" -maxdepth 1 -type d | sort -rV | head -1)
-          echo "Using Xcode: $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      - name: List available simulators
-        run: xcrun simctl list devices available | grep -E "iPhone|iPad" | head -20
-
       - name: Run tests
-        run: |
-          # Pick the newest available iPhone simulator (sorted by runtime version descending)
-          SIM_UDID=$(xcrun simctl list devices available -j \
-            | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          candidates = []
-          for runtime, devices in data['devices'].items():
-              if 'iOS' in runtime:
-                  for d in devices:
-                      if d.get('isAvailable') and 'iPhone' in d.get('name', ''):
-                          candidates.append((runtime, d['name'], d['udid']))
-          candidates.sort(reverse=True)
-          if candidates:
-              print(candidates[0][2])
-          else:
-              sys.exit('No iPhone simulator found')
-          ")
-          echo "Running tests on simulator UDID: $SIM_UDID"
-          set -o pipefail
-          xcodebuild test \
-            -project HealthExporter.xcodeproj \
-            -scheme HealthExporter \
-            -destination "id=$SIM_UDID" \
-            -only-testing:HealthExporterTests \
-            -resultBundlePath TestResults.xcresult \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty --color
+        run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestResults.xcresult"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: TestResults.xcresult
+          path: ${{ runner.temp }}/TestResults.xcresult
           if-no-files-found: ignore

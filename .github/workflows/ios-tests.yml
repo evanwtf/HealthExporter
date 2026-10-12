@@ -111,3 +111,17 @@ jobs:
           name: test-results
           path: ${{ runner.temp }}/TestResults.xcresult
           if-no-files-found: ignore
+
+      # The screenshots as plain PNGs, named by screen. The simulator is a
+      # 6.9-inch iPhone Pro Max, so they fit the App Store's iPhone slot.
+      - name: Export screenshots
+        if: ${{ !cancelled() }}
+        run: ci/export_screenshots.sh "$RUNNER_TEMP/TestResults.xcresult" "$RUNNER_TEMP/screenshots"
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore

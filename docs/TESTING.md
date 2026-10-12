@@ -64,7 +64,7 @@ The job runs on the self-hosted Mac runner, selected by the labels `[self-hosted
 The job calls [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh). The script:
 1. Prints the selected Xcode and its version.
 2. Restarts `CoreSimulatorService`, so an Xcode upgrade does not leave a stale daemon.
-3. Creates a throwaway simulator from the newest `iPhone N Pro` device type and the newest iOS runtime, and deletes it on exit.
+3. Creates a throwaway simulator from the newest `iPhone N Pro Max` device type (else the newest `iPhone N Pro`) and the newest iOS runtime, and deletes it on exit. The Pro Max has the 6.9-inch screen that App Store screenshots need.
 4. Runs `xcodebuild test -only-testing:HealthExporterTests` with `CODE_SIGNING_ALLOWED=NO`.
 
 The result bundle is uploaded as the `test-results` artifact, also when the tests fail. The TestFlight workflow runs the same script before it archives.

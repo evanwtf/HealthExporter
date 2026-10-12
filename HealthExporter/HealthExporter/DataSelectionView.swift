@@ -33,6 +33,8 @@ struct DataSelectionView: View {
     @ObservedObject var settings: SettingsManager
     let healthManager = HealthKitManager()
 
+    @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
+
     private static let dayOptions = Array(1...30) + [60, 90, 180, 365, 730]
     private static let recordOptions = Array(stride(from: 100, through: 1_000, by: 100)) + Array(stride(from: 2_000, through: 10_000, by: 1_000))
     private static let saveSuccessAutoDismissSeconds = 5
@@ -225,7 +227,7 @@ struct DataSelectionView: View {
                     if !metrics.isEmpty {
                         Text("\(selectedCount)/\(metrics.count)")
                             .font(.footnote)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                 }
@@ -249,7 +251,7 @@ struct DataSelectionView: View {
                     if !allVitals.isEmpty {
                         Text("\(selectedCount)/\(allVitals.count)")
                             .font(.footnote)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                 }
@@ -258,46 +260,41 @@ struct DataSelectionView: View {
         }
     }
 
-    private static let dateRangeEditorHeight: CGFloat = 90
-
     private func segmentLabel(for option: DateRangeOption) -> String {
         switch option {
-        case .lastXDays:         return "Last X\nDays"
-        case .lastXRecords:      return "Last X\nRecords"
-        case .specificDateRange: return "Specific\nDates"
-        case .allRecords:        return "All\nRecords"
+        case .lastXDays:         return "Days"
+        case .lastXRecords:      return "Records"
+        case .specificDateRange: return "Range"
+        case .allRecords:        return "All"
         }
     }
 
     private func dateRangeSegmentedPicker() -> some View {
-        HStack(spacing: 2) {
+        Picker("Date Range", selection: $selectedDateRangeOption) {
             ForEach(DateRangeOption.allCases, id: \.self) { option in
-                let isSelected = selectedDateRangeOption == option
-                Button {
-                    selectedDateRangeOption = option
-                } label: {
-                    Text(segmentLabel(for: option))
-                        .font(.footnote)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(isSelected ? Color(uiColor: .systemBackground) : Color.clear)
-                                .shadow(color: isSelected ? Color.black.opacity(0.12) : .clear, radius: 1, y: 1)
-                        )
-                        .foregroundColor(.primary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(option.displayName)
+                Text(segmentLabel(for: option))
+                    .accessibilityLabel(option.displayName)
+                    .tag(option)
             }
         }
-        .padding(2)
-        .background(Color(uiColor: .tertiarySystemFill))
-        .cornerRadius(9)
+        .pickerStyle(.segmented)
         .accessibilityIdentifier("dateRangePicker")
+    }
+
+    private func metricLabel(_ title: String, systemImage: String, caption: String? = nil) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(.tint)
+        }
     }
 
     @ViewBuilder
@@ -319,7 +316,7 @@ struct DataSelectionView: View {
                 }
                 Text(DayRangeSummaryFormatter.summaryText(forDays: settings.lastXDaysValue, relativeTo: Date()))
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -358,7 +355,7 @@ struct DataSelectionView: View {
         case .allRecords:
             Text("Exports every available record in the selected metrics.")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -368,25 +365,37 @@ struct DataSelectionView: View {
             dateRangeSegmentedPicker()
 
             dateRangeValueEditor()
-                .frame(height: Self.dateRangeEditorHeight, alignment: .top)
+                .frame(minHeight: dateRangeEditorMinHeight, alignment: .top)
 
             if !hasSelectedMetric {
                 Text("Please select at least one metric")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if selectedDateRangeOption == .specificDateRange && !isValidDateRange {
                 Text("End date must be on or after start date")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            Button(action: {
+                exportData()
+            }) {
+                Label("Export CSV", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .disabled(!exportEnabled || isPreparingExport)
+            .accessibilityIdentifier("exportButton")
         }
         .padding(.horizontal)
-        .padding(.vertical, 12)
-        .background(Color(uiColor: .secondarySystemBackground))
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.bar)
     }
 
     var body: some View {
@@ -394,12 +403,18 @@ struct DataSelectionView: View {
             VStack(spacing: 0) {
                 Form {
                     Section {
-                        Toggle("Weight", isOn: $settings.exportWeight)
-                            .accessibilityIdentifier("weightToggle")
-                        Toggle("Steps", isOn: $settings.exportSteps)
-                            .accessibilityIdentifier("stepsToggle")
-                        Toggle("Blood Glucose (mg/dL)", isOn: $settings.exportGlucose)
-                            .accessibilityIdentifier("glucoseToggle")
+                        Toggle(isOn: $settings.exportWeight) {
+                            metricLabel("Weight", systemImage: "scalemass")
+                        }
+                        .accessibilityIdentifier("weightToggle")
+                        Toggle(isOn: $settings.exportSteps) {
+                            metricLabel("Steps", systemImage: "figure.walk")
+                        }
+                        .accessibilityIdentifier("stepsToggle")
+                        Toggle(isOn: $settings.exportGlucose) {
+                            metricLabel("Blood Glucose", systemImage: "drop", caption: "mg/dL")
+                        }
+                        .accessibilityIdentifier("glucoseToggle")
                     } header: {
                         Label("Activity & Glucose", systemImage: "figure.walk")
                     }
@@ -422,22 +437,6 @@ struct DataSelectionView: View {
                 }
 
                 dateRangeFooter()
-
-                Button(action: {
-                    exportData()
-                }) {
-                    Text("Save...")
-                        .font(.title3)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(exportEnabled ? Color.blue : Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .disabled(!exportEnabled || isPreparingExport)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .accessibilityIdentifier("exportButton")
             }
             .disabled(isPreparingExport)
 

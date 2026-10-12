@@ -197,6 +197,8 @@ final nonisolated class ScreenshotTests: XCTestCase {
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = scene.traitCollection.displayScale
+        // App Store Connect rejects a screenshot with an alpha channel.
+        format.opaque = true
         let image = UIGraphicsImageRenderer(bounds: frame, format: format).image { _ in
             window.drawHierarchy(in: frame, afterScreenUpdates: true)
         }

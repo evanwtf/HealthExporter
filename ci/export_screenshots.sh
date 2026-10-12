@@ -48,8 +48,10 @@ for test in tests:
 print("Exported %d screenshots to %s" % (count, out_dir))
 PY
 
+# App Store Connect takes only exact sizes and no alpha channel: print both.
 for image in "$OUT_DIR"/*.png; do
   [ -e "$image" ] || continue
-  size=$(sips -g pixelWidth -g pixelHeight "$image" | awk '/pixel/ {printf "%s ", $2}')
-  echo "$(basename "$image"): ${size% }"
+  info=$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$image" | awk '/pixel|hasAlpha/ {printf "%s ", $2}')
+  set -- $info
+  echo "$(basename "$image"): $1 x $2, alpha: $3"
 done

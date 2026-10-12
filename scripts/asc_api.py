@@ -51,7 +51,8 @@ def build_jwt(
 
 def load_private_key(value: str) -> str:
     """Accept either an inline PEM string or a path to a .p8 file."""
-    if "BEGIN PRIVATE KEY" in value:
+    # Any PEM block marks an inline key; a path never contains one.
+    if "-----BEGIN " in value:
         return value
     path = Path(value).expanduser()
     if not path.is_file():

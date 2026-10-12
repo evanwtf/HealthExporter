@@ -1,14 +1,18 @@
 name: TestFlight Upload
 
+# bump-build-number.yml dispatches this workflow on the new tag after every
+# merge to main. Dispatch it by hand to rebuild a ref or to dry-run signing.
 on:
   workflow_dispatch:
     inputs:
       ref:
         description: "Tag or commit SHA to build (defaults to current ref)"
         required: false
-  schedule:
-    # 13:00 UTC is 9am Eastern during daylight time.
-    - cron: "0 13 * * *"
+      upload:
+        description: "Upload to TestFlight (false = test, archive and export only: a dry run of signing)"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -29,72 +33,27 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
           fetch-depth: 0
 
-      - name: Check for daily changes
-        id: daily_changes
+      - name: Check required secrets
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          DAILY_CHANGE_WINDOW: "24 hours ago"
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "schedule" ]; then
-            echo "Manual run; proceeding with TestFlight upload."
-            echo "should_upload=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          commit_count="$(git rev-list --count HEAD --since="$DAILY_CHANGE_WINDOW")"
-          if [ "$commit_count" -gt 0 ]; then
-            echo "Found $commit_count commit(s) in the last 24 hours; proceeding with TestFlight upload."
-            echo "should_upload=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No commits in the last 24 hours; skipping TestFlight upload."
-            echo "should_upload=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Report Xcode and reset CoreSimulator
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
-        run: |
-          # The self-hosted runner's admin manages which Xcode is
-          # installed and xcode-select'd; don't use setup-xcode to
-          # flip versions, because a newer Xcode on disk whose iOS
-          # simulator runtime isn't installed will break tests.
-          xcode-select -p
-          xcodebuild -version
-          # When Xcode is upgraded between jobs the user-domain
-          # CoreSimulator daemon can keep running with the old framework
-          # and every simctl/xcodebuild call fails with "CoreSimulator
-          # is out of date". Kickstart the agent so it reloads against
-          # the currently-selected Xcode's framework.
-          launchctl kickstart -k "gui/$(id -u)/com.apple.CoreSimulator.CoreSimulatorService" || true
-          for _ in {1..10}; do
-            if xcrun simctl list devicetypes >/dev/null 2>&1; then
-              break
+          missing=0
+          for name in MACOS_KEYCHAIN_PASSWORD ASC_API_KEY_ID ASC_API_ISSUER_ID ASC_API_KEY_P8; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing secret $name"
+              missing=1
             fi
-            sleep 1
           done
+          exit "$missing"
 
       - name: Run iOS tests
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
-        run: |
-          set -euo pipefail
-          DEVICE_TYPE_ID=$(
-            xcrun simctl list devicetypes -j | /usr/bin/python3 -c "import json, sys; data = json.load(sys.stdin).get('devicetypes', []); preferred = next((d for d in data if d.get('name') == 'iPhone 16 Pro'), None); iphone = preferred or next((d for d in data if d.get('name', '').startswith('iPhone')), None); print(iphone['identifier'] if iphone else (_ for _ in ()).throw(SystemExit('No iPhone simulator device type available')))"
-          )
-          RUNTIME_ID=$(
-            xcrun simctl list runtimes available -j | /usr/bin/python3 -c "import json, sys; runtimes = [runtime for runtime in json.load(sys.stdin).get('runtimes', []) if runtime.get('isAvailable') and runtime.get('identifier', '').startswith('com.apple.CoreSimulator.SimRuntime.iOS-')]; runtimes.sort(key=lambda runtime: runtime['version']); print(runtimes[-1]['identifier'] if runtimes else (_ for _ in ()).throw(SystemExit('No iOS simulator runtime available')))"
-          )
-          SIMULATOR_ID=$(xcrun simctl create "HealthExporter TestFlight CI" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
-          trap 'xcrun simctl delete "$SIMULATOR_ID"' EXIT
-          xcrun simctl boot "$SIMULATOR_ID"
-          xcrun simctl bootstatus "$SIMULATOR_ID" -b
-          xcodebuild test \
-            -project HealthExporter.xcodeproj \
-            -scheme HealthExporter \
-            -destination "id=$SIMULATOR_ID" \
-            -resultBundlePath "$RUNNER_TEMP/TestFlightTestResults"
+        run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestFlightTestResults.xcresult"
 
       - name: Unlock signing keychain
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
         env:
           MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
         run: |
@@ -110,7 +69,6 @@ jobs:
           security set-keychain-settings -lut 7200 "$KEYCHAIN"
 
       - name: Stage App Store Connect API key
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
@@ -124,8 +82,14 @@ jobs:
           echo "ASC_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      # Fails in seconds when the profile is missing, before the long archive.
+      - name: Install App Store profile
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: xcrun swift ci/install_profile.swift "HealthExporter App Store"
+
       - name: Archive
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -145,7 +109,6 @@ jobs:
             DEVELOPMENT_TEAM=94S5PZTVPY
 
       - name: Export IPA
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -161,7 +124,7 @@ jobs:
             -authenticationKeyIssuerID "$ASC_API_ISSUER_ID"
 
       - name: Upload IPA for Internal TestFlight
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
+        if: ${{ inputs.upload }}
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -181,7 +144,7 @@ jobs:
             --apiIssuer "$ASC_API_ISSUER_ID"
 
       - name: Clean up API key
-        if: ${{ always() && steps.daily_changes.outputs.should_upload == 'true' }}
+        if: always()
         run: |
           if [ -n "${ASC_KEY_DIR:-}" ] && [ -d "$ASC_KEY_DIR" ]; then
             rm -rf "$ASC_KEY_DIR"

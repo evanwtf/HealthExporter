@@ -80,6 +80,46 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    func testLargeTypeLaunchView() {
+        let settings = sharedSettings()
+        capture("05-launch-large-type") {
+            NavigationStack {
+                LaunchView(settings: settings)
+            }
+            .environment(\.dynamicTypeSize, .accessibility2)
+        }
+    }
+
+    func testLargeTypeDataSelectionView() {
+        let settings = sharedSettings()
+        capture("06-data-selection-large-type") {
+            NavigationStack {
+                DataSelectionView(settings: settings)
+            }
+            .environment(\.dynamicTypeSize, .accessibility2)
+        }
+    }
+
+    func testNothingSelectedDataSelectionView() {
+        let settings = sharedSettings()
+        let saved = (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+                     settings.selectedLabPanels, settings.favoriteLabCodes)
+        settings.exportWeight = false
+        settings.exportSteps = false
+        settings.exportGlucose = false
+        settings.selectedLabPanels = []
+        settings.favoriteLabCodes = []
+        defer {
+            (settings.exportWeight, settings.exportSteps, settings.exportGlucose,
+             settings.selectedLabPanels, settings.favoriteLabCodes) = saved
+        }
+        capture("07-data-selection-nothing-selected") {
+            NavigationStack {
+                DataSelectionView(settings: settings)
+            }
+        }
+    }
+
     func testPrivacyPolicyView() {
         capture("04-privacy") {
             NavigationStack {

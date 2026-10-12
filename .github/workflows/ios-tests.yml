@@ -6,16 +6,10 @@ on:
   # tooling changed, and GitHub counts a job skipped by `if:` as a pass.
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-    # Keep in step with IGNORE in the `changes` job.
-    paths-ignore:
-      - "docs/**"
-      - "assets/**"
-      - "**.md"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/pull_request_template.md"
-      - ".github/dependabot.yml"
+  # No push trigger on main. Every release merge dispatches
+  # release-testflight.yml, which runs this suite on the release tag, and a
+  # skip-release merge has no Swift changes. A push run would only repeat a
+  # test on the one shared macOS runner.
   # Run on any branch without a pull request, e.g. to render screenshots:
   # gh workflow run ios-tests.yml --ref <branch>
   workflow_dispatch:
@@ -24,11 +18,7 @@ permissions:
   contents: read
 
 # One macOS runner serves every iOS job, so a superseded run must not hold it.
-# - main: at most one run executes and one waits. A newer push replaces the
-#   waiting run, never the running one, so main always finishes a run on the
-#   newest merge.
-# - pull requests: a new push cancels the old run, even mid-job. Only the
-#   newest commit decides the merge.
+# A new push to a pull request cancels the old run, even mid-job.
 concurrency:
   group: ios-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -48,8 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          # Paths that never need the iOS tests. Keep in step with the push
-          # `paths-ignore:` above.
+          # Paths that never need the iOS tests.
           IGNORE: '^docs/|^assets/|\.md$|^\.github/ISSUE_TEMPLATE/|^\.github/pull_request_template\.md$|^\.github/dependabot\.yml$'
         run: |
           set -euo pipefail
@@ -110,7 +99,9 @@ jobs:
       - name: Lint Swift
         run: ci/lint_swift.sh
 
+      # Run the tests after a lint failure too, so one run reports both.
       - name: Run tests
+        if: ${{ !cancelled() }}
         run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestResults.xcresult"
 
       - name: Upload test results

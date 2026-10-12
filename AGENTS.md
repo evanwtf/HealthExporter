@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`), and CSV output (`CSVGenerator.swift`, `CSVDocument.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/`; there is no workspace and no Swift package. `CLAUDE.md` and `.github/copilot-instructions.md` are symlinks to this file — edit `AGENTS.md`.
+`HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`, `LabSelection.swift`), and CSV output (`CSVGenerator.swift`, `CSVFile.swift`, `ExportSize.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/`; there is no workspace and no Swift package. `CLAUDE.md` and `.github/copilot-instructions.md` are symlinks to this file — edit `AGENTS.md`.
 
 ## Architecture Notes
 Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (welcome screen; `Choose Data` button, Settings gear in the toolbar) → `DataSelectionView`; `SettingsView` is presented as a sheet from the welcome screen. `HealthExporterTests/ScreenshotTests.swift` renders each screen in light and dark mode and attaches PNGs to the CI result bundle (`test-results` artifact).
@@ -16,9 +16,12 @@ Key components:
 | `LabMetricRegistry.swift` | Single source of truth for lab metrics: `LabPanel` groupings, `LabMetric` records (id == primary LOINC; `alternateLoincCodes` also match records), and `LabMetricRegistry.all`. Adding a lab is a single append here |
 | `HealthSampleTypes.swift` | `GlucoseSampleMgDl`, generic `LabResultSample`, `LOINCCode` constants, and `FHIRLabResultParser` |
 | `ExportLogic.swift` | Pure logic: `isExportEnabled(...,hasSelectedLabs:)`, `resolveLabMetrics(selectedPanels:favoriteCodes:registry:)`, date-range/limit helpers, fetch-error ordering, filename generation |
-| `SettingsManager.swift` | Persists unit and format preferences plus `selectedLabPanels` and `favoriteLabCodes` in `UserDefaults`; runs the one-time legacy `exportA1C` → `favoriteLabCodes` migration |
-| `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order. `appendLabResultRows` uses per-metric `LabMetric.valuePrecision` |
-| `DataSelectionView.swift` | "Choose Data": a two-column grid of category tiles (Weight, Steps, Blood Glucose, Vitals, then one tile per `LabPanel`), each a `Toggle` styled by `CategoryTileToggleStyle`. The Vitals and lab-panel tiles open `SelectionDetailView` for per-vital and per-lab toggles (individual labs are saved as favorites). The date range and Export CSV sit in a `.safeAreaBar` footer. Also the export trigger and exporter state |
+| `SettingsManager.swift` | `@Observable`. Persists unit and format preferences plus `selectedLabPanels` and `favoriteLabCodes` in `UserDefaults`, in `didSet`; the keys (`SettingsManager.Key`) and value formats must not change. Takes the `UserDefaults` in its initializer (default `.standard`), so tests use a suite of their own. Runs the one-time legacy `exportA1C` → `favoriteLabCodes` migration. The app holds one instance in `@State`; views take it as `@Bindable` or a plain `let` |
+| `LabSelection.swift` | The lab selection rules: a lab is selected through its panel or on its own (a favorite). A panel toggle changes the panels only, so it never clears labs selected one by one (#115) |
+| `CSVGenerator.swift` | Converts samples to CSV with unit conversion, date formatting, and sort order. `appendLabResultRows` uses per-metric `LabMetric.valuePrecision`. `makeFile` is `@concurrent`: it builds the export once, off the main actor, and checks for cancellation before each metric and every `rowsPerCancellationCheck` rows |
+| `CSVFile.swift` | The built export: the CSV text, its row count and its UTF-8 byte count. `Transferable` (`.commaSeparatedText`), so `fileExporter(item:)` writes it |
+| `ExportSize.swift` | The exact row and byte count of a built export, the confirmation thresholds (500 rows or 1 MB) and the alert text |
+| `DataSelectionView.swift` | "Choose Data": a two-column grid of category tiles (Weight, Steps, Blood Glucose, Vitals, then one tile per `LabPanel`), each a `Toggle` styled by `CategoryTileToggleStyle`. The Vitals and lab-panel tiles open `SelectionDetailView` for per-vital and per-lab toggles (individual labs are saved as favorites). The date range and Export CSV sit in a `.safeAreaBar` footer. `exportEnabled` is a computed property of the selection and the date range (#120). Also the export task, the progress overlay with its Cancel button, and the exporter state |
 | `HealthCategory.swift` | The tile categories with their SF Symbol and category color (asset catalog `Category*` colors) |
 
 Lab support (including A1C) uses Clinical Health Records via `HKClinicalTypeIdentifier.labResultRecord` and the LOINC code on each `LabMetric`; see `docs/a1c/` for the registry-driven implementation details.
@@ -51,10 +54,13 @@ Export sequence:
 1. User selects built-in metric toggles, panel/favorite labs, and a date range in `DataSelectionView`.
 2. `ExportLogic.resolveLabMetrics(selectedPanels:favoriteCodes:)` produces the deduplicated list of `LabMetric`s to fetch.
 3. `DataSelectionView` builds an `ExportRequest` and requests HealthKit read access for the selected metrics.
-4. `ExportDataLoader.load` fetches the selected metrics in parallel; lab results come from a single clinical-records query. If some metrics fail, the export continues with the others and an alert names each failed metric before the file picker opens. If every metric fails, or no data loaded, the export stops with an error.
-5. `CSVGenerator.generateCombinedCSV(weightSamples:stepsSamples:glucoseSamples:labResults:vitalSamples:...)` builds the output in memory. It takes the sample arrays `inout` and releases each one as its rows are written.
-6. SwiftUI `.fileExporter()` presents the Files picker.
-7. Sample arrays and `csvContent` are cleared after export.
+4. `ExportDataLoader.load` fetches the selected metrics in parallel; lab results come from a single clinical-records query. If some metrics fail, the export continues with the others. If every metric fails, or no data loaded, the export stops with an error.
+5. `CSVGenerator.makeFile(from:...)` builds the CSV once, off the main actor (#111). It consumes the fetch result and releases each sample array as its rows are written. The result is a `CSVFile` with the exact row and byte count.
+6. If the file has more than 500 rows or 1 MB, or some metrics failed, an alert gives the exact size and names each failed metric. Cancel drops the file.
+7. SwiftUI `.fileExporter(isPresented:item:contentTypes:defaultFilename:onCompletion:onCancellation:)` presents the Files picker with the `CSVFile`. The filename comes from `ExportLogic.exportFilename`.
+8. `exportFile` is cleared after the export, a failure or a cancel in the picker.
+
+Steps 3 to 5 run in one `Task` (`exportTask`) behind the "Preparing export..." overlay. Its Cancel button calls `cancelExport()`: it cancels the task and clears the pending file, and the screen returns to the selection with no alert. After each step, a cancelled task returns without changing the view state. `onDisappear` cancels the same way.
 
 Keep this flow and its surrounding privacy copy aligned whenever export behavior changes.
 
@@ -77,8 +83,8 @@ When adding a new lab (Clinical Health Records / LOINC-coded observation):
 4. Add tests (and a CSV byte-pinning test if exact output matters) and docs in the same change.
 
 Memory management matters because HealthKit datasets can be large:
-- Release fetched sample arrays immediately after CSV generation, for example `weightSamples = nil`.
-- Clear `csvContent` after successful export.
+- Release fetched sample arrays immediately after CSV generation, for example `weightSamples = nil`. `CSVGenerator.makeFile` takes the fetch result `consuming` for this reason.
+- Clear `exportFile` after the export, a failure, or a cancel.
 - Prefer append-style CSV generation and avoid unnecessary intermediate allocations.
 - Profile memory if a change could expand retained sample data.
 

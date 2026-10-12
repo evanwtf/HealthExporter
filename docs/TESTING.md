@@ -2,7 +2,7 @@
 
 ## Overview
 
-HealthExporter uses XCTest unit tests that run automatically in GitHub CI on every push and pull request.
+HealthExporter uses Swift Testing unit tests and one XCTest suite (`ScreenshotTests`). They run automatically in GitHub CI on every push and pull request.
 
 ## Test Structure
 
@@ -11,21 +11,22 @@ Tests live in `HealthExporterTests/` (sibling to the main `HealthExporter/` sour
 | File | What it tests |
 |------|--------------|
 | `A1CCSVBytePinningTests.swift` | Byte-identical A1C CSV rows: `%` and `mmol/mol` units, comma/quote CSV escaping, two-decimal precision, ascending sort |
-| `CSVDocumentTests.swift` | `CSVDocument` content storage, UTF-8 round-trip, invalid encoding detection |
+| `CSVFileTests.swift` | `CSVFile` content and UTF-8 byte count, the `.commaSeparatedText` transfer representation, `makeFile` bytes and cancellation, the builder's cancellation checks |
 | `CSVGeneratorTests.swift` | CSV generation for weight, steps, glucose, lab results, and vitals; unit conversion; registry-driven precision; output formatting |
 | `DateRangeOptionTests.swift` | `DateRangeOption` enum cases, raw values, `displayName` |
 | `DayRangeSummaryFormatterTests.swift` | Date range summary text formatting |
 | `ExportErrorTests.swift` | All `ExportError.errorDescription` branches with/without underlying errors |
 | `ExportLogicTests.swift` | Export enablement (including labs and vitals), date range calculation, record limits, data availability, filename generation, `resolveLabMetrics` panel/favorite union and dedup |
-| `ExportPreviewEstimateTests.swift` | Row count rounding, byte estimation, confirmation threshold |
+| `ExportSizeTests.swift` | Exact row and byte counts in the alert text, confirmation thresholds, `makeFile` size against the generated CSV |
 | `FHIRLabResultParserTests.swift` | FHIR JSON parsing — LOINC matching, missing fields, invalid data |
 | `GlucoseSampleTests.swift` | `GlucoseSampleMgDl` init — values ≥20 accepted, values <20 rejected |
 | `HealthKitQueryHelpersTests.swift` | Authorization type sets (with/without labs and vitals), day-aligned date ranges, `filterLabResultsByDateRange`, simulator-only test data helpers |
 | `HealthMetricConfigTests.swift` | `HealthMetrics` static properties and `LOINCCode` constants |
+| `LabSelectionTests.swift` | Panel and single-lab selection rules, including the #115 sequence (a panel on then off keeps a lab selected on its own) |
 | `LabMetricRegistryTests.swift` | `LabPanel` cases, `LabMetric.id == loincCode`, registry uniqueness, lookup by LOINC, panel grouping |
 | `LabResultSampleTests.swift` | `LabResultSample` memberwise init, default empty source, FHIR init with known/unknown LOINC, missing observation handling |
 | `SettingsEnumTests.swift` | Raw values, displayName, dateFormat, isUTC for all settings enums |
-| `SettingsManagerTests.swift` | Default values, persisted reads (including lab and vital selections), invalid raw value fallbacks, legacy `exportA1C` → favorites migration |
+| `SettingsManagerTests.swift` | The real `SettingsManager` on a per-test `UserDefaults` suite: defaults, a suite written by v2.5.0 loads unchanged, changes are written with the same keys and formats, invalid raw value fallbacks, legacy `exportA1C` → favorites migration |
 | `VitalMetricRegistryTests.swift` | Vital metric cases, HealthKit identifiers, blood-pressure component expansion, unit conversion |
 
 ## Running Tests Locally
@@ -118,5 +119,4 @@ The following items **intentionally remain outside CI unit tests** and require m
 - Loading overlay during export preparation
 
 ### Known Test Limitations
-- **`SettingsManager` cannot be instantiated in tests** due to a Combine/`@Published` malloc crash when a second instance is created alongside the app's `@main` `@StateObject`. Tests exercise the same logic through `UserDefaults` directly. A fix would require changing the test target to not use the app as `TEST_HOST`, or restructuring `SettingsManager` to avoid the `$property.dropFirst().sink()` pattern.
 - **`HealthKitManager` fetch methods** are tightly coupled to `HKHealthStore` and callback-based queries. The pure query construction logic is tested via `HealthKitQueryHelpers`; actual data fetching requires a device with HealthKit data.

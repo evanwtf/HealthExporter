@@ -68,13 +68,7 @@ DISPLAY_TYPES: dict[tuple[int, int], str] = {
 }
 
 # App Store version states in which the screenshots can change.
-EDITABLE_STATES = {
-    "PREPARE_FOR_SUBMISSION",
-    "DEVELOPER_REJECTED",
-    "REJECTED",
-    "METADATA_REJECTED",
-    "INVALID_BINARY",
-}
+EDITABLE_STATES = asc_api.EDITABLE_VERSION_STATES
 
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+")
 NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -251,8 +245,7 @@ def find_version(client: httpx.Client, app_id: str, version: str) -> JSONObject:
             f"No App Store version {version}. Create it in App Store Connect first."
         )
     found = versions[0]
-    attrs = found.get("attributes", {})
-    state = attrs.get("appVersionState") or attrs.get("appStoreState")
+    state = asc_api.version_state(found)
     if state not in EDITABLE_STATES:
         raise asc_api.ASCError(
             f"Version {version} is {state}; its screenshots are locked. "
@@ -405,12 +398,11 @@ def run(
 ) -> None:
     app_id = asc_api.get_app_id(client, args.bundle_id)
     version = find_version(client, app_id, args.version)
-    attrs = version.get("attributes", {})
     logger.info(
         "Version %s (id %s): %s",
         args.version,
         version["id"],
-        attrs.get("appVersionState") or attrs.get("appStoreState"),
+        asc_api.version_state(version),
     )
     localization_id = find_localization(client, version["id"], args.locale)
     set_id = find_set(client, localization_id, plan.display_type)

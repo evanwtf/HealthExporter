@@ -32,6 +32,18 @@ TOKEN_TTL_SECONDS = 15 * 60
 
 JSONObject = dict[str, Any]
 
+# App Store version states in which the metadata, the screenshots and the
+# build can change.
+EDITABLE_VERSION_STATES = frozenset(
+    {
+        "PREPARE_FOR_SUBMISSION",
+        "DEVELOPER_REJECTED",
+        "REJECTED",
+        "METADATA_REJECTED",
+        "INVALID_BINARY",
+    }
+)
+
 
 def configure_logging() -> None:
     """Log to stdout, and keep httpx and httpcore quiet.
@@ -121,3 +133,10 @@ def get_app_id(client: httpx.Client, bundle_id: str) -> str:
     if not data:
         raise ASCError(f"No app found in App Store Connect for bundleId={bundle_id}")
     return str(data[0]["id"])
+
+
+def version_state(version: JSONObject) -> str | None:
+    """The state of an App Store version. Older responses use appStoreState."""
+    attrs = version.get("attributes", {})
+    state = attrs.get("appVersionState") or attrs.get("appStoreState")
+    return None if state is None else str(state)

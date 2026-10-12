@@ -41,7 +41,7 @@ jobs:
           # Paths that never need the iOS tests.
           # Also the Python scripts and the Linux-only workflows: the Scripts,
           # Gitleaks and Changelog jobs check those, and no iOS test reads them.
-          IGNORE: '^docs/|^assets/|\.md$|^\.github/ISSUE_TEMPLATE/|^\.github/pull_request_template\.md$|^\.github/dependabot\.yml$|^scripts/|^pyproject\.toml$|^uv\.lock$|^\.python-version$|^\.gitleaksignore$|^\.pre-commit-config\.yaml$|^ci/appstore-screenshots\.txt$|^\.github/workflows/(appstore-screenshots|bump-build-number|changelog|gitleaks|promote-testflight-external|publish-release|scripts)\.yml$'
+          IGNORE: '^docs/|^assets/|\.md$|^\.github/ISSUE_TEMPLATE/|^\.github/pull_request_template\.md$|^\.github/dependabot\.yml$|^scripts/|^pyproject\.toml$|^uv\.lock$|^\.python-version$|^\.gitleaksignore$|^\.pre-commit-config\.yaml$|^ci/appstore-screenshots\.txt$|^\.github/workflows/(appstore-screenshots|bump-build-number|changelog|gitleaks|promote-testflight-external|publish-release|release-appstore|scripts)\.yml$'
         run: |
           set -euo pipefail
           # Push and dispatch runs keep their own trigger rules: always run.

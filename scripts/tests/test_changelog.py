@@ -220,6 +220,37 @@ def test_markdown_formatting_in_a_comment_passes() -> None:
     changelog.check(with_unreleased("<!-- `code` and **bold** -->\n- Plain."))
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- A result such as >60 keeps its sign.",
+        "- A result such as <0.3 keeps its sign.",
+        "- A <b>bold</b> word.",
+    ],
+)
+def test_markup_characters_in_notes_fail(line: str) -> None:
+    with pytest.raises(changelog.ChangelogError, match=r"markup"):
+        changelog.check(with_unreleased(line))
+
+
+def test_markup_characters_in_a_released_section_fail() -> None:
+    text = SEEDED.replace("- Settings has a new close button.", "- Value >60.")
+
+    with pytest.raises(changelog.ChangelogError, match=r"v2\.5\.3 has '>'"):
+        changelog.check(text)
+
+
+def test_markup_characters_in_a_comment_pass() -> None:
+    changelog.check(with_unreleased("<!-- a value >60 or <0.3 -->\n- Plain."))
+
+
+def test_notes_refuse_markup_characters() -> None:
+    text = SEEDED.replace("- Settings has a new close button.", "- Value <0.3.")
+
+    with pytest.raises(changelog.ChangelogError, match=r"markup"):
+        changelog.notes(text, "2.5.3")
+
+
 # --- release ---------------------------------------------------------------
 
 

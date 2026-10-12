@@ -90,7 +90,9 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                // Not .confirmationAction: that placement draws the close
+                // button as a prominent, system-blue glass circle.
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(role: .close) {
                         dismiss()
                     }

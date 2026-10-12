@@ -11,7 +11,7 @@ A privacy-focused iOS app that exports Apple HealthKit data to CSV files. All da
 - **Selectable date format**: Choose from 5 date formats including ISO8601 (UTC), `yyyy-MM-dd HH:mm:ss`, `MM/dd/yyyy HH:mm:ss`, and more
 - **Sort order**: Export rows in ascending (oldest first) or descending (newest first) order
 - **CSV export**: Save directly to Files app via `.fileExporter()`
-- **Splash screen** with navigation to data selection and settings
+- **Welcome screen** with navigation to data selection and settings
 - **Settings persistence**: Unit preferences are automatically saved
 - **Clinical records support**: Lab-result export requires Clinical Health Records capability and permission
 - **Memory-optimized**: Health data is cleared from memory immediately after export

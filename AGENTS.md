@@ -4,7 +4,7 @@
 `HealthExporter/HealthExporter/` contains the app source: SwiftUI views (`LaunchView.swift`, `DataSelectionView.swift`, `SettingsView.swift`), managers (`HealthKitManager.swift`, `SettingsManager.swift`), data model and registry (`HealthSampleTypes.swift`, `HealthMetricConfig.swift`, `LabMetricRegistry.swift`), pure logic (`ExportLogic.swift`), and CSV output (`CSVGenerator.swift`, `CSVDocument.swift`). Tests live in `HealthExporterTests/`. Keep user-facing docs in `docs/`, with feature-specific notes under subfolders such as `docs/a1c/`. Store screenshots and marketing assets in `assets/`. Project configuration is in `HealthExporter.xcodeproj/` and `HealthExporter.xcworkspace/`. `CLAUDE.md` is a symlink to this file — edit `AGENTS.md`.
 
 ## Architecture Notes
-Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (splash/loading, then `Next` + Settings) → `DataSelectionView`; `SettingsView` is presented from the launch screen.
+Navigation flow: `HealthExporterApp` (`NavigationStack`) → `LaunchView` (welcome screen; `Choose Data` button, Settings gear in the toolbar) → `DataSelectionView`; `SettingsView` is presented as a sheet from the welcome screen. `HealthExporterTests/ScreenshotTests.swift` renders each screen in light and dark mode and attaches PNGs to the CI result bundle (`test-results` artifact).
 
 Key components:
 

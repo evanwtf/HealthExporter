@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Run on any branch without a pull request, e.g. to render screenshots:
+  # gh workflow run ios-tests.yml --ref <branch>
+  workflow_dispatch:
 
 permissions:
   contents: read

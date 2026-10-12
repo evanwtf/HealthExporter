@@ -12,7 +12,7 @@ jobs:
   bump:
     name: Increment CURRENT_PROJECT_VERSION
     if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout
@@ -63,5 +63,7 @@ jobs:
             exit 0
           fi
 
+          # The self-hosted workspace is reused: drop a stale local tag from a failed run.
+          git tag -d "$TAG" 2>/dev/null || true
           git tag -a "$TAG" -m "$TAG"
           git push origin "$TAG"

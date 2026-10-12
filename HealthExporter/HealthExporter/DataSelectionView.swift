@@ -396,47 +396,49 @@ struct DataSelectionView: View {
         .padding(.horizontal)
         .padding(.top, 12)
         .padding(.bottom, 8)
-        .background(.bar)
     }
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                Form {
-                    Section {
-                        Toggle(isOn: $settings.exportWeight) {
-                            metricLabel("Weight", systemImage: "scalemass")
-                        }
-                        .accessibilityIdentifier("weightToggle")
-                        Toggle(isOn: $settings.exportSteps) {
-                            metricLabel("Steps", systemImage: "figure.walk")
-                        }
-                        .accessibilityIdentifier("stepsToggle")
-                        Toggle(isOn: $settings.exportGlucose) {
-                            metricLabel("Blood Glucose", systemImage: "drop", caption: "mg/dL")
-                        }
-                        .accessibilityIdentifier("glucoseToggle")
-                    } header: {
-                        Label("Activity & Glucose", systemImage: "figure.walk")
+            Form {
+                Section {
+                    Toggle(isOn: $settings.exportWeight) {
+                        metricLabel("Weight", systemImage: "scalemass")
                     }
-
-                    Section {
-                        ForEach(LabPanel.allCases, id: \.self) { panel in
-                            labPanelDisclosure(panel)
-                        }
-                    } header: {
-                        Label("Labs", systemImage: "cross.case")
-                    } footer: {
-                        Text("Lab sections require access to Clinical Health Records.")
+                    .accessibilityIdentifier("weightToggle")
+                    Toggle(isOn: $settings.exportSteps) {
+                        metricLabel("Steps", systemImage: "figure.walk")
                     }
-
-                    Section {
-                        vitalsDisclosure()
-                    } header: {
-                        Label("Vitals", systemImage: "heart.text.square")
+                    .accessibilityIdentifier("stepsToggle")
+                    Toggle(isOn: $settings.exportGlucose) {
+                        metricLabel("Blood Glucose", systemImage: "drop", caption: "mg/dL")
                     }
+                    .accessibilityIdentifier("glucoseToggle")
+                } header: {
+                    Label("Activity & Glucose", systemImage: "figure.walk")
                 }
 
+                Section {
+                    ForEach(LabPanel.allCases, id: \.self) { panel in
+                        labPanelDisclosure(panel)
+                    }
+                } header: {
+                    Label("Labs", systemImage: "cross.case")
+                } footer: {
+                    Text("Lab sections require access to Clinical Health Records.")
+                }
+
+                Section {
+                    vitalsDisclosure()
+                } header: {
+                    Label("Vitals", systemImage: "heart.text.square")
+                }
+            }
+            // The footer is a bar, not a view below the form, so rows scroll
+            // under it with the soft edge effect. A row cut off by the footer
+            // shows that the list continues.
+            .scrollIndicatorsFlash(onAppear: true)
+            .safeAreaBar(edge: .bottom) {
                 dateRangeFooter()
             }
             .disabled(isPreparingExport)

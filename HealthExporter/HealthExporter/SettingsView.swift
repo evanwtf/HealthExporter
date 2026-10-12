@@ -7,6 +7,9 @@ struct SettingsView: View {
     @State private var showTestDataFailureAlert = false
 
     var healthManager: HealthKitManager = .shared
+    /// Shows the simulator-only "Testing" section. `ScreenshotTests` passes
+    /// `false`, so its images match the shipped app, which has no such section.
+    var showsTestingTools = true
 
     var body: some View {
         NavigationStack {
@@ -56,16 +59,18 @@ struct SettingsView: View {
                 }
 
                 #if targetEnvironment(simulator)
-                    Section {
-                        Button("Generate Weight Data", action: generateTestData)
+                    if showsTestingTools {
+                        Section {
+                            Button("Generate Weight Data", action: generateTestData)
 
-                        if !testDataMessage.isEmpty {
-                            Text(testDataMessage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if !testDataMessage.isEmpty {
+                                Text(testDataMessage)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } header: {
+                            Text("Testing")
                         }
-                    } header: {
-                        Text("Testing")
                     }
                 #endif
 

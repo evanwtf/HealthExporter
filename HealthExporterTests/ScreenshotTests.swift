@@ -80,8 +80,9 @@ final nonisolated class ScreenshotTests: XCTestCase {
 
     @MainActor func testSettingsView() {
         let settings = sharedSettings()
+        // The shipped app has no "Testing" section: hide it, as on a device.
         capture("03-settings") {
-            SettingsView(settings: settings)
+            SettingsView(settings: settings, showsTestingTools: false)
         }
     }
 

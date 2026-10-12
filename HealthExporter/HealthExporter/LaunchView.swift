@@ -26,6 +26,7 @@ struct LaunchView: View {
             bottomBar
         }
         .fontDesign(.rounded)
+        .tint(Color("AccentColor"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -99,7 +100,7 @@ struct LaunchView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
-            .tint(.accentColor)
+            .tint(Color("AccentColor"))
             .controlSize(.large)
             .accessibilityIdentifier("nextButton")
 

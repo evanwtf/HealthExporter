@@ -82,6 +82,7 @@ struct PrivacyPolicyView: View {
             .padding()
         }
         .fontDesign(.rounded)
+        .tint(Color("AccentColor"))
         .navigationTitle("Privacy & Disclaimer")
         .navigationBarTitleDisplayMode(.inline)
     }

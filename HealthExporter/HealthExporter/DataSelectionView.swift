@@ -484,7 +484,7 @@ struct DataSelectionView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
-            .tint(.accentColor)
+            .tint(Color("AccentColor"))
             .controlSize(.large)
             .disabled(!exportEnabled || isPreparingExport)
             .accessibilityIdentifier("exportButton")
@@ -529,6 +529,7 @@ struct DataSelectionView: View {
             }
         }
         .fontDesign(.rounded)
+        .tint(Color("AccentColor"))
         .navigationTitle("Choose Data")
         .navigationBarTitleDisplayMode(.large)
         .onAppear { updateExportEnabled() }

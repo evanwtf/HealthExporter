@@ -76,6 +76,7 @@ struct SettingsView: View {
                 }
             }
             .fontDesign(.rounded)
+            .tint(Color("AccentColor"))
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

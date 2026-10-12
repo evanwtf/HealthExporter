@@ -1,6 +1,6 @@
 import Foundation
 
-enum DateRangeOption: String, CaseIterable {
+nonisolated enum DateRangeOption: String, CaseIterable {
     case lastXDays = "Last X Days"
     case lastXRecords = "Last X Records"
     case specificDateRange = "Specific Date Range"

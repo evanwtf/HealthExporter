@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-enum DateFormatOption: String, CaseIterable {
+nonisolated enum DateFormatOption: String, CaseIterable {
     case yyyyMMddHHmmss = "yyyy-MM-dd HH:mm:ss"
     case iso8601 = "ISO8601"
     case yyyySlashMMddHHmmss = "yyyy/MM/dd HH:mm:ss"
@@ -33,17 +33,17 @@ enum DateFormatOption: String, CaseIterable {
     }
 }
 
-enum SortOrder: String, CaseIterable {
+nonisolated enum SortOrder: String, CaseIterable {
     case ascending = "Oldest → Newest"
     case descending = "Newest → Oldest"
 }
 
-enum TemperatureUnit: String, CaseIterable {
+nonisolated enum TemperatureUnit: String, CaseIterable {
     case celsius = "Celsius (°C)"
     case fahrenheit = "Fahrenheit (°F)"
 }
 
-enum WeightUnit: String, CaseIterable {
+nonisolated enum WeightUnit: String, CaseIterable {
     case kilograms = "Kilograms (kg)"
     case pounds = "Pounds (lbs)"
 }

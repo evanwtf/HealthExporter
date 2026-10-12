@@ -1,10 +1,10 @@
 import HealthKit
 import os
 
-private let logger = Logger(subsystem: "com.HealthExporter", category: "HealthSampleTypes")
+nonisolated private let logger = Logger(subsystem: "com.HealthExporter", category: "HealthSampleTypes")
 
 // MARK: - Glucose Sample Type
-struct GlucoseSampleMgDl {
+nonisolated struct GlucoseSampleMgDl: Sendable {
     let startDate: Date
     let value: Double // mg/dL value (e.g., 145.0 for 145 mg/dL)
     let source: String
@@ -46,7 +46,7 @@ struct GlucoseSampleMgDl {
 
 // MARK: - LOINC Code Constants
 /// Common LOINC codes for lab results
-struct LOINCCode {
+nonisolated struct LOINCCode {
     static let hemoglobinA1C = "4548-4"
     static let hemoglobinA1CHPLC = "17856-6"
 
@@ -101,7 +101,7 @@ struct LOINCCode {
 // MARK: - FHIR Lab Result Helper
 
 /// The fields of one FHIR Observation that the exporter uses.
-struct FHIRObservation {
+nonisolated struct FHIRObservation: Sendable {
     /// LOINC codes from `code.coding`, in record order.
     let loincCodes: [String]
     let effectiveDateTime: Date
@@ -111,7 +111,7 @@ struct FHIRObservation {
     let comparator: String?
 }
 
-struct FHIRLabResultParser {
+nonisolated struct FHIRLabResultParser {
     static let loincSystem = "http://loinc.org"
     static let allowedComparators: Set<String> = ["<", "<=", ">", ">="]
 
@@ -160,17 +160,9 @@ struct FHIRLabResultParser {
         return observation
     }
 
-    private static let dateTimeFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
-    private static let fractionalDateTimeFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
+    // Sendable format styles, so the parser can run off the main actor.
+    private static let dateTimeStyle = Date.ISO8601FormatStyle()
+    private static let fractionalDateTimeStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     private static let utcCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -183,7 +175,7 @@ struct FHIRLabResultParser {
     /// A partial date resolves to the start of that period in UTC.
     static func parseDate(_ string: String) -> Date? {
         if string.contains("T") {
-            return fractionalDateTimeFormatter.date(from: string) ?? dateTimeFormatter.date(from: string)
+            return (try? fractionalDateTimeStyle.parse(string)) ?? (try? dateTimeStyle.parse(string))
         }
 
         let parts = string.split(separator: "-", omittingEmptySubsequences: false)
@@ -210,7 +202,7 @@ struct FHIRLabResultParser {
 /// Generic lab result row used by the lab pipeline. Carries everything needed
 /// to render a CSV row: human-readable metric name, the LOINC code found in the
 /// record, and the observation's date/value/unit/source/comparator.
-struct LabResultSample {
+nonisolated struct LabResultSample: Sendable {
     let metricName: String
     let loincCode: String
     let effectiveDateTime: Date

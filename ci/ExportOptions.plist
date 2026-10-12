@@ -7,12 +7,7 @@
 	<key>teamID</key>
 	<string>94S5PZTVPY</string>
 	<key>signingStyle</key>
-	<string>manual</string>
-	<key>provisioningProfiles</key>
-	<dict>
-		<key>com.evanhoffman.HealthExporter</key>
-		<string>HealthExporter App Store</string>
-	</dict>
+	<string>automatic</string>
 	<key>destination</key>
 	<string>export</string>
 	<key>uploadSymbols</key>

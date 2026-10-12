@@ -11,7 +11,7 @@ struct FHIRLabResultParserTests {
         effectiveDateTime: String = "2024-06-15T10:30:00Z",
         value: Any = 7.2,
         unit: String = "%"
-    ) -> Data {
+    ) throws -> Data {
         let json: [String: Any] = [
             "resourceType": "Observation",
             "code": [
@@ -25,10 +25,10 @@ struct FHIRLabResultParserTests {
                 "unit": unit,
             ],
         ]
-        return try! JSONSerialization.data(withJSONObject: json)
+        return try JSONSerialization.data(withJSONObject: json)
     }
 
-    private func makeFHIRJSONWithout(_ keyToOmit: String) -> Data {
+    private func makeFHIRJSONWithout(_ keyToOmit: String) throws -> Data {
         var json: [String: Any] = [
             "resourceType": "Observation",
             "code": [
@@ -43,13 +43,13 @@ struct FHIRLabResultParserTests {
             ],
         ]
         json.removeValue(forKey: keyToOmit)
-        return try! JSONSerialization.data(withJSONObject: json)
+        return try JSONSerialization.data(withJSONObject: json)
     }
 
     // MARK: - Matching LOINC code
 
     @Test func matchingLOINCCode_returnsResult() throws {
-        let data = makeFHIRJSON(loincCode: "4548-4")
+        let data = try makeFHIRJSON(loincCode: "4548-4")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
 
         #expect(result != nil)
@@ -58,7 +58,7 @@ struct FHIRLabResultParserTests {
     }
 
     @Test func matchingLOINCCode_parsesDateCorrectly() throws {
-        let data = makeFHIRJSON(effectiveDateTime: "2024-06-15T10:30:00Z")
+        let data = try makeFHIRJSON(effectiveDateTime: "2024-06-15T10:30:00Z")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
 
         #expect(result != nil)
@@ -73,14 +73,14 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Non-matching LOINC code
 
-    @Test func nonMatchingLOINCCode_returnsNil() {
-        let data = makeFHIRJSON(loincCode: "4548-4")
+    @Test func nonMatchingLOINCCode_returnsNil() throws {
+        let data = try makeFHIRJSON(loincCode: "4548-4")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "2093-3")
         #expect(result == nil)
     }
 
-    @Test func wrongSystem_returnsNil() {
-        let data = makeFHIRJSON(system: "http://snomed.org")
+    @Test func wrongSystem_returnsNil() throws {
+        let data = try makeFHIRJSON(system: "http://snomed.org")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
@@ -88,7 +88,7 @@ struct FHIRLabResultParserTests {
     // MARK: - Invalid/missing JSON
 
     @Test func invalidJSON_returnsNil() {
-        let data = "not json".data(using: .utf8)!
+        let data = Data("not json".utf8)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
@@ -106,28 +106,28 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Missing required fields
 
-    @Test func missingCodeField_returnsNil() {
-        let data = makeFHIRJSONWithout("code")
+    @Test func missingCodeField_returnsNil() throws {
+        let data = try makeFHIRJSONWithout("code")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
 
-    @Test func missingEffectiveDateTime_returnsNil() {
-        let data = makeFHIRJSONWithout("effectiveDateTime")
+    @Test func missingEffectiveDateTime_returnsNil() throws {
+        let data = try makeFHIRJSONWithout("effectiveDateTime")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
 
-    @Test func missingValueQuantity_returnsNil() {
-        let data = makeFHIRJSONWithout("valueQuantity")
+    @Test func missingValueQuantity_returnsNil() throws {
+        let data = try makeFHIRJSONWithout("valueQuantity")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
 
     // MARK: - Invalid field values
 
-    @Test func invalidDateTimeFormat_returnsNil() {
-        let data = makeFHIRJSON(effectiveDateTime: "June 15, 2024")
+    @Test func invalidDateTimeFormat_returnsNil() throws {
+        let data = try makeFHIRJSON(effectiveDateTime: "June 15, 2024")
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
         #expect(result == nil)
     }
@@ -153,7 +153,7 @@ struct FHIRLabResultParserTests {
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
         let result = FHIRLabResultParser.extractLabResult(fromFHIRData: data, loincCode: "4548-4")
-        #expect(result?.unit == "")
+        #expect(result?.unit.isEmpty == true)
         #expect(abs((result?.value ?? 0) - 7.2) <= 0.001)
     }
 
@@ -206,27 +206,27 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Comparator
 
-    private func observation(valueQuantity: [String: Any]) -> FHIRObservation? {
+    private func observation(valueQuantity: [String: Any]) throws -> FHIRObservation? {
         let json: [String: Any] = [
             "code": ["coding": [["system": "http://loinc.org", "code": "33914-3"]]],
             "effectiveDateTime": "2024-06-15T10:30:00Z",
             "valueQuantity": valueQuantity,
         ]
-        return FHIRLabResultParser.parseObservation(fromFHIRData: try! JSONSerialization.data(withJSONObject: json))
+        return try FHIRLabResultParser.parseObservation(fromFHIRData: JSONSerialization.data(withJSONObject: json))
     }
 
     @Test(arguments: ["<", "<=", ">", ">="])
-    func comparator_eachAllowedValueIsKept(comparator: String) {
-        let result = observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": comparator])
+    func comparator_eachAllowedValueIsKept(comparator: String) throws {
+        let result = try observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": comparator])
         #expect(result?.comparator == comparator)
     }
 
-    @Test func comparator_absentIsNil() {
-        #expect(observation(valueQuantity: ["value": 60, "unit": "mL/min"])?.comparator == nil)
+    @Test func comparator_absentIsNil() throws {
+        #expect(try observation(valueQuantity: ["value": 60, "unit": "mL/min"])?.comparator == nil)
     }
 
-    @Test func comparator_unknownValueIsNil() {
-        #expect(observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": "ad"])?.comparator == nil)
+    @Test func comparator_unknownValueIsNil() throws {
+        #expect(try observation(valueQuantity: ["value": 60, "unit": "mL/min", "comparator": "ad"])?.comparator == nil)
     }
 
     // MARK: - Codes
@@ -247,42 +247,42 @@ struct FHIRLabResultParserTests {
 
     // MARK: - FHIR date forms
 
-    private func utc(_ y: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0, _ s: Int = 0) -> Date {
+    private func utc(_ y: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0, _ s: Int = 0) throws -> Date {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        return calendar.date(from: DateComponents(year: y, month: mo, day: d, hour: h, minute: mi, second: s))!
+        calendar.timeZone = .gmt
+        return try #require(calendar.date(from: DateComponents(year: y, month: mo, day: d, hour: h, minute: mi, second: s)))
     }
 
-    @Test func parseDate_fullDateTimeWithoutFraction() {
-        #expect(FHIRLabResultParser.parseDate("2024-06-15T10:30:00Z") == utc(2024, 6, 15, 10, 30))
+    @Test func parseDate_fullDateTimeWithoutFraction() throws {
+        #expect(try FHIRLabResultParser.parseDate("2024-06-15T10:30:00Z") == utc(2024, 6, 15, 10, 30))
     }
 
-    @Test func parseDate_fullDateTimeWithOffset() {
-        #expect(FHIRLabResultParser.parseDate("2024-06-15T10:30:00-04:00") == utc(2024, 6, 15, 14, 30))
+    @Test func parseDate_fullDateTimeWithOffset() throws {
+        #expect(try FHIRLabResultParser.parseDate("2024-06-15T10:30:00-04:00") == utc(2024, 6, 15, 14, 30))
     }
 
     @Test func parseDate_fractionalSeconds() throws {
         let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.123Z")
         #expect(date != nil)
-        #expect(try abs(#require(date?.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.123) <= 0.001)
+        #expect(try abs(#require(try date?.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.123) <= 0.001)
     }
 
     @Test func parseDate_fractionalSecondsWithOffset() throws {
         let date = FHIRLabResultParser.parseDate("2024-06-15T10:30:00.5+02:00")
         #expect(date != nil)
-        #expect(try abs(#require(date?.timeIntervalSince(utc(2024, 6, 15, 8, 30))) - 0.5) <= 0.001)
+        #expect(try abs(#require(try date?.timeIntervalSince(utc(2024, 6, 15, 8, 30))) - 0.5) <= 0.001)
     }
 
-    @Test func parseDate_dateOnly_isStartOfDayUTC() {
-        #expect(FHIRLabResultParser.parseDate("2024-06-15") == utc(2024, 6, 15))
+    @Test func parseDate_dateOnly_isStartOfDayUTC() throws {
+        #expect(try FHIRLabResultParser.parseDate("2024-06-15") == utc(2024, 6, 15))
     }
 
-    @Test func parseDate_yearMonth_isFirstOfMonthUTC() {
-        #expect(FHIRLabResultParser.parseDate("2024-06") == utc(2024, 6, 1))
+    @Test func parseDate_yearMonth_isFirstOfMonthUTC() throws {
+        #expect(try FHIRLabResultParser.parseDate("2024-06") == utc(2024, 6, 1))
     }
 
-    @Test func parseDate_yearOnly_isJanuaryFirstUTC() {
-        #expect(FHIRLabResultParser.parseDate("2024") == utc(2024, 1, 1))
+    @Test func parseDate_yearOnly_isJanuaryFirstUTC() throws {
+        #expect(try FHIRLabResultParser.parseDate("2024") == utc(2024, 1, 1))
     }
 
     @Test(arguments: ["", "June 15, 2024", "2024-13", "2024-02-30", "24-06-15", "2024-6-15", "2024-06-15T10:30", "abcd", "2024-06-15Z"])
@@ -337,32 +337,32 @@ struct FHIRLabResultParserTests {
 
     // MARK: - Effective date fallbacks
 
-    private func observationData(dateFields: [String: Any]) -> Data {
+    private func observationData(dateFields: [String: Any]) throws -> Data {
         var json: [String: Any] = [
             "code": ["coding": [["system": "http://loinc.org", "code": "4548-4"]]],
             "valueQuantity": ["value": 7.2, "unit": "%"],
         ]
         json.merge(dateFields) { _, new in new }
-        return try! JSONSerialization.data(withJSONObject: json)
+        return try JSONSerialization.data(withJSONObject: json)
     }
 
     @Test func effectiveInstant_usedWhenDateTimeAbsent() throws {
-        let data = observationData(dateFields: ["effectiveInstant": "2024-06-15T10:30:00.250Z"])
+        let data = try observationData(dateFields: ["effectiveInstant": "2024-06-15T10:30:00.250Z"])
         let result = FHIRLabResultParser.parseObservation(fromFHIRData: data)
-        #expect(try abs(#require(result?.effectiveDateTime.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.25) <= 0.001)
+        #expect(try abs(#require(try result?.effectiveDateTime.timeIntervalSince(utc(2024, 6, 15, 10, 30))) - 0.25) <= 0.001)
     }
 
-    @Test func effectivePeriodStart_usedWhenDateTimeAndInstantAbsent() {
-        let data = observationData(dateFields: ["effectivePeriod": ["start": "2024-06-15", "end": "2024-06-16"]])
-        #expect(FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime == utc(2024, 6, 15))
+    @Test func effectivePeriodStart_usedWhenDateTimeAndInstantAbsent() throws {
+        let data = try observationData(dateFields: ["effectivePeriod": ["start": "2024-06-15", "end": "2024-06-16"]])
+        #expect(try FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime == utc(2024, 6, 15))
     }
 
-    @Test func effectiveDateTime_winsOverFallbacks() {
-        let data = observationData(dateFields: [
+    @Test func effectiveDateTime_winsOverFallbacks() throws {
+        let data = try observationData(dateFields: [
             "effectiveDateTime": "2024-06-15T10:30:00Z",
             "effectiveInstant": "2023-01-01T00:00:00Z",
             "effectivePeriod": ["start": "2022-01-01"],
         ])
-        #expect(FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime == utc(2024, 6, 15, 10, 30))
+        #expect(try FHIRLabResultParser.parseObservation(fromFHIRData: data)?.effectiveDateTime == utc(2024, 6, 15, 10, 30))
     }
 }

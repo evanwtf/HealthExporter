@@ -15,17 +15,17 @@ final class SettingsManagerTests {
         }
     }
 
-    private func makeDefaults() -> UserDefaults {
+    private func makeDefaults() throws -> UserDefaults {
         let suiteName = "SettingsManagerTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         suiteNames.append(suiteName)
         return defaults
     }
 
     // MARK: - Defaults when no key is set
 
-    @Test func emptySuite_loadsTheDefaults() {
-        let settings = SettingsManager(defaults: makeDefaults())
+    @Test func emptySuite_loadsTheDefaults() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
 
         #expect(settings.temperatureUnit == .fahrenheit)
         #expect(settings.weightUnit == .pounds)
@@ -44,8 +44,8 @@ final class SettingsManagerTests {
         #expect(settings.lastXRecordsValue == 100)
     }
 
-    @Test func loading_writesNothingToTheSuite() {
-        let defaults = makeDefaults()
+    @Test func loading_writesNothingToTheSuite() throws {
+        let defaults = try makeDefaults()
 
         _ = SettingsManager(defaults: defaults)
 
@@ -82,8 +82,8 @@ final class SettingsManagerTests {
         defaults.set(2000, forKey: "lastXRecordsValue")
     }
 
-    @Test func suiteWrittenByV250_loadsUnchanged() {
-        let defaults = makeDefaults()
+    @Test func suiteWrittenByV250_loadsUnchanged() throws {
+        let defaults = try makeDefaults()
         writeV250Settings(to: defaults)
 
         let settings = SettingsManager(defaults: defaults)
@@ -105,8 +105,8 @@ final class SettingsManagerTests {
         #expect(settings.lastXRecordsValue == 2000)
     }
 
-    @Test func changes_areWrittenWithTheV250KeysAndFormats() {
-        let defaults = makeDefaults()
+    @Test func changes_areWrittenWithTheV250KeysAndFormats() throws {
+        let defaults = try makeDefaults()
         let settings = SettingsManager(defaults: defaults)
 
         settings.temperatureUnit = .celsius
@@ -142,8 +142,8 @@ final class SettingsManagerTests {
         #expect(defaults.object(forKey: "lastXRecordsValue") as? Int == 2000)
     }
 
-    @Test func changes_loadIntoANewInstance() {
-        let defaults = makeDefaults()
+    @Test func changes_loadIntoANewInstance() throws {
+        let defaults = try makeDefaults()
         let first = SettingsManager(defaults: defaults)
         first.weightUnit = .kilograms
         first.favoriteLabCodes = [LOINCCode.hemoglobinA1C]
@@ -158,9 +158,9 @@ final class SettingsManagerTests {
         #expect(second.lastXRecordsValue == 300)
     }
 
-    @Test func instances_doNotShareASuite() {
-        let first = SettingsManager(defaults: makeDefaults())
-        let second = SettingsManager(defaults: makeDefaults())
+    @Test func instances_doNotShareASuite() throws {
+        let first = try SettingsManager(defaults: makeDefaults())
+        let second = try SettingsManager(defaults: makeDefaults())
 
         first.exportGlucose = true
 
@@ -169,8 +169,8 @@ final class SettingsManagerTests {
 
     // MARK: - Fallback for invalid raw values
 
-    @Test func invalidRawValues_fallBackToTheDefaults() {
-        let defaults = makeDefaults()
+    @Test func invalidRawValues_fallBackToTheDefaults() throws {
+        let defaults = try makeDefaults()
         for key in ["temperatureUnit", "weightUnit", "dateFormat", "sortOrder"] {
             defaults.set("invalid", forKey: key)
         }
@@ -189,8 +189,8 @@ final class SettingsManagerTests {
 
     // MARK: - Lab selection
 
-    @Test func labSelection_writesBothSets() {
-        let defaults = makeDefaults()
+    @Test func labSelection_writesBothSets() throws {
+        let defaults = try makeDefaults()
         let settings = SettingsManager(defaults: defaults)
 
         settings.labSelection.setSelected(true, loincCode: LOINCCode.hemoglobinA1C)
@@ -203,8 +203,8 @@ final class SettingsManagerTests {
     }
 
     /// #115 through the real settings: the A1C selection survives a reload.
-    @Test func labPanelOnThenOff_keepsASingleLabAfterReload() {
-        let defaults = makeDefaults()
+    @Test func labPanelOnThenOff_keepsASingleLabAfterReload() throws {
+        let defaults = try makeDefaults()
         let settings = SettingsManager(defaults: defaults)
         settings.labSelection.setSelected(true, loincCode: LOINCCode.hemoglobinA1C)
 
@@ -218,8 +218,8 @@ final class SettingsManagerTests {
 
     // MARK: - Legacy exportA1C migration
 
-    @Test func migration_legacyExportA1CTrue_seedsFavorites() {
-        let defaults = makeDefaults()
+    @Test func migration_legacyExportA1CTrue_seedsFavorites() throws {
+        let defaults = try makeDefaults()
         defaults.set(true, forKey: "exportA1C")
 
         let settings = SettingsManager(defaults: defaults)
@@ -228,8 +228,8 @@ final class SettingsManagerTests {
         #expect(defaults.array(forKey: "favoriteLabCodes") as? [String] == [LOINCCode.hemoglobinA1C])
     }
 
-    @Test func migration_legacyExportA1CFalse_doesNotSeedFavorites() {
-        let defaults = makeDefaults()
+    @Test func migration_legacyExportA1CFalse_doesNotSeedFavorites() throws {
+        let defaults = try makeDefaults()
         defaults.set(false, forKey: "exportA1C")
 
         let settings = SettingsManager(defaults: defaults)
@@ -238,8 +238,8 @@ final class SettingsManagerTests {
         #expect(defaults.object(forKey: "favoriteLabCodes") == nil)
     }
 
-    @Test func migration_noLegacyKey_doesNotSeedFavorites() {
-        let defaults = makeDefaults()
+    @Test func migration_noLegacyKey_doesNotSeedFavorites() throws {
+        let defaults = try makeDefaults()
 
         let settings = SettingsManager(defaults: defaults)
 
@@ -247,8 +247,8 @@ final class SettingsManagerTests {
         #expect(defaults.object(forKey: "favoriteLabCodes") == nil)
     }
 
-    @Test func migration_doesNotOverrideExistingFavorites() {
-        let defaults = makeDefaults()
+    @Test func migration_doesNotOverrideExistingFavorites() throws {
+        let defaults = try makeDefaults()
         defaults.set(true, forKey: "exportA1C")
         defaults.set(["2093-3"], forKey: "favoriteLabCodes") // user already picked something
 
@@ -257,8 +257,8 @@ final class SettingsManagerTests {
         #expect(settings.favoriteLabCodes == ["2093-3"], "Migration must not clobber existing user choices")
     }
 
-    @Test func migration_doesNotOverrideAnEmptyFavoriteList() {
-        let defaults = makeDefaults()
+    @Test func migration_doesNotOverrideAnEmptyFavoriteList() throws {
+        let defaults = try makeDefaults()
         defaults.set(true, forKey: "exportA1C")
         defaults.set([String](), forKey: "favoriteLabCodes") // user cleared every lab
 
@@ -267,8 +267,8 @@ final class SettingsManagerTests {
         #expect(settings.favoriteLabCodes.isEmpty)
     }
 
-    @Test func migration_runsOnce() {
-        let defaults = makeDefaults()
+    @Test func migration_runsOnce() throws {
+        let defaults = try makeDefaults()
         defaults.set(true, forKey: "exportA1C")
         let first = SettingsManager(defaults: defaults)
         first.favoriteLabCodes = []

@@ -116,7 +116,9 @@ nonisolated struct ExportDataLoaderTests {
     }
 
     private var a1c: LabMetric {
-        LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C)!
+        get throws {
+            try #require(LabMetricRegistry.metric(forLoincCode: LOINCCode.hemoglobinA1C))
+        }
     }
 
     private let labsUnavailable = NSError(domain: "HealthKit", code: 3, userInfo: [
@@ -125,13 +127,13 @@ nonisolated struct ExportDataLoaderTests {
 
     // MARK: - #112: one failed metric does not discard the others
 
-    @Test func load_labFailure_keepsWeightAndSteps() async {
+    @Test func load_labFailure_keepsWeightAndSteps() async throws {
         let store = FakeHealthDataStore(
             quantity: [.bodyMass: .success(weightSamples(2)), .stepCount: .success(stepsSamples(3))],
             labs: .failure(labsUnavailable)
         )
 
-        let result = await ExportDataLoader(store: store).load(request(weight: true, steps: true, labs: [a1c]))
+        let result = try await ExportDataLoader(store: store).load(request(weight: true, steps: true, labs: [a1c]))
 
         #expect(result.weightSamples?.count == 2)
         #expect(result.stepsSamples?.count == 3)
@@ -141,19 +143,19 @@ nonisolated struct ExportDataLoaderTests {
         #expect(result.blockingErrorMessage == nil)
     }
 
-    @Test func load_labFailure_reportsTheFailureInPlainWords() async {
+    @Test func load_labFailure_reportsTheFailureInPlainWords() async throws {
         let store = FakeHealthDataStore(
             quantity: [.bodyMass: .success(weightSamples(2))],
             labs: .failure(labsUnavailable)
         )
 
-        let result = await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
+        let result = try await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
 
         #expect(result.partialFailureNotice == ("Lab results could not be read: Clinical Lab Result type not available\n\n"
                 + "The file will contain the other selected data."))
     }
 
-    @Test func load_labFailure_csvMatchesTheLoadedSamples() async {
+    @Test func load_labFailure_csvMatchesTheLoadedSamples() async throws {
         let weight = weightSamples(4)
         let steps = stepsSamples(5)
         let store = FakeHealthDataStore(
@@ -161,7 +163,7 @@ nonisolated struct ExportDataLoaderTests {
             labs: .failure(labsUnavailable)
         )
 
-        var result = await ExportDataLoader(store: store).load(request(weight: true, steps: true, labs: [a1c]))
+        var result = try await ExportDataLoader(store: store).load(request(weight: true, steps: true, labs: [a1c]))
 
         var expectedWeight: [HKQuantitySample]? = weight
         var expectedSteps: [HKQuantitySample]? = steps
@@ -209,27 +211,27 @@ nonisolated struct ExportDataLoaderTests {
         #expect(result.blockingErrorMessage == nil)
     }
 
-    @Test func load_everyMetricFails_showsTheFirstErrorAsBefore() async {
+    @Test func load_everyMetricFails_showsTheFirstErrorAsBefore() async throws {
         let weightFailure = NSError(domain: "HealthKit", code: 6, userInfo: [NSLocalizedDescriptionKey: "Weight failed"])
         let store = FakeHealthDataStore(
             quantity: [.bodyMass: .failure(weightFailure)],
             labs: .failure(labsUnavailable)
         )
 
-        let result = await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
+        let result = try await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
 
         #expect(result.failures.map(\.metric) == [.weight, .labResults])
         #expect(result.blockingErrorMessage == "Failed to fetch Weight data: Weight failed")
         #expect(result.partialFailureNotice == nil)
     }
 
-    @Test func load_failureAndNoOtherData_saysNoFileWasExported() async {
+    @Test func load_failureAndNoOtherData_saysNoFileWasExported() async throws {
         let store = FakeHealthDataStore(
             quantity: [.bodyMass: .success([])],
             labs: .failure(labsUnavailable)
         )
 
-        let result = await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
+        let result = try await ExportDataLoader(store: store).load(request(weight: true, labs: [a1c]))
 
         #expect(result.blockingErrorMessage == ("No file was exported.\n\n"
                 + "Lab results could not be read: Clinical Lab Result type not available\n\n"
@@ -245,14 +247,14 @@ nonisolated struct ExportDataLoaderTests {
         #expect(result.blockingErrorMessage == ExportError.noDataFound.localizedDescription)
     }
 
-    @Test func load_labsLoad_parsesAndKeepsNewestPerLab() async {
+    @Test func load_labsLoad_parsesAndKeepsNewestPerLab() async throws {
         let store = FakeHealthDataStore(labs: .success([
             a1cRecord(value: 6.1, date: "2024-06-15T10:00:00Z"),
             a1cRecord(value: 5.9, date: "2024-03-15T10:00:00Z"),
             a1cRecord(value: 5.7, date: "2023-12-15T10:00:00Z"),
         ]))
 
-        let result = await ExportDataLoader(store: store).load(request(labs: [a1c], limit: 2))
+        let result = try await ExportDataLoader(store: store).load(request(labs: [a1c], limit: 2))
 
         #expect(result.labResults?.map(\.value) == [6.1, 5.9])
         #expect(result.labResults?.first?.source == "Clinic")
@@ -327,7 +329,7 @@ nonisolated struct ExportDataLoaderTests {
         date: .abbreviated,
         time: .omitted,
         locale: Locale(identifier: "en_US"),
-        timeZone: TimeZone(identifier: "UTC")!
+        timeZone: .gmt
     )
 
     /// 2026-03-03T12:00:00Z.

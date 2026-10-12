@@ -7,8 +7,8 @@ import UniformTypeIdentifiers
 
 /// `CSVFile` replaced `CSVDocument` as the item the file picker writes (#111).
 struct CSVFileTests {
-    private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-    private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+    private let weightType = HKQuantityType(.bodyMass)
+    private let stepsType = HKQuantityType(.stepCount)
 
     private func samples(_ type: HKQuantityType, unit: HKUnit, count: Int) -> [HKQuantitySample] {
         let start = Date(timeIntervalSince1970: 1_700_000_000)

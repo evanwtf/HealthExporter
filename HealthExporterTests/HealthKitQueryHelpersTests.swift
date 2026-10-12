@@ -6,11 +6,12 @@ import Testing
 struct HealthKitQueryHelpersTests {
     private let calendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
+        // swiftlint:disable:next force_unwrapping - a stored property initializer cannot throw, and the IANA name is fixed
         cal.timeZone = TimeZone(identifier: "America/New_York")!
         return cal
     }()
 
-    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 12, _ minute: Int = 0) -> Date {
+    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 12, _ minute: Int = 0) throws -> Date {
         var components = DateComponents()
         components.year = year
         components.month = month
@@ -18,7 +19,7 @@ struct HealthKitQueryHelpersTests {
         components.hour = hour
         components.minute = minute
         components.timeZone = TimeZone(identifier: "America/New_York")
-        return calendar.date(from: components)!
+        return try #require(calendar.date(from: components))
     }
 
     // MARK: - readTypes
@@ -118,8 +119,8 @@ struct HealthKitQueryHelpersTests {
     // MARK: - dayAlignedRange
 
     @Test func dayAlignedRange_alignsToStartOfDay() throws {
-        let start = date(2024, 6, 15, 14, 30) // 2:30 PM
-        let end = date(2024, 6, 20, 9, 15) // 9:15 AM
+        let start = try date(2024, 6, 15, 14, 30) // 2:30 PM
+        let end = try date(2024, 6, 20, 9, 15) // 9:15 AM
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (start, end), calendar: calendar)
 
@@ -131,8 +132,8 @@ struct HealthKitQueryHelpersTests {
     }
 
     @Test func dayAlignedRange_endIsNextDayMidnight() throws {
-        let start = date(2024, 6, 15)
-        let end = date(2024, 6, 20)
+        let start = try date(2024, 6, 15)
+        let end = try date(2024, 6, 20)
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (start, end), calendar: calendar)
 
@@ -147,7 +148,7 @@ struct HealthKitQueryHelpersTests {
     }
 
     @Test func dayAlignedRange_sameDay_coversFullDay() throws {
-        let day = date(2024, 6, 15, 14, 30)
+        let day = try date(2024, 6, 15, 14, 30)
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (day, day), calendar: calendar)
 
@@ -159,8 +160,8 @@ struct HealthKitQueryHelpersTests {
     }
 
     @Test func dayAlignedRange_preservesStartDate() throws {
-        let start = date(2024, 1, 1, 23, 59)
-        let end = date(2024, 1, 31, 0, 1)
+        let start = try date(2024, 1, 1, 23, 59)
+        let end = try date(2024, 1, 31, 0, 1)
 
         let result = HealthKitQueryHelpers.dayAlignedRange(from: (start, end), calendar: calendar)
 
@@ -171,9 +172,9 @@ struct HealthKitQueryHelpersTests {
         #expect(startComponents.day == 1)
     }
 
-    @Test func predicateForDateRange_returnsPredicate() {
-        let start = date(2024, 6, 15)
-        let end = date(2024, 6, 20)
+    @Test func predicateForDateRange_returnsPredicate() throws {
+        let start = try date(2024, 6, 15)
+        let end = try date(2024, 6, 20)
 
         let predicate = HealthKitQueryHelpers.predicateForDateRange((start, end), calendar: calendar)
 
@@ -192,55 +193,55 @@ struct HealthKitQueryHelpersTests {
         )
     }
 
-    @Test func filterLabResults_insideRange_included() {
-        let sample = labSample(date(2024, 6, 17, 10, 0), value: 7.2)
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+    @Test func filterLabResults_insideRange_included() throws {
+        let sample = try labSample(date(2024, 6, 17, 10, 0), value: 7.2)
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         #expect(filtered.count == 1)
     }
 
-    @Test func filterLabResults_beforeRange_excluded() {
-        let sample = labSample(date(2024, 6, 14, 10, 0), value: 7.2)
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+    @Test func filterLabResults_beforeRange_excluded() throws {
+        let sample = try labSample(date(2024, 6, 14, 10, 0), value: 7.2)
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
-        #expect(filtered.count == 0)
+        #expect(filtered.isEmpty)
     }
 
-    @Test func filterLabResults_afterRange_excluded() {
-        let sample = labSample(date(2024, 6, 21, 10, 0), value: 7.2)
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+    @Test func filterLabResults_afterRange_excluded() throws {
+        let sample = try labSample(date(2024, 6, 21, 10, 0), value: 7.2)
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
-        #expect(filtered.count == 0)
+        #expect(filtered.isEmpty)
     }
 
-    @Test func filterLabResults_onStartDay_included() {
-        let sample = labSample(date(2024, 6, 15, 0, 0), value: 6.5)
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
-
-        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
-        #expect(filtered.count == 1)
-    }
-
-    @Test func filterLabResults_onEndDay_included() {
-        let sample = labSample(date(2024, 6, 20, 23, 59), value: 6.5)
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+    @Test func filterLabResults_onStartDay_included() throws {
+        let sample = try labSample(date(2024, 6, 15, 0, 0), value: 6.5)
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
         #expect(filtered.count == 1)
     }
 
-    @Test func filterLabResults_multipleSamples_filtersCorrectly() {
-        let samples = [
+    @Test func filterLabResults_onEndDay_included() throws {
+        let sample = try labSample(date(2024, 6, 20, 23, 59), value: 6.5)
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+
+        let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([sample], dateRange: range, calendar: calendar)
+        #expect(filtered.count == 1)
+    }
+
+    @Test func filterLabResults_multipleSamples_filtersCorrectly() throws {
+        let samples = try [
             labSample(date(2024, 6, 14), value: 7.0), // before
             labSample(date(2024, 6, 15), value: 7.1), // start day
             labSample(date(2024, 6, 18), value: 7.2), // middle
             labSample(date(2024, 6, 20), value: 7.3), // end day
             labSample(date(2024, 6, 21), value: 7.4), // after
         ]
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: range, calendar: calendar)
         #expect(filtered.count == 3)
@@ -249,19 +250,19 @@ struct HealthKitQueryHelpersTests {
         #expect(abs(filtered[2].value - 7.3) <= 0.01)
     }
 
-    @Test func filterLabResults_emptySamples_returnsEmpty() {
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
+    @Test func filterLabResults_emptySamples_returnsEmpty() throws {
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 20))
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange([], dateRange: range, calendar: calendar)
         #expect(filtered.isEmpty)
     }
 
-    @Test func filterLabResults_sameDay_includesFullDay() {
-        let samples = [
+    @Test func filterLabResults_sameDay_includesFullDay() throws {
+        let samples = try [
             labSample(date(2024, 6, 15, 0, 0), value: 6.5),
             labSample(date(2024, 6, 15, 12, 0), value: 6.6),
             labSample(date(2024, 6, 15, 23, 59), value: 6.7),
         ]
-        let range = (startDate: date(2024, 6, 15), endDate: date(2024, 6, 15))
+        let range = try (startDate: date(2024, 6, 15), endDate: date(2024, 6, 15))
 
         let filtered = HealthKitQueryHelpers.filterLabResultsByDateRange(samples, dateRange: range, calendar: calendar)
         #expect(filtered.count == 3)
@@ -298,7 +299,7 @@ struct HealthKitQueryHelpersTests {
         #expect(samples.last?.startDate == referenceDate)
 
         for (index, sample) in samples.enumerated() {
-            let expectedDate = gmtCalendar.date(byAdding: .day, value: index - 59, to: referenceDate)!
+            let expectedDate = try #require(gmtCalendar.date(byAdding: .day, value: index - 59, to: referenceDate))
             #expect(sample.startDate == expectedDate)
             #expect(abs(sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo)) - (80.0 + Double(index))) <= 0.0001)
         }
@@ -330,12 +331,12 @@ struct HealthKitQueryHelpersTests {
 
     // MARK: - limitLabResultsPerMetric
 
-    private func lab(_ code: String, _ name: String, day: Int) -> LabResultSample {
-        LabResultSample(metricName: name, loincCode: code, effectiveDateTime: date(2024, 6, day), value: Double(day), unit: "u")
+    private func lab(_ code: String, _ name: String, day: Int) throws -> LabResultSample {
+        try LabResultSample(metricName: name, loincCode: code, effectiveDateTime: date(2024, 6, day), value: Double(day), unit: "u")
     }
 
-    @Test func limitPerMetric_keepsNewestPerMetric() {
-        let samples = [
+    @Test func limitPerMetric_keepsNewestPerMetric() throws {
+        let samples = try [
             lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 1),
             lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 3),
             lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: 2),
@@ -349,16 +350,16 @@ struct HealthKitQueryHelpersTests {
         #expect(Set(limited.filter { $0.loincCode == LOINCCode.totalCholesterol }.map(\.value)) == [4, 5])
     }
 
-    @Test func limitPerMetric_oneMetricDoesNotStarveAnother() {
-        var samples = (1 ... 20).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
-        samples.append(lab(LOINCCode.triglycerides, "Triglycerides", day: 1))
+    @Test func limitPerMetric_oneMetricDoesNotStarveAnother() throws {
+        var samples = try (1 ... 20).map { try lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+        try samples.append(lab(LOINCCode.triglycerides, "Triglycerides", day: 1))
         let limited = HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: 5)
         #expect((limited.filter { $0.loincCode == LOINCCode.hemoglobinA1C }.count) == 5)
         #expect((limited.filter { $0.loincCode == LOINCCode.triglycerides }.count) == 1)
     }
 
-    @Test func limitPerMetric_alternateCodesCountAsSameMetric() {
-        let samples = [
+    @Test func limitPerMetric_alternateCodesCountAsSameMetric() throws {
+        let samples = try [
             lab(LOINCCode.ldlCholesterolDirect, "LDL Cholesterol", day: 1),
             lab("13457-7", "LDL Cholesterol", day: 2),
             lab("18262-6", "LDL Cholesterol", day: 3),
@@ -367,8 +368,8 @@ struct HealthKitQueryHelpersTests {
         #expect(limited.map(\.loincCode) == ["13457-7", "18262-6"])
     }
 
-    @Test func limitPerMetric_noLimitReturnsAll() {
-        let samples = (1 ... 5).map { lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
+    @Test func limitPerMetric_noLimitReturnsAll() throws {
+        let samples = try (1 ... 5).map { try lab(LOINCCode.hemoglobinA1C, "Hemoglobin A1C", day: $0) }
         #expect(HealthKitQueryHelpers.limitLabResultsPerMetric(samples, limit: HKObjectQueryNoLimit).count == 5)
     }
 }

@@ -7,9 +7,8 @@ import Testing
 /// is forced to UTC by `CSVGenerator.makeDateFormatter`, giving a deterministic
 /// expected string independent of the test host's locale or timezone.
 struct A1CCSVBytePinningTests {
-    private var fixedDate: Date {
-        ISO8601DateFormatter().date(from: "2024-06-15T10:30:00Z")!
-    }
+    /// 2024-06-15T10:30:00Z.
+    private let fixedDate = Date(timeIntervalSince1970: 1_718_447_400)
 
     private func a1cSample(date: Date, value: Double, unit: String, source: String) -> LabResultSample {
         LabResultSample(

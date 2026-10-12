@@ -99,7 +99,7 @@ nonisolated enum HealthKitQueryHelpers {
     ) -> [HKQuantitySample] {
         guard days > 0 else { return [] }
 
-        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+        let weightType = HKQuantityType(.bodyMass)
         let unit = HKUnit.gramUnit(with: .kilo)
 
         return (0 ..< days).compactMap { index in
@@ -121,7 +121,7 @@ nonisolated enum HealthKitQueryHelpers {
     #if targetEnvironment(simulator)
         /// The sample types the simulator test-data generator needs permission to write.
         static func simulatorTestDataShareTypes() -> Set<HKSampleType> {
-            let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+            let weightType = HKQuantityType(.bodyMass)
             return [weightType]
         }
 

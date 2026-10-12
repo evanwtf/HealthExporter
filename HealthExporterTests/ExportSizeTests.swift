@@ -4,23 +4,14 @@ import HealthKit
 import Testing
 
 struct ExportSizeTests {
-    private let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
-    private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-    private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
-    private let oxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!
+    private let weightType = HKQuantityType(.bodyMass)
+    private let stepsType = HKQuantityType(.stepCount)
+    private let glucoseType = HKQuantityType(.bloodGlucose)
+    private let oxygenType = HKQuantityType(.oxygenSaturation)
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
-    private var referenceDate: Date {
-        var components = DateComponents()
-        components.year = 2024
-        components.month = 1
-        components.day = 15
-        components.hour = 9
-        components.minute = 30
-        components.second = 0
-        components.timeZone = TimeZone(secondsFromGMT: 0)
-        return Calendar(identifier: .gregorian).date(from: components)!
-    }
+    /// 2024-01-15T09:30:00Z.
+    private let referenceDate = Date(timeIntervalSince1970: 1_705_311_000)
 
     @Test func summaryText_givesTheExactRowCountAndSize() {
         let size = ExportSize(rowCount: 19432, byteCount: 1_980_000)

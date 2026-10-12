@@ -4,7 +4,7 @@ import HealthKit
 import Testing
 
 struct GlucoseSampleTests {
-    private let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+    private let glucoseType = HKQuantityType(.bloodGlucose)
     private let mgDlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
 
     private func makeSample(value: Double, date: Date = Date()) -> HKQuantitySample {

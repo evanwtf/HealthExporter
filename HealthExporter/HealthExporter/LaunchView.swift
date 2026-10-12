@@ -94,7 +94,9 @@ struct LaunchView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 16) {
-            NavigationLink(destination: DataSelectionView(settings: settings)) {
+            NavigationLink {
+                DataSelectionView(settings: settings)
+            } label: {
                 Text("Choose Data")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
@@ -121,10 +123,8 @@ struct LaunchView: View {
     }
 }
 
-struct LaunchView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            LaunchView(settings: SettingsManager())
-        }
+#Preview {
+    NavigationStack {
+        LaunchView(settings: SettingsManager())
     }
 }

@@ -24,6 +24,11 @@ nonisolated protocol HealthDataStore: Sendable {
 
     /// Returns every lab-result clinical record in the date range, newest first.
     func labResultRecords(dateRange: (startDate: Date, endDate: Date)?) async throws -> [ClinicalRecordPayload]
+
+    /// Returns the earliest date the app can read, for each type the user
+    /// gave limited-history access to (iOS 27). A type with full access is
+    /// not in the result. Before iOS 27 the result is empty.
+    func earliestAuthorizedSampleDates(for types: Set<HKObjectType>) async throws -> [HKObjectType: Date]
 }
 
 /// What the user selected for one export.
@@ -83,6 +88,29 @@ nonisolated enum ExportMetric: Hashable, Sendable {
         case .vital(let component): return component.displayName
         }
     }
+
+    /// The HealthKit type that holds this metric's samples.
+    var objectType: HKObjectType? {
+        switch self {
+        case .weight: return HKQuantityType(.bodyMass)
+        case .steps: return HKQuantityType(.stepCount)
+        case .glucose: return HKQuantityType(.bloodGlucose)
+        case .labResults: return HKObjectType.clinicalType(forIdentifier: .labResultRecord)
+        case .vital(let component): return HKQuantityType(component.healthKitIdentifier)
+        }
+    }
+}
+
+/// A metric the user gave limited-history read access to (iOS 27), where the
+/// access starts after the export's start date. Older samples are not in the file.
+nonisolated struct ExportAccessLimit: Equatable, Sendable {
+    let metric: ExportMetric
+    let earliestDate: Date
+
+    func message(dateStyle: Date.FormatStyle) -> String {
+        "Health access for \(metric.plainName) starts on \(earliestDate.formatted(dateStyle)), "
+            + "so older samples are not in the file."
+    }
 }
 
 nonisolated struct ExportMetricFailure: Sendable {
@@ -103,6 +131,8 @@ nonisolated struct ExportFetchResult: Sendable {
     var vitalSamples: [VitalMetricComponent: [HKQuantitySample]] = [:]
     /// In display order.
     var failures: [ExportMetricFailure] = []
+    /// In display order.
+    var accessLimits: [ExportAccessLimit] = []
     var requestedMetricCount = 0
 
     /// The number of CSV rows: one per sample.
@@ -146,6 +176,15 @@ nonisolated struct ExportFetchResult: Sendable {
         return failureLines + "\n\nThe file will contain the other selected data."
     }
 
+    /// The note to show before an export that limited-history access cut
+    /// short, or nil when every selected metric has full access.
+    func accessLimitNotice(
+        dateStyle: Date.FormatStyle = Date.FormatStyle(date: .abbreviated, time: .omitted)
+    ) -> String? {
+        guard hasAnyData, !accessLimits.isEmpty else { return nil }
+        return accessLimits.map { $0.message(dateStyle: dateStyle) }.joined(separator: "\n")
+    }
+
     private var failureLines: String {
         failures.map(\.message).joined(separator: "\n")
     }
@@ -187,6 +226,7 @@ nonisolated struct ExportDataLoader: Sendable {
     func load(_ request: ExportRequest) async -> ExportFetchResult {
         let metrics = request.metrics
         let limit: Int? = request.recordLimit > 0 ? request.recordLimit : nil
+        async let pendingAccessLimits = accessLimits(for: request, metrics: metrics)
 
         let outcomes = await withTaskGroup(of: (ExportMetric, Result<MetricData, any Error>).self) { group in
             for metric in metrics {
@@ -222,7 +262,29 @@ nonisolated struct ExportDataLoader: Sendable {
                 break
             }
         }
+        result.accessLimits = await pendingAccessLimits
         return result
+    }
+
+    /// The metrics whose limited-history access starts after the export's
+    /// start. Every limit counts when the export has no start date ("All
+    /// Records", "Last N Records"). A failed lookup reports no limits.
+    private func accessLimits(for request: ExportRequest, metrics: [ExportMetric]) async -> [ExportAccessLimit] {
+        let earliestDates: [HKObjectType: Date]
+        do {
+            earliestDates = try await store.earliestAuthorizedSampleDates(for: request.readTypes)
+        } catch {
+            logger.error("Earliest authorized dates failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+        guard !earliestDates.isEmpty else { return [] }
+
+        let exportStart = request.dateRange.flatMap { HealthKitQueryHelpers.dayAlignedRange(from: $0)?.start }
+        return metrics.compactMap { metric in
+            guard let type = metric.objectType, let earliestDate = earliestDates[type] else { return nil }
+            if let exportStart, earliestDate <= exportStart { return nil }
+            return ExportAccessLimit(metric: metric, earliestDate: earliestDate)
+        }
     }
 
     private func fetch(_ metric: ExportMetric, request: ExportRequest, limit: Int?) async -> Result<MetricData, any Error> {

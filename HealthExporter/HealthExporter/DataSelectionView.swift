@@ -8,6 +8,17 @@ private let logger = Logger(subsystem: "com.HealthExporter", category: "DataSele
 private struct PendingExport {
     let file: CSVFile
     let failureNotice: String?
+    let accessLimitNotice: String?
+
+    var title: String {
+        if failureNotice != nil { return "Some Data Could Not Be Read" }
+        if accessLimitNotice != nil { return "Health Access Is Limited" }
+        return "Export Size"
+    }
+
+    var message: String {
+        [failureNotice, accessLimitNotice, file.size.summaryText].compactMap { $0 }.joined(separator: "\n\n")
+    }
 }
 
 struct DataSelectionView: View {
@@ -139,7 +150,7 @@ struct DataSelectionView: View {
         cancelSaveSuccessDismissTask()
         saveSuccessDismissTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: UInt64(Self.saveSuccessAutoDismissSeconds) * 1_000_000_000)
+                try await Task.sleep(for: .seconds(Self.saveSuccessAutoDismissSeconds))
             } catch {
                 return
             }
@@ -200,7 +211,9 @@ struct DataSelectionView: View {
                 ))
                 .accessibilityIdentifier(identifier)
 
-            NavigationLink(destination: destination()) {
+            NavigationLink {
+                destination()
+            } label: {
                 Image(systemName: "list.bullet")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(isOn.wrappedValue ? Color.white : category.color)
@@ -524,7 +537,7 @@ struct DataSelectionView: View {
         } message: {
             Text("File \(fileName) has been saved!")
         }
-        .alert(pendingExport?.failureNotice == nil ? "Export Size" : "Some Data Could Not Be Read", isPresented: $showingSizeConfirmation, presenting: pendingExport) { _ in
+        .alert(pendingExport?.title ?? "Export Size", isPresented: $showingSizeConfirmation, presenting: pendingExport) { _ in
             Button("Cancel", role: .cancel) {
                 pendingExport = nil
             }
@@ -532,7 +545,7 @@ struct DataSelectionView: View {
                 continuePendingExport()
             }
         } message: { pending in
-            Text([pending.failureNotice, pending.file.size.summaryText].compactMap { $0 }.joined(separator: "\n\n"))
+            Text(pending.message)
         }
         .alert("Export Error", isPresented: $showErrorAlert) {
             Button("OK") { }
@@ -591,6 +604,7 @@ struct DataSelectionView: View {
             }
 
             let failureNotice = fetched.partialFailureNotice
+            let accessLimitNotice = fetched.accessLimitNotice()
             let file: CSVFile
             do {
                 file = try await CSVGenerator.makeFile(
@@ -607,8 +621,8 @@ struct DataSelectionView: View {
             guard !Task.isCancelled else { return }
 
             finishPreparingExport()
-            if file.size.shouldShowConfirmation || failureNotice != nil {
-                pendingExport = PendingExport(file: file, failureNotice: failureNotice)
+            if file.size.shouldShowConfirmation || failureNotice != nil || accessLimitNotice != nil {
+                pendingExport = PendingExport(file: file, failureNotice: failureNotice, accessLimitNotice: accessLimitNotice)
                 showingSizeConfirmation = true
             } else {
                 presentExporter(for: file)
@@ -644,8 +658,6 @@ struct DataSelectionView: View {
     }
 }
 
-struct DataSelectionView_Previews: PreviewProvider {
-    static var previews: some View {
-        DataSelectionView(settings: SettingsManager())
-    }
+#Preview {
+    DataSelectionView(settings: SettingsManager())
 }

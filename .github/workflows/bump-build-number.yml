@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   bump:
@@ -54,9 +55,11 @@ jobs:
           git push
 
       - name: Tag release
+        id: tag
         run: |
           FILE="HealthExporter.xcodeproj/project.pbxproj"
           TAG="v$(grep -m1 'MARKETING_VERSION' "$FILE" | sed 's/[^0-9.]//g')"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
             echo "Tag $TAG already exists"
@@ -67,3 +70,25 @@ jobs:
           git tag -d "$TAG" 2>/dev/null || true
           git tag -a "$TAG" -m "$TAG"
           git push origin "$TAG"
+
+      # A tag pushed with GITHUB_TOKEN does not trigger other workflows, so this
+      # job creates the release and starts the TestFlight upload itself.
+      # A workflow_dispatch made with GITHUB_TOKEN does create a run.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+
+      - name: Start TestFlight upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh workflow run release-testflight.yml --ref "$TAG"

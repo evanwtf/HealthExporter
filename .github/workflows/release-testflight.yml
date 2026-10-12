@@ -82,6 +82,13 @@ jobs:
           echo "ASC_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      # Fails in seconds when the profile is missing, before the long archive.
+      - name: Install App Store profile
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: xcrun swift ci/install_profile.swift "HealthExporter App Store"
+
       - name: Archive
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}

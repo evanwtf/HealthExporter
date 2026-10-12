@@ -755,6 +755,7 @@ def test_configure_logging_raises_httpx_to_warning() -> None:
         "upload_appstore_screenshots.py",
         "update_testflight_notes.py",
         "promote_testflight_external.py",
+        "submit_appstore_release.py",
     ],
 )
 def test_each_asc_script_configures_logging_through_asc_api(script: str) -> None:

@@ -1,0 +1,41 @@
+# SwiftLint configuration, ported from StationCast.
+#
+# It uses a short list of correctness, cleanup and performance rules.
+# SwiftFormat owns the layout. ci/lint_swift.sh runs SwiftLint with --strict,
+# so every finding fails the check.
+
+included:
+  - HealthExporter
+  - HealthExporterTests
+
+excluded:
+  - .build
+  - DerivedData
+  - build
+  - .worktrees
+
+only_rules:
+  - blanket_disable_command
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - duplicate_conditions
+  - duplicate_enum_cases
+  - duplicate_imports
+  - duplicated_key_in_dictionary_literal
+  - empty_count
+  - empty_string
+  - first_where
+  - force_cast
+  - force_try
+  - force_unwrapping
+  - identical_operands
+  - invalid_swiftlint_command
+  - lower_acl_than_parent
+  - private_swiftui_state
+  - unavailable_condition
+  - unavailable_function
+
+# SwiftLint has no per-rule file exclusion for built-in rules, so force_try and
+# force_unwrapping apply to the tests too. Where a finding is wrong for the
+# code, disable it at the site with a reason on the same line:
+#   // swiftlint:disable:next force_unwrapping - <reason>

@@ -1,0 +1,10 @@
+# SwiftFormat configuration, ported from StationCast.
+#
+# The rules stay close to the SwiftFormat defaults, so the reformat is
+# mechanical. ci/lint_swift.sh runs SwiftFormat on HealthExporter/ and
+# HealthExporterTests/.
+
+--swiftversion 6.0
+
+# Build output to skip.
+--exclude **/.build,**/DerivedData,build,.worktrees

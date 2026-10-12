@@ -1,0 +1,59 @@
+# Local mirror of the CI checks. Set it up once per clone:
+#   uvx pre-commit install
+# Run every hook on the whole tree:
+#   uvx pre-commit run --all-files
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      # SwiftFormat and SwiftLint are Homebrew tools, so they run as system
+      # commands. ci/lint_swift.sh runs the same checks in CI.
+      - id: swiftformat
+        name: swiftformat --lint
+        entry: swiftformat --lint --cache ignore
+        language: system
+        types: [swift]
+        files: ^HealthExporter(Tests)?/
+      - id: swiftlint
+        name: swiftlint
+        entry: swiftlint lint --strict --no-cache
+        language: system
+        types: [swift]
+        files: ^HealthExporter(Tests)?/
+
+      # The Python tools come from the dev group in pyproject.toml, through
+      # uv run, so the hook versions match the project versions.
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+        files: ^scripts/
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+        files: ^scripts/
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        files: ^scripts/
+        # mypy --strict must see the whole package, not only the staged files.
+        pass_filenames: false

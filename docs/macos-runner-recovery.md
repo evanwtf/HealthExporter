@@ -49,26 +49,15 @@ Any of the following in a `release-testflight.yml` run usually points here:
   `error: exportArchive No signing certificate "iOS Distribution" found`.
 - The `Export IPA` step fails with `errSecInternalComponent` from `codesign`
   while re-signing `HealthExporter.app`.
-- The `Archive` or `Export IPA` step fails with `No profiles for
-  'com.evanhoffman.HealthExporter' were found`. Automatic signing could not
-  get a profile through the App Store Connect API key — check that the key
-  still exists and has the App Manager role (Section 4.4).
-
-  **Open problem (2026-10-12).** The first dry runs on `MacMiniM6_01` fail
-  in `Export IPA` with this error before the one above, also with
-  `signingCertificate = Apple Distribution` in the export options:
-
-  ```
-  error: exportArchive Cloud signing permission error
-  ```
-
-  Xcode adds: "You haven't been given access to cloud-managed distribution
-  certificates." The API key does not have access to cloud-managed
-  distribution certificates, and the export does not find an App Store
-  profile for the local identity. The fix is on the Apple account side: an
-  Admin or the Account Holder must give the key that access, or create the
-  App Store profile for the local `Apple Distribution` cert. Re-run the dry
-  run (Section 5) after the change.
+- The `Install App Store profile` step fails with `No ACTIVE App Store
+  profile named 'HealthExporter App Store'`. The profile does not exist or
+  has expired. An Admin creates it once (Section 4.4). An HTTP 401 or 403
+  from that step means the API key secrets are wrong or the key was revoked.
+- The `Export IPA` step fails with `error: exportArchive Cloud signing
+  permission error`. The export options were switched to automatic signing.
+  An App Manager API key cannot use cloud-managed distribution certificates,
+  so automatic export fails. Keep `signingStyle = manual` in
+  [`ci/ExportOptions.plist`](../ci/ExportOptions.plist).
 - A queued job stays queued for many minutes with `MacMiniM6_01` showing
   "Offline" in https://github.com/organizations/evanwtf/settings/actions/runners
   even though `Runner.Listener` is in `ps`.
@@ -84,19 +73,22 @@ The TestFlight workflow depends on three independent things on the runner:
    in the `MACOS_KEYCHAIN_PASSWORD` GitHub secret.
 2. The signing certificates **and their private keys** inside that keychain
    (`Apple Development` and `Apple Distribution`, both team `94S5PZTVPY`).
-3. An App Store provisioning profile for `com.evanhoffman.HealthExporter`.
-   The archive and [`ci/ExportOptions.plist`](../ci/ExportOptions.plist) both
-   use automatic signing. The archive signs with a development identity. The
-   export re-signs with the runner's local `Apple Distribution` identity
-   (`signingCertificate = Apple Distribution`) and the Xcode-managed
-   `iOS Team Store Provisioning Profile: com.evanhoffman.HealthExporter`,
-   which `xcodebuild` fetches or creates through the App Store Connect API key
-   (`-allowProvisioningUpdates`). It caches the profile in
-   `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. The profile
-   must include both the HealthKit and the Clinical Health Records
-   capabilities. Automatic signing was once seen to return a stale cached
-   profile without one of them; App Store Connect ingest then rejects the
-   IPA. Section 4.4 covers that case.
+3. The `HealthExporter App Store` provisioning profile. The archive signs
+   automatically for development. The export signs manually
+   ([`ci/ExportOptions.plist`](../ci/ExportOptions.plist)) with the runner's
+   local `Apple Distribution` identity and that named profile. The workflow
+   step `Install App Store profile` runs
+   [`ci/install_profile.swift`](../ci/install_profile.swift), which downloads
+   the ACTIVE profile by name through the App Store Connect API key and
+   writes it to `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`
+   on every run. The script only reads; it never creates or changes anything
+   on the Apple account. The profile must name the runner's
+   `Apple Distribution` cert and include both the HealthKit and the Clinical
+   Health Records capabilities.
+
+   Automatic export is not an option: an App Manager key cannot use
+   cloud-managed distribution certificates, so it fails with
+   `Cloud signing permission error`.
 
 A macOS account password reset can break each of these in a different way:
 
@@ -115,7 +107,8 @@ A macOS account password reset can break each of these in a different way:
   are not encrypted by the keychain, so they usually survive on disk. But
   every profile binds to a specific cert, so once the matching cert is gone
   (or you revoke it on developer.apple.com), the profile is dead too.
-  Automatic signing re-creates the Xcode-managed profile on the next run.
+  An Admin must then re-issue `HealthExporter App Store` against the new
+  cert (Section 4.4).
 - **Keychain partition list ACL.** New private keys imported into a keychain
   by Xcode → Manage Certificates have a restrictive default ACL that forces
   a GUI confirmation the first time a non-Xcode tool (notably `codesign` and
@@ -163,11 +156,9 @@ Interpreting the output:
   rotate the GitHub secret as described in Section 4.1.
 - (3) If `0 valid identities found`, you have lost both private keys and need
   to do the full cert+profile recovery (Sections 4.2, 4.3, 4.4).
-- (4) Expect `iOS Team Store Provisioning Profile:
-  com.evanhoffman.HealthExporter`. If it appears more than once, or the
-  export fails after a cert change, delete the cached copies (Section 4.4).
-  A leftover `HealthExporter App Store` profile is from the old manual
-  export and is unused; you can delete it.
+- (4) Expect `HealthExporter App Store`. The workflow downloads it on every
+  run, so an old copy on disk does no harm, but you can delete copies that
+  reference a revoked cert.
 
 ## 4. Recovery procedure
 
@@ -180,7 +171,7 @@ runbook was first written from):
 | 4.1 | Rotate `MACOS_KEYCHAIN_PASSWORD` if the keychain unlock password changed | Local + `gh` |
 | 4.2 | Revoke the orphaned Apple Development and Apple Distribution certs | developer.apple.com → Certificates |
 | 4.3 | Re-create the Apple Distribution cert and private key via Xcode → Manage Certificates | Mac mini (GUI) |
-| 4.4 | Check the App ID capabilities and the API key, then delete stale cached profiles | developer.apple.com, App Store Connect, Mac mini |
+| 4.4 | An Admin creates or re-issues the `HealthExporter App Store` profile against the runner's Distribution cert | developer.apple.com → Profiles |
 | 4.5 | Set the keychain partition list so `codesign` can use the new keys without a GUI prompt | Mac mini shell |
 | 4.6 | Restart the runner via `~/actions-runner/svc.sh` if it is stuck | Mac mini shell |
 | 5   | Dispatch the workflow and watch it green-light | `gh` |
@@ -238,27 +229,24 @@ security find-identity -v -p codesigning
 Expect two valid identities for team `94S5PZTVPY`: `Apple Development` and
 `Apple Distribution`.
 
-### 4.4. Let automatic signing re-create the profile
+### 4.4. Create or renew the `HealthExporter App Store` profile
 
-There is no profile to install by hand. `xcodebuild` uses the App Store
-Connect API key to fetch or create the Xcode-managed App Store profile for
-the current `Apple Distribution` cert. Check three things:
+This is an Admin step in the Apple Developer portal. Nothing is installed on
+the runner: the workflow downloads the profile by name on every run. Do it
+once, again when the profile expires (once a year), and after the
+`Apple Distribution` cert changes.
 
-1. On https://developer.apple.com/account/resources/identifiers/list, the App
-   ID `com.evanhoffman.HealthExporter` has both **HealthKit** and
-   **HealthKit / Clinical Health Records** ticked.
-2. In App Store Connect → Users and Access → Integrations, the API key in the
-   `ASC_API_KEY_ID` secret is active and has the **App Manager** role.
-3. On the Mac mini, no stale cached profile is left. Find the cached copies
-   with the loop from Section 3 and delete each file whose name is
-   `iOS Team Store Provisioning Profile: com.evanhoffman.HealthExporter` or
-   `HealthExporter App Store`:
+1. Check that the App ID `com.evanhoffman.HealthExporter` has both
+   **HealthKit** and **HealthKit / Clinical Health Records** ticked.
+2. Go to Certificates, Identifiers & Profiles → **Profiles** → **+**.
+3. Choose **App Store Connect** (distribution), then the App ID
+   `com.evanhoffman.HealthExporter`.
+4. Choose the certificate `Apple Distribution: EVAN DAVID HOFFMAN` that the
+   runner has (the one that expires 2027-05-25).
+5. Name it exactly `HealthExporter App Store` and click **Generate**.
 
-   ```sh
-   rm ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/<uuid>.mobileprovision
-   ```
-
-   The next run downloads a fresh profile.
+To renew, edit the existing profile, select the current cert, and save. Keep
+the exact name. Then re-dispatch the dry run (Section 5).
 
 ### 4.5. Fix the keychain partition list
 
@@ -311,7 +299,8 @@ gh run watch "$(gh run list --repo evanwtf/HealthExporter \
 ```
 
 Steps to look at, in order: `Check required secrets` → `Run iOS tests` →
-`Unlock signing keychain` → `Archive` → `Export IPA`. The dry run skips
+`Unlock signing keychain` → `Install App Store profile` → `Archive` →
+`Export IPA`. The dry run skips
 `Upload IPA for Internal TestFlight`. When those steps are green, upload the
 newest tag if its upload failed (App Store Connect rejects a build number it
 already has):
@@ -364,8 +353,10 @@ Things that would have cut this incident from "an hour of cert rebuilding" to
   creates the GitHub release.
 - Test script: [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh)
 - Export options: [`ci/ExportOptions.plist`](../ci/ExportOptions.plist)
-  (`signingStyle = automatic`, `signingCertificate = Apple Distribution`,
-  no named profile)
+  (`signingStyle = manual`, `signingCertificate = Apple Distribution`,
+  profile `HealthExporter App Store`)
+- Profile download: [`ci/install_profile.swift`](../ci/install_profile.swift)
+  (read-only App Store Connect API call)
 - Required secrets:
   - Organization secret `MACOS_KEYCHAIN_PASSWORD` — the login keychain unlock
     password. Its selected repositories must include `HealthExporter`.

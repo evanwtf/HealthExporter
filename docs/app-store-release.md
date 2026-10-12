@@ -49,8 +49,10 @@ gh secret set ASC_REVIEW_CONTACT_PHONE --repo evanwtf/HealthExporter
 
 A set secret wins over the contact in App Store Connect. When a secret is not
 set, the script keeps the value that App Store Connect has. When neither has a
-value, the script refuses and names the missing secret. The script never logs
-a contact value. It logs only "set from secret", "kept" or "missing".
+value, the script refuses and names the missing secret. The script sends only
+the values from the secrets; it does not send a kept value again. The script
+never logs a contact value. It logs only "set from secret", "kept" or
+"missing".
 
 ## Cut a public release
 
@@ -156,6 +158,24 @@ Review submission. Add `-f group=<name>` to use one group only.
    for Distribution" without a further step. A version with release type
    manual waits in "Pending Developer Release" until the owner releases it in
    App Store Connect.
+
+## When a submit run fails
+
+Run mode submit again. If the failed run added the version to a draft review
+submission, the version is in "Ready for Review". The script reuses that
+version and that draft, and does not add the version twice.
+
+## When App Review rejects the version
+
+The dry run refuses with "has unresolved issues". Read App Review's message in
+App Store Connect, and answer it there.
+
+- If App Review needs a new build, merge the fix. Then run mode prepare with
+  the new version number. The script renames the rejected version only when
+  it is in Prepare for Submission, so first remove the rejected version from
+  review in App Store Connect.
+- If App Review needs only an answer or a metadata change, resubmit in App
+  Store Connect.
 
 ## Rotate the ASC key
 

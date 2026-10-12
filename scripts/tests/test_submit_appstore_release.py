@@ -497,7 +497,13 @@ def test_build_refusals(
 
 @pytest.mark.parametrize(
     "state",
-    ["DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"],
+    [
+        "DEVELOPER_REJECTED",
+        "REJECTED",
+        "METADATA_REJECTED",
+        "INVALID_BINARY",
+        "READY_FOR_REVIEW",
+    ],
 )
 def test_an_editable_version_is_reused(changelog_path: Path, state: str) -> None:
     fake = FakeASC(versions=[("ver-1", "2.5.5", state)])
@@ -923,8 +929,20 @@ def test_app_store_connect_values_are_kept_without_secrets(
     caplog.set_level(logging.INFO)
 
     assert call(fake, changelog_path, "--mode", "prepare", env={}) == 0
-    assert review_attributes(fake) == {**KEPT_CONTACT, "demoAccountRequired": False}
+    # A kept value is not sent again.
+    assert review_attributes(fake) == {"demoAccountRequired": False}
     assert "App Review contact phone: kept" in caplog.text
+
+
+def test_kept_values_and_a_set_demo_flag_send_no_review_detail(
+    changelog_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake = FakeASC(review_detail={**KEPT_CONTACT, "demoAccountRequired": False})
+    caplog.set_level(logging.INFO)
+
+    assert call(fake, changelog_path, "--mode", "prepare", env={}) == 0
+    assert not any("appStoreReviewDetails" in w for w in fake.writes())
+    assert "App Review contact: no change" in caplog.text
 
 
 def test_one_secret_and_three_kept_values(changelog_path: Path) -> None:
@@ -932,9 +950,10 @@ def test_one_secret_and_three_kept_values(changelog_path: Path) -> None:
     env = {"ASC_REVIEW_CONTACT_PHONE": "+44 20 7946 0000"}
 
     assert call(fake, changelog_path, "--mode", "prepare", env=env) == 0
-    attrs = review_attributes(fake)
-    assert attrs["contactPhone"] == "+44 20 7946 0000"
-    assert attrs["contactEmail"] == "kept@example.com"
+    assert review_attributes(fake) == {
+        "contactPhone": "+44 20 7946 0000",
+        "demoAccountRequired": False,
+    }
 
 
 def test_a_missing_contact_names_the_secret(
@@ -1074,9 +1093,7 @@ def test_an_api_error_that_echoes_a_contact_value_is_redacted(
 # --- Check 8: the review submissions ------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "state", ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"]
-)
+@pytest.mark.parametrize("state", ["WAITING_FOR_REVIEW", "IN_REVIEW"])
 def test_a_submission_in_review_is_refused(
     changelog_path: Path, caplog: pytest.LogCaptureFixture, state: str
 ) -> None:
@@ -1084,6 +1101,18 @@ def test_a_submission_in_review_is_refused(
 
     assert call(fake, changelog_path, "--mode", "submit") == 1
     assert f"sub-1 is already in review ({state})" in problems_logged(caplog)
+    assert fake.writes() == []
+
+
+def test_a_rejected_submission_asks_for_an_answer(
+    changelog_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake = FakeASC(submissions=[("sub-1", "UNRESOLVED_ISSUES")])
+
+    assert call(fake, changelog_path, "--mode", "submit") == 1
+    logged = problems_logged(caplog)
+    assert "sub-1 has unresolved issues" in logged
+    assert "Answer App Review in App Store Connect" in logged
     assert fake.writes() == []
 
 
@@ -1109,6 +1138,19 @@ def test_a_version_already_in_the_submission_is_not_added_again(
     changelog_path: Path,
 ) -> None:
     fake = FakeASC(submissions=[("sub-1", "READY_FOR_REVIEW")], items=["ver-1"])
+
+    assert call(fake, changelog_path, "--mode", "submit") == 0
+    assert fake.writes() == [*PREPARE_WRITES, "PATCH /reviewSubmissions/sub-1"]
+
+
+def test_a_failed_submit_run_can_run_again(changelog_path: Path) -> None:
+    # The first run added the version to the draft, then failed. The version is
+    # READY_FOR_REVIEW. The second run reuses both and submits.
+    fake = FakeASC(
+        versions=[("ver-1", "2.5.5", "READY_FOR_REVIEW")],
+        submissions=[("sub-1", "READY_FOR_REVIEW")],
+        items=["ver-1"],
+    )
 
     assert call(fake, changelog_path, "--mode", "submit") == 0
     assert fake.writes() == [*PREPARE_WRITES, "PATCH /reviewSubmissions/sub-1"]

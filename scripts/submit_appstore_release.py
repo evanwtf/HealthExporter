@@ -77,6 +77,10 @@ MAX_WHATS_NEW_LENGTH = changelog.MAX_NOTES_LENGTH
 IN_REVIEW_SUBMISSION_STATES = ("WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES")
 DRAFT_SUBMISSION_STATE = "READY_FOR_REVIEW"
 
+# A version that a failed run added to a draft submission is READY_FOR_REVIEW.
+# It can still change, so the next run reuses it and the draft.
+REUSABLE_VERSION_STATES = asc_api.EDITABLE_VERSION_STATES | {"READY_FOR_REVIEW"}
+
 # appInfo states in which the app information can no longer change.
 LOCKED_APP_INFO_STATES = frozenset({"READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_INFO"})
 
@@ -132,6 +136,9 @@ class Plan:
     review_detail_id: str | None = None
     demo_account_required: bool | None = None
     contact: dict[str, str] = field(default_factory=dict)
+    # Only the values from the secrets. A kept value is not sent again, so an
+    # API error cannot repeat it.
+    contact_updates: dict[str, str] = field(default_factory=dict)
     contact_status: dict[str, str] = field(default_factory=dict)
     # "reuse" or "create" in modes submit and dry-run; None in mode prepare.
     submission_action: str | None = None
@@ -305,7 +312,7 @@ def check_version(client: httpx.Client, plan: Plan) -> None:
     if same:
         found = same[0]
         state = asc_api.version_state(found)
-        if state not in asc_api.EDITABLE_VERSION_STATES:
+        if state not in REUSABLE_VERSION_STATES:
             plan.problems.append(
                 f"App Store version {plan.version} is {state}; it cannot change. "
                 "A new release needs a new version number."
@@ -317,9 +324,7 @@ def check_version(client: httpx.Client, plan: Plan) -> None:
         return
 
     editable = [
-        v
-        for v in versions
-        if asc_api.version_state(v) in asc_api.EDITABLE_VERSION_STATES
+        v for v in versions if asc_api.version_state(v) in REUSABLE_VERSION_STATES
     ]
     if not editable:
         plan.version_action = "create"
@@ -573,6 +578,7 @@ def check_review_contact(
         kept = str(existing.get(item.attribute) or "").strip()
         if from_env:
             plan.contact[item.attribute] = from_env
+            plan.contact_updates[item.attribute] = from_env
             plan.contact_status[item.label] = "set from secret"
         elif kept:
             plan.contact[item.attribute] = kept
@@ -631,7 +637,13 @@ def check_submissions(client: httpx.Client, plan: Plan) -> None:
         return str(s.get("attributes", {}).get("state"))
 
     for submission in submissions:
-        if state(submission) in IN_REVIEW_SUBMISSION_STATES:
+        if state(submission) == "UNRESOLVED_ISSUES":
+            plan.problems.append(
+                f"Review submission {submission['id']} has unresolved issues: App "
+                "Review rejected it. Answer App Review in App Store Connect, and "
+                "resubmit there."
+            )
+        elif state(submission) in IN_REVIEW_SUBMISSION_STATES:
             plan.problems.append(
                 f"Review submission {submission['id']} is already in review "
                 f"({state(submission)}). Wait for App Review, or cancel it in "
@@ -826,10 +838,12 @@ def apply(
             },
             f"Set What's New ({args.locale})",
         )
-    attributes: JSONObject = dict(plan.contact)
+    attributes: JSONObject = dict(plan.contact_updates)
     if plan.demo_account_required is None:
         attributes["demoAccountRequired"] = False
-    if plan.review_detail_id is None:
+    if plan.review_detail_id is not None and not attributes:
+        logger.info("App Review contact: no change")
+    elif plan.review_detail_id is None:
         write(
             client,
             "POST",

@@ -20,7 +20,7 @@ struct SettingsView: View {
                     Text("Closes the save confirmation after 5 seconds.")
                 }
 
-                Section(header: Text("Export Format")) {
+                Section {
                     Picker("Date Format", selection: $settings.dateFormat) {
                         ForEach(DateFormatOption.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
@@ -33,9 +33,11 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("sortOrderPicker")
+                } header: {
+                    Text("Export Format")
                 }
 
-                Section(header: Text("Units")) {
+                Section {
                     Picker("Temperature", selection: $settings.temperatureUnit) {
                         ForEach(TemperatureUnit.allCases, id: \.self) { unit in
                             Text(unit.rawValue).tag(unit)
@@ -49,10 +51,12 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("weightUnitPicker")
+                } header: {
+                    Text("Units")
                 }
 
                 #if targetEnvironment(simulator)
-                Section(header: Text("Testing")) {
+                Section {
                     Button("Generate Weight Data", action: generateTestData)
 
                     if !testDataMessage.isEmpty {
@@ -60,11 +64,15 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text("Testing")
                 }
                 #endif
 
-                Section(header: Text("About")) {
-                    NavigationLink(destination: PrivacyPolicyView()) {
+                Section {
+                    NavigationLink {
+                        PrivacyPolicyView()
+                    } label: {
                         Text("Privacy Policy & Disclaimer")
                     }
                     HStack {
@@ -73,6 +81,8 @@ struct SettingsView: View {
                         Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
                             .foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text("About")
                 }
             }
             .fontDesign(.rounded)
@@ -81,7 +91,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
+                    Button(role: .close) {
                         dismiss()
                     }
                     .accessibilityIdentifier("doneButton")
@@ -112,8 +122,6 @@ struct SettingsView: View {
     #endif
 }
 
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView(settings: SettingsManager())
-    }
+#Preview {
+    SettingsView(settings: SettingsManager())
 }

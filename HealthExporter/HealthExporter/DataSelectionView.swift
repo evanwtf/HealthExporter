@@ -139,7 +139,7 @@ struct DataSelectionView: View {
         cancelSaveSuccessDismissTask()
         saveSuccessDismissTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: UInt64(Self.saveSuccessAutoDismissSeconds) * 1_000_000_000)
+                try await Task.sleep(for: .seconds(Self.saveSuccessAutoDismissSeconds))
             } catch {
                 return
             }
@@ -200,7 +200,9 @@ struct DataSelectionView: View {
                 ))
                 .accessibilityIdentifier(identifier)
 
-            NavigationLink(destination: destination()) {
+            NavigationLink {
+                destination()
+            } label: {
                 Image(systemName: "list.bullet")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(isOn.wrappedValue ? Color.white : category.color)
@@ -644,8 +646,6 @@ struct DataSelectionView: View {
     }
 }
 
-struct DataSelectionView_Previews: PreviewProvider {
-    static var previews: some View {
-        DataSelectionView(settings: SettingsManager())
-    }
+#Preview {
+    DataSelectionView(settings: SettingsManager())
 }

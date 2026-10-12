@@ -80,12 +80,9 @@ if [ -d "$RESULT_BUNDLE" ]; then
     | /usr/bin/python3 -c '
 import json, sys
 s = json.load(sys.stdin)
-print(
-    f"Test summary: {s.get(\"totalTestCount\", 0)} tests, "
-    f"{s.get(\"passedTests\", 0)} passed, {s.get(\"failedTests\", 0)} failed, "
-    f"{s.get(\"skippedTests\", 0)} skipped, {s.get(\"expectedFailures\", 0)} expected failures "
-    f"(result: {s.get(\"result\", \"unknown\")})"
-)
+print("Test summary: {} tests, {} passed, {} failed, {} skipped, {} expected failures (result: {})".format(
+    s.get("totalTestCount", 0), s.get("passedTests", 0), s.get("failedTests", 0),
+    s.get("skippedTests", 0), s.get("expectedFailures", 0), s.get("result", "unknown")))
 ') || SUMMARY="Test summary: could not read $RESULT_BUNDLE"
   echo "$SUMMARY"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

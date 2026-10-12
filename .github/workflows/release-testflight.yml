@@ -6,6 +6,11 @@ on:
       ref:
         description: "Tag or commit SHA to build (defaults to current ref)"
         required: false
+      upload:
+        description: "Upload to TestFlight (false = test, archive and export only: a dry run of signing)"
+        type: boolean
+        required: false
+        default: true
   schedule:
     # 13:00 UTC is 9am Eastern during daylight time.
     - cron: "0 13 * * *"
@@ -51,47 +56,9 @@ jobs:
             echo "should_upload=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Report Xcode and reset CoreSimulator
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
-        run: |
-          # The self-hosted runner's admin manages which Xcode is
-          # installed and xcode-select'd; don't use setup-xcode to
-          # flip versions, because a newer Xcode on disk whose iOS
-          # simulator runtime isn't installed will break tests.
-          xcode-select -p
-          xcodebuild -version
-          # When Xcode is upgraded between jobs the user-domain
-          # CoreSimulator daemon can keep running with the old framework
-          # and every simctl/xcodebuild call fails with "CoreSimulator
-          # is out of date". Kickstart the agent so it reloads against
-          # the currently-selected Xcode's framework.
-          launchctl kickstart -k "gui/$(id -u)/com.apple.CoreSimulator.CoreSimulatorService" || true
-          for _ in {1..10}; do
-            if xcrun simctl list devicetypes >/dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-
       - name: Run iOS tests
         if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
-        run: |
-          set -euo pipefail
-          DEVICE_TYPE_ID=$(
-            xcrun simctl list devicetypes -j | /usr/bin/python3 -c "import json, sys; data = json.load(sys.stdin).get('devicetypes', []); preferred = next((d for d in data if d.get('name') == 'iPhone 16 Pro'), None); iphone = preferred or next((d for d in data if d.get('name', '').startswith('iPhone')), None); print(iphone['identifier'] if iphone else (_ for _ in ()).throw(SystemExit('No iPhone simulator device type available')))"
-          )
-          RUNTIME_ID=$(
-            xcrun simctl list runtimes available -j | /usr/bin/python3 -c "import json, sys; runtimes = [runtime for runtime in json.load(sys.stdin).get('runtimes', []) if runtime.get('isAvailable') and runtime.get('identifier', '').startswith('com.apple.CoreSimulator.SimRuntime.iOS-')]; runtimes.sort(key=lambda runtime: runtime['version']); print(runtimes[-1]['identifier'] if runtimes else (_ for _ in ()).throw(SystemExit('No iOS simulator runtime available')))"
-          )
-          SIMULATOR_ID=$(xcrun simctl create "HealthExporter TestFlight CI" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
-          trap 'xcrun simctl delete "$SIMULATOR_ID"' EXIT
-          xcrun simctl boot "$SIMULATOR_ID"
-          xcrun simctl bootstatus "$SIMULATOR_ID" -b
-          xcodebuild test \
-            -project HealthExporter.xcodeproj \
-            -scheme HealthExporter \
-            -destination "id=$SIMULATOR_ID" \
-            -resultBundlePath "$RUNNER_TEMP/TestFlightTestResults"
+        run: ci/run_ios_tests.sh "$RUNNER_TEMP/TestFlightTestResults.xcresult"
 
       - name: Unlock signing keychain
         if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
@@ -161,7 +128,8 @@ jobs:
             -authenticationKeyIssuerID "$ASC_API_ISSUER_ID"
 
       - name: Upload IPA for Internal TestFlight
-        if: ${{ steps.daily_changes.outputs.should_upload == 'true' }}
+        # Scheduled runs have no inputs and always upload.
+        if: ${{ steps.daily_changes.outputs.should_upload == 'true' && (github.event_name != 'workflow_dispatch' || inputs.upload) }}
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}

@@ -9,6 +9,7 @@ if [ "$#" -ne 1 ]; then
 fi
 RESULT_BUNDLE="$1"
 
+# The runner admin manages the installed Xcode. Do not switch it here.
 xcode-select -p
 xcodebuild -version
 

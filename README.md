@@ -102,7 +102,7 @@ Data can be sorted ascending (oldest first) or descending (newest first) within 
 
 ## Testing
 
-Unit tests run automatically in GitHub Actions CI on every push and PR. See [docs/TESTING.md](docs/TESTING.md) for the full testing guide.
+Unit tests run in GitHub Actions on every push to `main` and every pull request from a branch in this repo. The `iOS Tests` workflow (`.github/workflows/ios-tests.yml`) runs on the self-hosted Mac runner (`[self-hosted, macOS, ARM64]`, `MacMiniM6_01`) through [`ci/run_ios_tests.sh`](ci/run_ios_tests.sh). Pull requests from forks do not run on the self-hosted runner. See [docs/TESTING.md](docs/TESTING.md) for the full testing guide.
 
 | Test file | Coverage |
 |-----------|----------|
@@ -117,13 +117,13 @@ Hemoglobin A1C export has been **verified working end-to-end** on a physical dev
 
 ## Releases
 
-Three GitHub Actions workflows handle the release pipeline:
+Three GitHub Actions workflows handle the release pipeline. Every pull request merged to `main` cuts a new version.
 
 | Workflow | Trigger | Runner | What it does |
 |----------|---------|--------|--------------|
-| `.github/workflows/bump-build-number.yml` | PR merge to `main` | `ubuntu-latest` | Increments `CURRENT_PROJECT_VERSION` and the `MARKETING_VERSION` patch component, commits the bump, and pushes a `vX.Y.Z` tag |
-| `.github/workflows/publish-release.yml` | `v*` tag push | `ubuntu-latest` | Creates the GitHub release with auto-generated notes |
-| `.github/workflows/release-testflight.yml` | Manual dispatch + daily 13:00 UTC schedule | `[self-hosted, macOS, ARM64]` (`MacMiniM4_01`) | Tests, archives, exports a signed IPA via [`ci/ExportOptions.plist`](ci/ExportOptions.plist), and uploads it to internal TestFlight |
+| `.github/workflows/bump-build-number.yml` | PR merge to `main` | `[self-hosted, Linux, X64]` | Increments `CURRENT_PROJECT_VERSION` and the `MARKETING_VERSION` patch component, commits the bump, and pushes a `vX.Y.Z` tag |
+| `.github/workflows/publish-release.yml` | `v*` tag push | `[self-hosted, Linux, X64]` | Creates the GitHub release with auto-generated notes |
+| `.github/workflows/release-testflight.yml` | Manual dispatch + daily 13:00 UTC schedule | `[self-hosted, macOS, ARM64]` (`MacMiniM6_01`) | Tests, archives, exports a signed IPA via [`ci/ExportOptions.plist`](ci/ExportOptions.plist), and uploads it to internal TestFlight |
 
 Manual TestFlight upload for the current `main`:
 
@@ -137,7 +137,18 @@ Upload a specific tag or commit:
 gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f ref=vX.Y.Z
 ```
 
-The TestFlight workflow requires the `MACOS_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, and `ASC_API_KEY_P8` secrets, plus a `HealthExporter App Store` provisioning profile installed on the runner with HealthKit and Clinical Health Records capabilities. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
+Dry run: test, archive and export a signed IPA, but do not upload it:
+
+```sh
+gh workflow run release-testflight.yml --repo evanwtf/HealthExporter -f upload=false
+```
+
+The TestFlight workflow needs these secrets. Its first step after the daily-change check fails the job if one is missing.
+
+- Repository secrets `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`: an App Store Connect API key with the App Manager role. One team key serves all the team's apps.
+- Organization secret `MACOS_KEYCHAIN_PASSWORD`: the password for the runner's login keychain. Its selected repositories must include `HealthExporter`.
+
+The archive and the export both sign automatically. `xcodebuild` uses the API key with `-allowProvisioningUpdates` to get the Xcode-managed App Store profile, and signs with the runner's `Apple Distribution` identity for team `94S5PZTVPY`. See [docs/macos-runner-recovery.md](docs/macos-runner-recovery.md) when signing or runner state drifts.
 
 ## Project Structure
 
@@ -154,9 +165,9 @@ HealthExporter/
 │       ├── SettingsView.swift           # Unit/format preferences & test data
 │       ├── PrivacyPolicyView.swift      # Privacy policy & disclaimer
 │       ├── HealthKitManager.swift       # HealthKit auth & data fetching
-      │       ├── HealthMetricConfig.swift     # Base metric registry
-      │       ├── LabMetricRegistry.swift      # Clinical lab panel registry
-      │       ├── VitalMetricRegistry.swift    # HealthKit vital metric registry
+│       ├── HealthMetricConfig.swift     # Base metric registry
+│       ├── LabMetricRegistry.swift      # Clinical lab panel registry
+│       ├── VitalMetricRegistry.swift    # HealthKit vital metric registry
 │       ├── HealthSampleTypes.swift      # Glucose, LOINC constants, FHIR parsing
 │       ├── CSVGenerator.swift           # CSV generation & unit conversion
 │       ├── CSVDocument.swift            # FileDocument for saving
@@ -178,7 +189,9 @@ HealthExporter/
 │       ├── QUICK_REFERENCE.md
 │       └── IMPLEMENTATION_GUIDE.md
 ├── .github/workflows/         # ios-tests, bump-build-number, publish-release, release-testflight
-├── ci/ExportOptions.plist
+├── ci/
+│   ├── ExportOptions.plist        # Export options (automatic signing)
+│   └── run_ios_tests.sh           # Simulator unit tests, used by CI
 └── README.md
 ```
 
@@ -250,6 +263,3 @@ In no event shall the developer be liable for any claim, damages, or other liabi
 ### Data Accuracy
 
 HealthExporterCSV exports data as recorded in Apple HealthKit. The developer makes no guarantees about the accuracy, completeness, or reliability of the underlying health data or the exported CSV files.
-
-# Test of beef
-Can you believe this?

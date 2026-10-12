@@ -27,7 +27,7 @@ Release notes for each version of HealthExporter, newest first. The release job 
 
 ## v2.5.1 (build 53), 2026-10-12
 
-- New builds reach testers again. Versions 2.4.15 to 2.5.0 stopped at an export compliance question in App Store Connect, so testers did not get them. The app itself does not change.
+- New builds reach testers again. Versions 2.4.13 and 2.4.15 to 2.5.0 stopped at an export compliance question in App Store Connect, so testers did not get them. The app itself does not change.
 
 ## v2.5.0 (build 52), 2026-10-12
 

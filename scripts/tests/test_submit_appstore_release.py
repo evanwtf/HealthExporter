@@ -712,6 +712,29 @@ def test_whats_new_comes_from_the_changelog_when_empty(changelog_path: Path) -> 
     assert whats_new_body(fake) == CHANGELOG_NOTES
 
 
+def test_whats_new_leaves_out_the_requests_to_testers(changelog_path: Path) -> None:
+    changelog_path.write_text(
+        CHANGELOG.replace(
+            "- The export is faster.\n",
+            "- The export is faster.\n- Please check a large export.\n",
+        )
+    )
+    fake = FakeASC()
+
+    assert call(fake, changelog_path, "--mode", "prepare") == 0
+    assert whats_new_body(fake) == CHANGELOG_NOTES
+
+
+def test_a_created_version_replaces_a_copied_whats_new(changelog_path: Path) -> None:
+    fake = FakeASC(
+        versions=[("ver-live", "2.4.7", "READY_FOR_DISTRIBUTION")],
+        new_localizations=[localization(whats_new="The notes of 2.4.7.")],
+    )
+
+    assert call(fake, changelog_path, "--mode", "prepare") == 0
+    assert whats_new_body(fake) == CHANGELOG_NOTES
+
+
 def test_whats_new_is_kept_when_set(changelog_path: Path) -> None:
     fake = FakeASC(localizations=[localization(whats_new="Bug fixes.")])
 

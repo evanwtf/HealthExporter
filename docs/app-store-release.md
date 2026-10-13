@@ -86,9 +86,14 @@ never logs a contact value. It logs only "set from secret", "kept" or
 
    - The default build is the newest VALID, unexpired build of the version.
      Pass `-f build=57` to use another one.
-   - What's New: the script keeps the text in App Store Connect. When it is
-     empty, the script uses the version's section of `docs/changelog.md`.
-     Pass `-f replace_whats_new=true` to use the changelog text in all cases.
+   - What's New comes from the version's section of `docs/changelog.md`,
+     without the lines that start with "- Please". Those lines ask testers
+     to check something, so only TestFlight shows them.
+   - For a version that the run creates, the script always uses the
+     changelog text: App Store Connect can copy What's New from the version
+     before it. For a version that exists, the script keeps the text in App
+     Store Connect, and uses the changelog only when the text is empty. Pass
+     `-f replace_whats_new=true` to use the changelog text in all cases.
    - When the version does not exist, the dry run cannot check its
      metadata. The prepare run creates it, then checks it before any other
      write.

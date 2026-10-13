@@ -84,6 +84,8 @@ never logs a contact value. It logs only "set from secret", "kept" or
    review submission. When a check fails, the run fails and lists every
    problem. Fix them all, then run the dry run again.
 
+   - App Review takes one version at a time. While another version is in
+     review, or approved and not yet live, the run refuses and names it.
    - The default build is the newest VALID, unexpired build of the version.
      Pass `-f build=57` to use another one.
    - What's New comes from the version's section of `docs/changelog.md`,

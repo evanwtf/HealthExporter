@@ -81,6 +81,21 @@ DRAFT_SUBMISSION_STATE = "READY_FOR_REVIEW"
 # It can still change, so the next run reuses it and the draft.
 REUSABLE_VERSION_STATES = asc_api.EDITABLE_VERSION_STATES | {"READY_FOR_REVIEW"}
 
+# A version in one of these states is with App Review, or approved and not yet
+# live. App Review takes one version at a time, so a new release waits for it.
+# Its review submission can already be COMPLETE, so check the version itself.
+IN_FLIGHT_VERSION_STATES = frozenset(
+    {
+        "WAITING_FOR_EXPORT_COMPLIANCE",
+        "WAITING_FOR_REVIEW",
+        "IN_REVIEW",
+        "PENDING_DEVELOPER_RELEASE",
+        "PENDING_APPLE_RELEASE",
+        "ACCEPTED",
+        "PROCESSING_FOR_DISTRIBUTION",
+    }
+)
+
 # appInfo states in which the app information can no longer change.
 LOCKED_APP_INFO_STATES = frozenset({"READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_INFO"})
 
@@ -307,6 +322,18 @@ def check_version(client: httpx.Client, plan: Plan) -> None:
 
     def version_string(v: JSONObject) -> str:
         return str(v.get("attributes", {}).get("versionString"))
+
+    for other in versions:
+        other_state = asc_api.version_state(other)
+        if (
+            version_string(other) != plan.version
+            and other_state in IN_FLIGHT_VERSION_STATES
+        ):
+            plan.problems.append(
+                f"App Store version {version_string(other)} is {other_state}. "
+                "App Review takes one version at a time. Wait until that version "
+                "is live, or remove it from review in App Store Connect."
+            )
 
     same = [v for v in versions if version_string(v) == plan.version]
     if same:
@@ -736,8 +763,7 @@ def log_plan(plan: Plan) -> None:
             logger.info("    %s", line)
     elif plan.changelog_text is not None:
         logger.info(
-            "  What's New: from the changelog when the new version has none "
-            "(%d characters)",
+            "  What's New: from the changelog, for the new version (%d characters)",
             len(plan.changelog_text),
         )
     for label, status in plan.contact_status.items():

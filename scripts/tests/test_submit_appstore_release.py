@@ -603,6 +603,22 @@ def test_a_rejected_other_version_is_refused(
     assert fake.writes() == []
 
 
+@pytest.mark.parametrize(
+    "state", ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE"]
+)
+@pytest.mark.parametrize("mode", ["dry-run", "prepare", "submit"])
+def test_another_version_with_app_review_is_refused(
+    changelog_path: Path, caplog: pytest.LogCaptureFixture, state: str, mode: str
+) -> None:
+    # The review submission of that version is COMPLETE, so only the version
+    # state shows that App Review has it.
+    fake = FakeASC(versions=[("ver-1", "2.5.4", state)])
+
+    assert call(fake, changelog_path, "--mode", mode) == 1
+    assert f"App Store version 2.5.4 is {state}" in problems_logged(caplog)
+    assert fake.writes() == []
+
+
 def test_a_missing_version_is_created_then_checked(changelog_path: Path) -> None:
     fake = FakeASC(versions=[("ver-live", "2.4.7", "READY_FOR_DISTRIBUTION")])
 

@@ -7,6 +7,7 @@ private let logger = Logger(subsystem: "com.HealthExporter", category: "DataSele
 /// A built file that waits for the user to confirm its size or a partial export.
 private struct PendingExport {
     let file: CSVFile
+    let historyEntry: ExportHistoryEntry
     let failureNotice: String?
     let accessLimitNotice: String?
 
@@ -40,9 +41,29 @@ struct DataSelectionView: View {
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
     @State private var pendingExport: PendingExport?
+    /// The entry for the file in the file picker. A successful save adds it to the history.
+    @State private var pendingHistoryEntry: ExportHistoryEntry?
 
     @Bindable var settings: SettingsManager
-    var healthStore: any HealthDataStore = HealthKitManager.shared
+    var healthStore: any HealthDataStore
+
+    /// `initialDateRange` sets the date range controls. Export Again passes the
+    /// date range of a history entry; Choose Data passes nil and opens on Days.
+    init(
+        settings: SettingsManager,
+        healthStore: any HealthDataStore = HealthKitManager.shared,
+        initialDateRange: ExportHistoryDateRange? = nil
+    ) {
+        self.settings = settings
+        self.healthStore = healthStore
+        if let initialDateRange {
+            _selectedDateRangeOption = State(initialValue: initialDateRange.option)
+            if let start = initialDateRange.specificStart, let end = initialDateRange.specificEnd {
+                _startDate = State(initialValue: start)
+                _endDate = State(initialValue: end)
+            }
+        }
+    }
 
     @ScaledMetric(relativeTo: .body) private var dateRangeEditorMinHeight: CGFloat = 76
     @ScaledMetric(relativeTo: .title2) private var detailButtonSize: CGFloat = 44
@@ -518,6 +539,11 @@ struct DataSelectionView: View {
             defaultFilename: fileName
         ) { result in
             exportFile = nil
+            if ExportHistory.shouldRecord(saveResult: result), var entry = pendingHistoryEntry {
+                entry.date = Date()
+                settings.recordExport(entry)
+            }
+            pendingHistoryEntry = nil
             switch result {
             case let .success(url):
                 logger.info("File saved to: \(url.path)")
@@ -529,6 +555,7 @@ struct DataSelectionView: View {
             }
         } onCancellation: {
             exportFile = nil
+            pendingHistoryEntry = nil
         }
         .onDisappear {
             cancelExport()
@@ -577,6 +604,19 @@ struct DataSelectionView: View {
             ),
             recordLimit: ExportLogic.recordLimit(for: selectedDateRangeOption, lastXRecords: settings.lastXRecordsValue)
         )
+        // The selection for the history entry, read before the task starts.
+        let exportWeight = settings.exportWeight
+        let exportSteps = settings.exportSteps
+        let exportGlucose = settings.exportGlucose
+        let vitalMetrics = settings.selectedVitalMetrics
+        let labSelection = settings.labSelection
+        let historyDateRange = ExportHistoryDateRange(
+            option: selectedDateRangeOption,
+            lastXDays: settings.lastXDaysValue,
+            lastXRecords: settings.lastXRecordsValue,
+            startDate: startDate,
+            endDate: endDate
+        )
         let weightUnit = settings.weightUnit
         let temperatureUnit = settings.temperatureUnit
         let dateFormat = settings.dateFormat
@@ -609,6 +649,8 @@ struct DataSelectionView: View {
 
             let failureNotice = fetched.partialFailureNotice
             let accessLimitNotice = fetched.accessLimitNotice()
+            // Names only: the history holds no error text and no health value.
+            let failedMetrics = fetched.failures.map(\.metric.plainName)
             let file: CSVFile
             do {
                 file = try await CSVGenerator.makeFile(
@@ -625,11 +667,27 @@ struct DataSelectionView: View {
             guard !Task.isCancelled else { return }
 
             finishPreparingExport()
+            let historyEntry = ExportHistoryEntry(
+                date: Date(),
+                exportWeight: exportWeight,
+                exportSteps: exportSteps,
+                exportGlucose: exportGlucose,
+                vitalMetrics: vitalMetrics,
+                labSelection: labSelection,
+                dateRange: historyDateRange,
+                file: file,
+                failedMetrics: failedMetrics
+            )
             if file.size.shouldShowConfirmation || failureNotice != nil || accessLimitNotice != nil {
-                pendingExport = PendingExport(file: file, failureNotice: failureNotice, accessLimitNotice: accessLimitNotice)
+                pendingExport = PendingExport(
+                    file: file,
+                    historyEntry: historyEntry,
+                    failureNotice: failureNotice,
+                    accessLimitNotice: accessLimitNotice
+                )
                 showingSizeConfirmation = true
             } else {
-                presentExporter(for: file)
+                presentExporter(for: file, historyEntry: historyEntry)
             }
         }
     }
@@ -642,6 +700,7 @@ struct DataSelectionView: View {
         isPreparingExport = false
         pendingExport = nil
         exportFile = nil
+        pendingHistoryEntry = nil
     }
 
     private func finishPreparingExport() {
@@ -652,11 +711,12 @@ struct DataSelectionView: View {
     private func continuePendingExport() {
         guard let pending = pendingExport else { return }
         pendingExport = nil
-        presentExporter(for: pending.file)
+        presentExporter(for: pending.file, historyEntry: pending.historyEntry)
     }
 
-    private func presentExporter(for file: CSVFile) {
+    private func presentExporter(for file: CSVFile, historyEntry: ExportHistoryEntry) {
         exportFile = file
+        pendingHistoryEntry = historyEntry
         fileName = ExportLogic.exportFilename()
         showingExporter = true
     }

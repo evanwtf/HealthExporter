@@ -2,7 +2,16 @@ import SwiftUI
 
 struct LaunchView: View {
     let settings: SettingsManager
+    /// Screenshots pass a fixed time for the "Last export" line.
+    var fixedNow: Date?
+
     @State private var showingSettings = false
+    @State private var showingHistory = false
+    @State private var showingDataSelection = false
+    /// The date range that Choose Data opens with. Nil opens it on Days.
+    @State private var dataSelectionRange: ExportHistoryDateRange?
+    /// Set by Export Again. Choose Data opens after the history sheet closes.
+    @State private var exportAgainRange: ExportHistoryDateRange?
 
     private var versionText: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -16,6 +25,9 @@ struct LaunchView: View {
                 header
                 categoryRow
                 privacyLine
+                if let latest = settings.exportHistory.latest {
+                    lastExportLine(latest)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
@@ -30,6 +42,17 @@ struct LaunchView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    showingHistory = true
+                } label: {
+                    Label("Export History", systemImage: "clock.arrow.circlepath")
+                }
+                .accessibilityLabel("Export History")
+                .accessibilityIdentifier("historyButton")
+            }
+            // Two glass buttons, each like the Settings gear on its own.
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     showingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
@@ -40,6 +63,59 @@ struct LaunchView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(settings: settings)
         }
+        .sheet(isPresented: $showingHistory, onDismiss: openExportAgain) {
+            ExportHistoryView(settings: settings, onExportAgain: exportAgain, fixedNow: fixedNow)
+        }
+        .navigationDestination(isPresented: $showingDataSelection) {
+            DataSelectionView(settings: settings, initialDateRange: dataSelectionRange)
+        }
+    }
+
+    /// Restores the entry's selection now. Choose Data opens when the sheet is gone.
+    private func exportAgain(_ entry: ExportHistoryEntry) {
+        exportAgainRange = settings.restoreSelection(from: entry)
+        showingHistory = false
+    }
+
+    private func openExportAgain() {
+        guard let range = exportAgainRange else { return }
+        exportAgainRange = nil
+        dataSelectionRange = range
+        showingDataSelection = true
+    }
+
+    private func lastExportLine(_ entry: ExportHistoryEntry) -> some View {
+        Button {
+            showingHistory = true
+        } label: {
+            HStack(spacing: 8) {
+                Label {
+                    Text("Last export: \(ExportHistoryDateText.text(for: entry.date, now: fixedNow ?? Date()))")
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundStyle(.tint)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color("SecondaryText"))
+                    .accessibilityHidden(true)
+            }
+            .font(.subheadline)
+            .foregroundStyle(Color.primary)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens your export history")
+        .accessibilityIdentifier("lastExportLine")
     }
 
     private var header: some View {
@@ -94,8 +170,9 @@ struct LaunchView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 16) {
-            NavigationLink {
-                DataSelectionView(settings: settings)
+            Button {
+                dataSelectionRange = nil
+                showingDataSelection = true
             } label: {
                 Text("Choose Data")
                     .fontWeight(.semibold)

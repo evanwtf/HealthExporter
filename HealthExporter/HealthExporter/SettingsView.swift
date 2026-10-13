@@ -24,6 +24,15 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Keep Export History", isOn: $settings.keepExportHistory)
+                        .accessibilityIdentifier("keepExportHistoryToggle")
+                } header: {
+                    Text("Export History")
+                } footer: {
+                    Text("Keeps your last \(ExportHistory.maxEntries) exports on this iPhone, with no health data. Turn it off to clear the history.")
+                }
+
+                Section {
                     Picker("Date Format", selection: $settings.dateFormat) {
                         ForEach(DateFormatOption.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)

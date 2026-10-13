@@ -6,6 +6,8 @@ Release notes for each version of HealthExporter, newest first. The release job 
 
 <!-- One "- " line per change, in plain words for testers. -->
 
+## v2.6.0 (build 58), 2026-10-13
+
 - The app now keeps a history of your last 10 exports. Tap the clock button next to Settings on the welcome screen to see what each export held, its date range, its size, and any data that did not load.
 - Tap Export Again on an entry to open Choose Data with the same selection and date range. Then tap Export CSV.
 - The welcome screen shows the time of your last export. Tap it to open the history.

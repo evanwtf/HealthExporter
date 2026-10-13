@@ -356,6 +356,30 @@ def test_notes_for_the_last_section_exclude_the_footer() -> None:
     )
 
 
+def test_store_notes_leave_out_the_requests_to_testers() -> None:
+    body = (
+        "- The app keeps a history of your exports.\n"
+        "- Please save an export and check the history.\n"
+        "- Tap Export Again to export the same data.\n"
+        "- Please cancel the Files picker once.\n"
+    )
+
+    assert changelog.store_notes(body) == (
+        "- The app keeps a history of your exports.\n"
+        "- Tap Export Again to export the same data.\n"
+    )
+
+
+def test_store_notes_keep_a_line_that_only_starts_like_please() -> None:
+    body = "- Pleased testers asked for this.\n- The text says please.\n"
+
+    assert changelog.store_notes(body) == body
+
+
+def test_store_notes_of_requests_only_are_empty() -> None:
+    assert changelog.store_notes("- Please check the dates.\n") == ""
+
+
 def test_notes_refuse_a_missing_version() -> None:
     with pytest.raises(changelog.ChangelogError, match=r"v2\.4\.0.*no section"):
         changelog.notes(SEEDED, "2.4.0")

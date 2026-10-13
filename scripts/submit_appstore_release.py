@@ -381,7 +381,9 @@ def whats_new_problems(text: str) -> list[str]:
 def load_changelog_text(plan: Plan, path: Path) -> None:
     """Read the version's changelog section into plan.changelog_text."""
     try:
-        text = changelog.notes(path.read_text(), plan.version).strip()
+        text = changelog.store_notes(
+            changelog.notes(path.read_text(), plan.version)
+        ).strip()
     except (OSError, changelog.ChangelogError) as error:
         plan.problems.append(f"What's New from the changelog: {error}")
         return
@@ -429,7 +431,10 @@ def check_localization(
             plan.problems.append(f"The {args.locale} {name} is empty.")
 
     current = str(attrs.get("whatsNew") or "")
-    if current.strip() and not args.replace_whats_new:
+    # A version that this run created can start with the What's New of the
+    # version before it. That text is not about this version.
+    replace = args.replace_whats_new or plan.version_action == "create"
+    if current.strip() and not replace:
         plan.whats_new = current
         plan.whats_new_source = "kept from App Store Connect"
         return
@@ -693,7 +698,7 @@ def gather(
             "screenshot and App Review contact checks run after the create.",
             plan.version,
         )
-        # What's New of a new version is empty: check the changelog now.
+        # A new version takes What's New from the changelog: check it now.
         load_changelog_text(plan, args.changelog)
     check_privacy_policy(client, plan, args)
     check_submissions(client, plan)

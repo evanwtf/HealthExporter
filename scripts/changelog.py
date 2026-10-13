@@ -24,6 +24,10 @@ The notes are plain text: no backticks, bold, Markdown links, '<' or '>'.
 App Store Connect refuses '<' and '>' in What's New. Each section is at most
 4000 characters, the TestFlight limit.
 
+A line that starts with "- Please" asks testers to check something. The
+TestFlight notes keep it. The App Store What's New (`store_notes`) leaves it
+out.
+
 Subcommands:
 
     check [--require-unreleased]
@@ -85,6 +89,8 @@ FORMATTING = {"`": "a backtick", "**": "bold", "](": "a Markdown link"}
 # App Store Connect refuses What's New text with these characters: "must not
 # contain markup language".
 MARKUP_CHARACTERS = ("<", ">")
+# A line for testers only, for example "- Please check the permission sheet."
+TESTER_REQUEST = re.compile(r"^- Please\b")
 
 
 class ChangelogError(Exception):
@@ -287,6 +293,16 @@ def release(text: str, version: str, build: int, date: str) -> str:
     )
     check(result)
     return result
+
+
+def store_notes(notes_body: str) -> str:
+    """The App Store What's New: the notes without the requests to testers.
+
+    A line that starts with "- Please" asks testers to check something. App
+    Store users cannot act on it, so What's New leaves it out.
+    """
+    kept = [line for line in notes_body.split("\n") if not TESTER_REQUEST.match(line)]
+    return tidy("\n".join(kept))
 
 
 def notes(text: str, version: str) -> str:

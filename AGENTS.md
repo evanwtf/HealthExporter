@@ -157,6 +157,7 @@ Changelog (`docs/changelog.md`):
 - A pull request that cuts a release adds its lines under `## Unreleased`. Only the release job writes a version heading.
 - Testers read the notes. Write one plain sentence or two after each `- `, for a user. No Markdown links, backticks, bold, `<` or `>`: `check` fails on them. App Store Connect refuses `<` and `>` in What's New as markup, so write "more than" or "less than".
 - HTML comments (`<!-- ... -->`) are removed before the notes are used and before the empty check. Put notes for developers there.
+- A line that asks testers to check something starts with `- Please`, for example "- Please check that the dates are right." The TestFlight notes keep it. The App Store What's New leaves it out.
 - A section is at most 4000 characters after the comments are removed, the TestFlight limit.
 - `scripts/changelog.py check` also fails on a missing or second `## Unreleased`, a malformed heading, a version that appears twice, and versions out of order.
 - `RELEASE_DEPLOY_KEY` is optional. When the secret is set, the release job checks out and pushes with that deploy key, which can bypass the ruleset on `main`. When it is not set, the job pushes with `GITHUB_TOKEN`. Add the key before the ruleset requires status checks; `GITHUB_TOKEN` cannot bypass them.
@@ -179,7 +180,7 @@ App Store release:
 - The runbook is `docs/app-store-release.md`. It covers the key, the secrets, a public release, external TestFlight, the checks after a submission and the key rotation.
 - `release-appstore.yml` runs `scripts/submit_appstore_release.py` on the Linux runner. The owner starts each run. The modes: `dry-run` (the default) checks and writes nothing; `prepare` writes the version, the release type, the build, What's New and the App Review contact; `submit` also submits for App Review. Example: `gh workflow run release-appstore.yml --repo evanwtf/HealthExporter -f version=2.5.5 -f mode=prepare`.
 - The script runs every read-only check first and refuses with the full list of problems before any write. It checks the build, the version state, the description, keywords and support URL, What's New, the 6.9-inch iPhone screenshots, the privacy policy URL, the App Review contact and the open review submissions.
-- What's New: the script keeps the text in App Store Connect. When it is empty, or with `-f replace_whats_new=true`, it uses the version's section of `docs/changelog.md`.
+- What's New: for a version that the run creates, the script uses the version's section of `docs/changelog.md`. For a version that exists, it keeps the text in App Store Connect; when that text is empty, or with `-f replace_whats_new=true`, it uses the changelog. The changelog text leaves out each line that starts with `- Please` (`changelog.store_notes`).
 - App Store Connect allows one editable version. When a lower version is in Prepare for Submission, the script renames it to the new version, so its metadata and screenshots stay.
 - The App Review contact comes from the secrets `ASC_REVIEW_CONTACT_FIRST_NAME`, `ASC_REVIEW_CONTACT_LAST_NAME`, `ASC_REVIEW_CONTACT_EMAIL` and `ASC_REVIEW_CONTACT_PHONE`. A set secret wins over the value in App Store Connect. The script never logs a contact value; a test pins this.
 

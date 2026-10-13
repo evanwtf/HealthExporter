@@ -24,6 +24,7 @@ APPROVED = [
     "01-launch-light",
     "08-data-selection-mixed-light",
     "09-lab-panel-detail-light",
+    "10-export-history-light",
     "08-data-selection-mixed-dark",
     "04-privacy-light",
 ]

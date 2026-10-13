@@ -6,6 +6,14 @@ Release notes for each version of HealthExporter, newest first. The release job 
 
 <!-- One "- " line per change, in plain words for testers. -->
 
+- The app now keeps a history of your last 10 exports. Tap the clock button next to Settings on the welcome screen to see what each export held, its date range, its size, and any data that did not load.
+- Tap Export Again on an entry to open Choose Data with the same selection and date range. Then tap Export CSV.
+- The welcome screen shows the time of your last export. Tap it to open the history.
+- To remove every entry, tap Clear History. To stop the history, turn off Keep Export History in Settings. This also clears it.
+- The privacy policy now describes the export history. An entry holds no health data, and no file name or location.
+- Please save an export in Files and check that it appears in the history. Then cancel the Files picker once, and check that no new entry appears.
+- Please try Export Again on an entry with lab results, and check that Choose Data shows the same labs and dates.
+
 ## v2.5.5 (build 57), 2026-10-12
 
 - The privacy policy in Settings is updated. It now says how the app reads lab results, what the exported file holds, where it can go, and that GitHub issues are public. It also gives the current steps to turn off Health access.

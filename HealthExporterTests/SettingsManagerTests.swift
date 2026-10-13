@@ -42,6 +42,8 @@ final class SettingsManagerTests {
         #expect(!settings.expandedVitalsSection)
         #expect(settings.lastXDaysValue == 30)
         #expect(settings.lastXRecordsValue == 100)
+        #expect(settings.keepExportHistory)
+        #expect(settings.exportHistory.isEmpty)
     }
 
     @Test func loading_writesNothingToTheSuite() throws {
@@ -49,7 +51,7 @@ final class SettingsManagerTests {
 
         _ = SettingsManager(defaults: defaults)
 
-        for key in Self.persistedKeys {
+        for key in Self.persistedKeys + Self.historyKeys {
             #expect(defaults.object(forKey: key) == nil, "\(key)")
         }
     }
@@ -63,6 +65,9 @@ final class SettingsManagerTests {
         "selectedLabPanels", "favoriteLabCodes", "selectedVitalMetrics",
         "expandedLabPanels", "expandedVitalsSection", "lastXDaysValue", "lastXRecordsValue",
     ]
+
+    /// The keys that v2.6.0 added.
+    private static let historyKeys = ["keepExportHistory", "exportHistory"]
 
     private func writeV250Settings(to defaults: UserDefaults) {
         defaults.set("Celsius (°C)", forKey: "temperatureUnit")
@@ -214,6 +219,182 @@ final class SettingsManagerTests {
         let reloaded = SettingsManager(defaults: defaults)
         #expect(reloaded.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
         #expect(reloaded.selectedLabPanels.isEmpty)
+    }
+
+    // MARK: - Export history
+
+    private static func historyEntry(
+        minutes: Int = 0,
+        labCodes: Set<String> = [LOINCCode.hemoglobinA1C],
+        dateRange: ExportHistoryDateRange = .lastDays(7)
+    ) -> ExportHistoryEntry {
+        ExportHistoryEntry(
+            date: Date(timeIntervalSince1970: 1_790_000_000 + TimeInterval(minutes * 60)),
+            exportWeight: false,
+            exportSteps: true,
+            exportGlucose: true,
+            vitalMetrics: [.restingHeartRate],
+            labSelection: LabSelection(panels: [.thyroid], favoriteCodes: labCodes),
+            dateRange: dateRange,
+            file: CSVFile(content: "abc", rowCount: 3),
+            failedMetrics: []
+        )
+    }
+
+    @Test func recordExport_addsTheEntry_andItLoadsIntoANewInstance() throws {
+        let defaults = try makeDefaults()
+        let settings = SettingsManager(defaults: defaults)
+        let entry = Self.historyEntry()
+
+        settings.recordExport(entry)
+
+        #expect(settings.exportHistory.entries == [entry])
+        #expect(defaults.data(forKey: "exportHistory") != nil)
+        #expect(SettingsManager(defaults: defaults).exportHistory.entries == [entry])
+    }
+
+    @Test func recordExport_keepsTheTenNewest() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+        let entries = (0 ..< 11).map { Self.historyEntry(minutes: $0) }
+
+        for entry in entries {
+            settings.recordExport(entry)
+        }
+
+        #expect(settings.exportHistory.entries.count == 10)
+        #expect(settings.exportHistory.latest == entries[10])
+        #expect(!settings.exportHistory.entries.contains(entries[0]))
+    }
+
+    @Test func clearExportHistory_removesEveryEntry_andTheStoredValue() throws {
+        let defaults = try makeDefaults()
+        let settings = SettingsManager(defaults: defaults)
+        settings.recordExport(Self.historyEntry())
+        settings.recordExport(Self.historyEntry(minutes: 1))
+
+        settings.clearExportHistory()
+
+        #expect(settings.exportHistory.isEmpty)
+        #expect(defaults.object(forKey: "exportHistory") == nil)
+        #expect(settings.keepExportHistory)
+    }
+
+    @Test func keepExportHistoryOff_clearsTheHistory_andStopsRecording() throws {
+        let defaults = try makeDefaults()
+        let settings = SettingsManager(defaults: defaults)
+        settings.recordExport(Self.historyEntry())
+
+        settings.keepExportHistory = false
+        settings.recordExport(Self.historyEntry(minutes: 1))
+
+        #expect(settings.exportHistory.isEmpty)
+        #expect(defaults.object(forKey: "exportHistory") == nil)
+        #expect(defaults.object(forKey: "keepExportHistory") as? Bool == false)
+        #expect(!SettingsManager(defaults: defaults).keepExportHistory)
+    }
+
+    @Test func keepExportHistoryOnAgain_recordsAgain() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+        settings.keepExportHistory = false
+
+        settings.keepExportHistory = true
+        settings.recordExport(Self.historyEntry())
+
+        #expect(settings.exportHistory.entries.count == 1)
+    }
+
+    @Test func badStoredHistory_loadsAsEmpty() throws {
+        let defaults = try makeDefaults()
+        defaults.set(Data("not json".utf8), forKey: "exportHistory")
+
+        let settings = SettingsManager(defaults: defaults)
+
+        #expect(settings.exportHistory.isEmpty)
+    }
+
+    @Test func storedHistoryOfTheWrongType_loadsAsEmpty() throws {
+        let defaults = try makeDefaults()
+        defaults.set("not data", forKey: "exportHistory")
+
+        let settings = SettingsManager(defaults: defaults)
+
+        #expect(settings.exportHistory.isEmpty)
+    }
+
+    // MARK: - Export Again
+
+    @Test func restoreSelection_setsTheSelectionAndTheDays() throws {
+        let defaults = try makeDefaults()
+        let settings = SettingsManager(defaults: defaults)
+        settings.exportWeight = true
+        settings.exportSteps = false
+        settings.selectedLabPanels = [.lipid]
+        settings.favoriteLabCodes = [LOINCCode.totalCholesterol]
+        settings.selectedVitalMetrics = [.bloodPressure]
+        let entry = Self.historyEntry(dateRange: .lastDays(14))
+
+        let range = settings.restoreSelection(from: entry)
+
+        #expect(range == .lastDays(14))
+        #expect(!settings.exportWeight)
+        #expect(settings.exportSteps)
+        #expect(settings.exportGlucose)
+        #expect(settings.selectedVitalMetrics == [.restingHeartRate])
+        #expect(settings.selectedLabPanels == [.thyroid])
+        #expect(settings.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(settings.lastXDaysValue == 14)
+        // Choose Data reads the same stored values.
+        let reloaded = SettingsManager(defaults: defaults)
+        #expect(reloaded.selectedLabPanels == [.thyroid])
+        #expect(reloaded.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(reloaded.lastXDaysValue == 14)
+    }
+
+    @Test func restoreSelection_setsTheRecords() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+
+        let range = settings.restoreSelection(from: Self.historyEntry(dateRange: .lastRecords(3000)))
+
+        #expect(range == .lastRecords(3000))
+        #expect(settings.lastXRecordsValue == 3000)
+        #expect(settings.lastXDaysValue == 30)
+    }
+
+    @Test func restoreSelection_returnsASpecificRange_andKeepsTheCounts() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_780_000_000)
+        let end = Date(timeIntervalSince1970: 1_790_000_000)
+
+        let range = settings.restoreSelection(from: Self.historyEntry(dateRange: .specific(start: start, end: end)))
+
+        #expect(range == .specific(start: start, end: end))
+        #expect(range.option == .specificDateRange)
+        #expect(settings.lastXDaysValue == 30)
+        #expect(settings.lastXRecordsValue == 100)
+    }
+
+    @Test func restoreSelection_skipsALabThatIsNotInTheRegistry() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+        var entry = Self.historyEntry()
+        entry.labCodes = ["0000-0", LOINCCode.hemoglobinA1C]
+        entry.labPanels = ["notAPanel", "lipid"]
+        entry.vitalMetrics = ["notAVital", "bodyTemperature"]
+
+        settings.restoreSelection(from: entry)
+
+        #expect(settings.favoriteLabCodes == [LOINCCode.hemoglobinA1C])
+        #expect(settings.selectedLabPanels == [.lipid])
+        #expect(settings.selectedVitalMetrics == [.bodyTemperature])
+    }
+
+    @Test func restoreSelection_doesNotChangeTheHistory() throws {
+        let settings = try SettingsManager(defaults: makeDefaults())
+        let entry = Self.historyEntry()
+        settings.recordExport(entry)
+
+        settings.restoreSelection(from: entry)
+
+        #expect(settings.exportHistory.entries == [entry])
     }
 
     // MARK: - Legacy exportA1C migration

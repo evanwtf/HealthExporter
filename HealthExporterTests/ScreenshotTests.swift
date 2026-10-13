@@ -21,8 +21,12 @@ final nonisolated class ScreenshotTests: XCTestCase {
             "expandedLabPanels": [LabPanel.lipid.rawValue],
             "selectedVitalMetrics": [String](),
             "expandedVitalsSection": false,
+            "keepExportHistory": true,
         ]
     }
+
+    /// Keys removed before each test, so each screen starts with no history.
+    private static let clearedKeys = ["exportHistory"]
 
     @MainActor private static var settings: SettingsManager?
     private var savedValues: [String: Any] = [:]
@@ -36,11 +40,17 @@ final nonisolated class ScreenshotTests: XCTestCase {
             }
             defaults.set(value, forKey: key)
         }
+        for key in Self.clearedKeys {
+            if let old = defaults.object(forKey: key) {
+                savedValues[key] = old
+            }
+            defaults.removeObject(forKey: key)
+        }
     }
 
     override func tearDown() {
         let defaults = UserDefaults.standard
-        for key in Self.seededKeys.keys {
+        for key in Array(Self.seededKeys.keys) + Self.clearedKeys {
             if let old = savedValues[key] {
                 defaults.set(old, forKey: key)
             } else {
@@ -152,6 +162,112 @@ final nonisolated class ScreenshotTests: XCTestCase {
         capture("09-lab-panel-detail") {
             NavigationStack {
                 DataSelectionView(settings: settings).labPanelDetail(.other)
+            }
+        }
+    }
+
+    // MARK: - Export history
+
+    /// A fixed time in the simulator's time zone, so the images do not
+    /// depend on the clock: today is October 12, 2026, at 5:30 PM.
+    private static func localDate(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        let components = DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)
+        return Calendar.current.date(from: components) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private static let fixedNow = localDate(2026, 10, 12, 17, 30)
+
+    private static func sampleEntry(
+        date: Date,
+        weight: Bool = false,
+        steps: Bool = false,
+        glucose: Bool = false,
+        vitals: Set<VitalMetric> = [],
+        labs: LabSelection = LabSelection(panels: [], favoriteCodes: []),
+        dateRange: ExportHistoryDateRange,
+        rows: Int,
+        bytes: Int,
+        failedMetrics: [String] = []
+    ) -> ExportHistoryEntry {
+        var entry = ExportHistoryEntry(
+            date: date,
+            exportWeight: weight,
+            exportSteps: steps,
+            exportGlucose: glucose,
+            vitalMetrics: vitals,
+            labSelection: labs,
+            dateRange: dateRange,
+            file: CSVFile(content: "", rowCount: rows),
+            failedMetrics: failedMetrics
+        )
+        entry.byteCount = bytes
+        return entry
+    }
+
+    /// Fixed sample entries, newest first. They hold no health value.
+    private static var sampleHistory: ExportHistory {
+        ExportHistory(entries: [
+            sampleEntry(
+                date: localDate(2026, 10, 12, 15, 2),
+                weight: true,
+                steps: true,
+                glucose: true,
+                labs: LabSelection(panels: [.lipid], favoriteCodes: [LOINCCode.hemoglobinA1C]),
+                dateRange: .lastDays(30),
+                rows: 1284,
+                bytes: 96214
+            ),
+            sampleEntry(
+                date: localDate(2026, 10, 11, 9, 41),
+                steps: true,
+                vitals: [.bloodPressure, .restingHeartRate],
+                dateRange: .specific(start: localDate(2026, 1, 1, 0, 0), end: localDate(2026, 6, 30, 0, 0)),
+                rows: 3620,
+                bytes: 251_904,
+                failedMetrics: ["Steps"]
+            ),
+            sampleEntry(
+                date: localDate(2026, 10, 3, 20, 15),
+                labs: LabSelection(panels: [.thyroid, .cbc], favoriteCodes: []),
+                dateRange: .allRecords,
+                rows: 212,
+                bytes: 18342
+            ),
+            sampleEntry(
+                date: localDate(2026, 9, 20, 7, 5),
+                glucose: true,
+                dateRange: .lastRecords(500),
+                rows: 500,
+                bytes: 41210
+            ),
+        ])
+    }
+
+    @MainActor func testExportHistoryView() {
+        let settings = sharedSettings()
+        settings.exportHistory = Self.sampleHistory
+        defer { settings.exportHistory = ExportHistory() }
+        capture("10-export-history") {
+            ExportHistoryView(settings: settings, onExportAgain: { _ in }, fixedNow: Self.fixedNow)
+        }
+    }
+
+    @MainActor func testEmptyExportHistoryView() {
+        let settings = sharedSettings()
+        settings.exportHistory = ExportHistory()
+        capture("11-export-history-empty") {
+            ExportHistoryView(settings: settings, onExportAgain: { _ in }, fixedNow: Self.fixedNow)
+        }
+    }
+
+    /// The welcome screen with "Last export: today, 3:02 PM".
+    @MainActor func testLaunchViewWithLastExport() {
+        let settings = sharedSettings()
+        settings.exportHistory = Self.sampleHistory
+        defer { settings.exportHistory = ExportHistory() }
+        capture("12-launch-last-export") {
+            NavigationStack {
+                LaunchView(settings: settings, fixedNow: Self.fixedNow)
             }
         }
     }

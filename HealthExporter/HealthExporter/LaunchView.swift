@@ -107,8 +107,9 @@ struct LaunchView: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            // The welcome screen is systemBackground, so the grouped color would be white on white.
             .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
+                Color(uiColor: .secondarySystemBackground),
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

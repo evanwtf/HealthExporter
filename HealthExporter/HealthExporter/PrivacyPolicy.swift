@@ -13,7 +13,7 @@ nonisolated struct PolicySection: Hashable, Sendable {
 /// `docs/privacy-policy.md`, must say the same thing: `PrivacyPolicyTests`
 /// checks every line here against it. Change both in the same commit.
 nonisolated enum PrivacyPolicy {
-    static let lastUpdated = "October 2026"
+    static let lastUpdated = "October 12, 2026"
 
     static let policy: [PolicySection] = [
         PolicySection(
@@ -49,7 +49,19 @@ nonisolated enum PrivacyPolicy {
         ),
         PolicySection(
             title: "Data Storage",
-            body: "The only data HealthExporterCSV stores persistently is your settings, in the app's local UserDefaults: units, date format, sort order, the metrics, vitals, lab panels, and labs you selected, and your date range choices. No health data, personal identifiers, or usage analytics are stored. Deleting the app deletes these settings."
+            body: "The only data HealthExporterCSV stores persistently is your settings and your export history, in the app's local UserDefaults. Your settings are the units, date format, sort order, the metrics, vitals, lab panels, and labs you selected, and your date range choices. No health data, personal identifiers, or usage analytics are stored. This data stays on your device, and your device backups include it. Deleting the app deletes your settings and your export history."
+        ),
+        PolicySection(
+            title: "Export History",
+            body: "HealthExporterCSV keeps a list of your last 10 exports, so you can see what you exported and export the same data again. The app adds an entry only when you save a file. Each entry holds:",
+            bullets: [
+                "The date and time you saved the file",
+                "The data types, vitals, lab panels, and labs you selected",
+                "The date range you chose",
+                "The number of rows and the file size",
+                "The names of the data types that could not be read, if any",
+            ],
+            closing: "An entry holds no health value, and no file name or file location. The history stays on your device, in the app's local UserDefaults, and your device backups include it, like your settings. To clear the history, tap the clock button on the welcome screen, then tap Clear History. To stop the history, turn off Keep Export History in Settings: the app clears the history and adds no new entries. Deleting the app deletes the history."
         ),
         PolicySection(
             title: "No Data Collection or Transmission",

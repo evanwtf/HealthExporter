@@ -70,6 +70,10 @@ final class SettingsManager {
         static let expandedVitalsSection = "expandedVitalsSection"
         static let lastXDaysValue = "lastXDaysValue"
         static let lastXRecordsValue = "lastXRecordsValue"
+        /// The "Keep Export History" switch, a Bool.
+        static let keepExportHistory = "keepExportHistory"
+        /// `ExportHistory` as JSON `Data`.
+        static let exportHistory = "exportHistory"
         /// The boolean A1C setting from before lab panels. Read once, by the migration.
         static let legacyExportA1C = "exportA1C"
     }
@@ -134,6 +138,27 @@ final class SettingsManager {
         didSet { defaults.set(lastXRecordsValue, forKey: Key.lastXRecordsValue) }
     }
 
+    /// When the user turns it off, the history is cleared.
+    var keepExportHistory: Bool {
+        didSet {
+            defaults.set(keepExportHistory, forKey: Key.keepExportHistory)
+            if !keepExportHistory {
+                clearExportHistory()
+            }
+        }
+    }
+
+    /// The last exports, newest first. An empty history removes the key.
+    var exportHistory: ExportHistory {
+        didSet {
+            if exportHistory.isEmpty {
+                defaults.removeObject(forKey: Key.exportHistory)
+            } else if let data = exportHistory.encoded() {
+                defaults.set(data, forKey: Key.exportHistory)
+            }
+        }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     /// The lab panels and the labs selected one by one, with the selection rules.
@@ -147,6 +172,42 @@ final class SettingsManager {
                 favoriteLabCodes = newValue.favoriteCodes
             }
         }
+    }
+
+    /// Adds a saved export to the history, unless the user turned it off.
+    func recordExport(_ entry: ExportHistoryEntry) {
+        guard keepExportHistory else { return }
+        exportHistory.add(entry)
+    }
+
+    /// Removes every entry, and the stored value too, even one that did not decode.
+    func clearExportHistory() {
+        exportHistory.clear()
+    }
+
+    /// Export Again: sets the selection of Choose Data to the selection of
+    /// `entry`. A lab, panel or vital that this version does not know is
+    /// skipped. Sets the days or the records value when the entry used one.
+    /// Returns the date range, which Choose Data takes as its initial value.
+    @discardableResult
+    func restoreSelection(from entry: ExportHistoryEntry) -> ExportHistoryDateRange {
+        exportWeight = entry.exportWeight
+        exportSteps = entry.exportSteps
+        exportGlucose = entry.exportGlucose
+        selectedVitalMetrics = Set(entry.knownVitalMetrics)
+        labSelection = LabSelection(
+            panels: Set(entry.knownLabPanels),
+            favoriteCodes: Set(entry.knownLabMetrics.map(\.loincCode))
+        )
+        switch entry.dateRange {
+        case let .lastDays(days):
+            lastXDaysValue = days
+        case let .lastRecords(records):
+            lastXRecordsValue = records
+        case .specific, .allRecords:
+            break
+        }
+        return entry.dateRange
     }
 
     /// One-time migration from the legacy boolean `exportA1C` setting to the
@@ -199,6 +260,9 @@ final class SettingsManager {
 
         lastXDaysValue = defaults.object(forKey: Key.lastXDaysValue) as? Int ?? 30
         lastXRecordsValue = defaults.object(forKey: Key.lastXRecordsValue) as? Int ?? 100
+
+        keepExportHistory = defaults.object(forKey: Key.keepExportHistory) as? Bool ?? true
+        exportHistory = ExportHistory.decoded(from: defaults.data(forKey: Key.exportHistory))
         // Assignments in init do not run `didSet`, so loading writes nothing back.
     }
 }

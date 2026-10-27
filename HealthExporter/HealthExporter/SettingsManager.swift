@@ -215,8 +215,7 @@ final class SettingsManager {
     /// has not yet customized `favoriteLabCodes`, seed Hemoglobin A1C in the
     /// favorites set so the toggle's user intent carries forward.
     static func migrateLegacyA1CSetting(in defaults: UserDefaults) {
-        guard defaults.object(forKey: Key.favoriteLabCodes) == nil else { return }
-        guard defaults.bool(forKey: Key.legacyExportA1C) else { return }
+        guard defaults.object(forKey: Key.favoriteLabCodes) == nil, defaults.bool(forKey: Key.legacyExportA1C) else { return }
         defaults.set([LOINCCode.hemoglobinA1C], forKey: Key.favoriteLabCodes)
     }
 

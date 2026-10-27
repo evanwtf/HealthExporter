@@ -67,7 +67,7 @@ The job calls [`ci/run_ios_tests.sh`](../ci/run_ios_tests.sh). The script:
 3. Creates a throwaway simulator from the newest `iPhone N Pro Max` device type (else the newest `iPhone N Pro`) and the newest iOS runtime, and deletes it on exit. The Pro Max has the 6.9-inch screen that App Store screenshots need.
 4. Runs `xcodebuild test -only-testing:HealthExporterTests` with `CODE_SIGNING_ALLOWED=NO`.
 
-The result bundle is uploaded as the `test-results` artifact, also when the tests fail. The TestFlight workflow runs the same script before it archives.
+The result bundle is uploaded as the `test-results` artifact, also when the tests fail. GitHub keeps it 3 days after a failed run and 1 day after a green run. The `screenshots` artifact keeps the repository's default. The TestFlight workflow runs the same script before it archives.
 
 ### Xcode version
 

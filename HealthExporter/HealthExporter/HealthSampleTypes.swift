@@ -135,11 +135,8 @@ nonisolated enum FHIRLabResultParser {
         let dateString = json["effectiveDateTime"] as? String
             ?? json["effectiveInstant"] as? String
             ?? (json["effectivePeriod"] as? [String: Any])?["start"] as? String
-        guard let dateString, let effectiveDateTime = parseDate(dateString) else {
-            return nil
-        }
-
-        guard let valueQuantity = json["valueQuantity"] as? [String: Any],
+        guard let dateString, let effectiveDateTime = parseDate(dateString),
+              let valueQuantity = json["valueQuantity"] as? [String: Any],
               let value = valueQuantity["value"] as? NSNumber
         else {
             return nil

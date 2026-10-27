@@ -84,13 +84,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ steps.source.outputs.run_id }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           dir="$RUNNER_TEMP/screenshots"
           # A run from before the export step, or older than the artifact
-          # retention, has no screenshots artifact.
+          # retention, has no screenshots artifact. A TestFlight run keeps
+          # its set 3 days; a dry run on the tag makes a new one.
           if ! gh run download "$RUN_ID" --repo "$REPO" --name screenshots --dir "$dir"; then
-            echo "::error::Run $RUN_ID has no screenshots artifact. Pass -f run_id=<id> of an iOS tests or TestFlight run that has one."
+            echo "::error::Run $RUN_ID has no screenshots artifact: a TestFlight run keeps it 3 days. Make a new set with a dry run on the tag, then run this workflow again: gh workflow run release-testflight.yml --repo $REPO --ref v$INPUT_VERSION -f upload=false. Or pass -f run_id=<id> of a run that has one."
             exit 1
           fi
           echo "Files in the screenshots artifact of run $RUN_ID:"

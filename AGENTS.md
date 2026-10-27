@@ -130,6 +130,7 @@ Workflows:
 - `App Store release` (`release-appstore.yml`, Linux, dispatch only) checks an App Store version, attaches the build and submits it for App Review. See "App Store release" below.
 - The ruleset on `main` requires the `iOS tests`, `iOS tests (fork guard)`, `Gitleaks` and `Changelog` checks. A pull request must be up to date with `main` before it merges.
 - Dependabot (`.github/dependabot.yml`) updates the GitHub Actions monthly, with the `skip-release` label.
+- No artifact keeps more than 3 days (Evan, 2026-10-27: "aside from actual release binaries we upload for distribution we should not retain any artifacts in GitHub for more than 3 days"). Give every `upload-artifact` step `retention-days`: the repository default is 90. `test-results` keeps 3 days after a failed run and 1 day after a green run; `screenshots` keeps 1 day, and 3 days from a TestFlight run.
 
 Releases:
 - Every pull request merged to `main` cuts a release unless it has the `skip-release` label. `bump-build-number.yml` runs on `pull_request_target` from `main`, on the Linux runner. It never runs code from the pull request.
@@ -172,6 +173,7 @@ TestFlight:
 App Store screenshots:
 - `ci/appstore-screenshots.txt` is the one place where the App Store set is chosen: one screenshot name per line, in store order, without `.png`. `#` starts a comment.
 - The images come from the `screenshots` artifact of a CI run. By default the workflow takes the newest successful `release-testflight.yml` run on the tag `v<version>`, and it fails when there is none. Pass `-f run_id=<id>` to use another run, for example an `iOS tests` run. The workflow logs the run and the files it used.
+- A TestFlight run keeps its set 3 days, and an `iOS tests` run 1 day. To upload later, make a new set first with a dry run on the tag, and wait for it to pass: `gh workflow run release-testflight.yml --repo evanwtf/HealthExporter --ref v2.5.5 -f upload=false`. The screenshot workflow then takes that run. A tag from before 2026-10-27 has the old workflow, whose set keeps 90 days.
 - The owner starts each upload. Dry run (the default): `gh workflow run appstore-screenshots.yml --repo evanwtf/HealthExporter -f version=2.5.5`. Upload: `gh workflow run appstore-screenshots.yml --repo evanwtf/HealthExporter -f version=2.5.5 -f dry_run=false`. It uploads only when `dry_run=false`.
 - `appstore-screenshots.yml` runs on the Linux runner. `scripts/upload_appstore_screenshots.py` checks the set before any write. It refuses a name with no file, a size with no App Store slot (1320 × 2868 and 1290 × 2796 map to `APP_IPHONE_67`), an image with an alpha channel, images of more than one display type, more than 10 images, a version that is missing or not editable, and a locale with no localization.
 - After the checks it deletes the screenshots in the version's 6.9-inch iPhone set, uploads the manifest's images in order, waits until Apple marks each one delivered, and sets the order. The version must be editable (Prepare for Submission). The script keeps `httpx` logging at WARNING: the upload URLs are pre-signed.

@@ -133,6 +133,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: ci/export_screenshots.sh "$RUNNER_TEMP/TestResults.xcresult" "$RUNNER_TEMP/screenshots"
 
+      # 1 day: the App Store set comes from a TestFlight run, and the
+      # test-results bundle of a failed run has the same images.
       - name: Upload screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -140,3 +142,4 @@ jobs:
           name: screenshots
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: ignore
+          retention-days: 1

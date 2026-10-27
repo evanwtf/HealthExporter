@@ -63,8 +63,16 @@ never logs a contact value. It logs only "set from secret", "kept" or
    gh run list --workflow release-testflight.yml --repo evanwtf/HealthExporter --limit 3
    ```
 
-2. If the UI changed, replace the App Store screenshots. Run the dry run,
-   read the log, then upload:
+2. If the UI changed, replace the App Store screenshots. The TestFlight run
+   of step 1 keeps its screenshots 3 days. If it is older, make a new set
+   first with a dry run on the tag, and wait for it to pass:
+
+   ```bash
+   gh workflow run release-testflight.yml --repo evanwtf/HealthExporter --ref v2.5.5 -f upload=false
+   gh run list --workflow release-testflight.yml --repo evanwtf/HealthExporter --limit 1
+   ```
+
+   Then run the screenshot dry run, read the log, and upload:
 
    ```bash
    gh workflow run appstore-screenshots.yml --repo evanwtf/HealthExporter -f version=2.5.5

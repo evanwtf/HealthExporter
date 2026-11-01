@@ -99,7 +99,7 @@ jobs:
           ls -l "$dir"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.3
         # The runner is shared: keep the uv cache to this run.
         with:
           cache-local-path: ${{ runner.temp }}/uv-${{ github.run_id }}-${{ github.run_attempt }}
